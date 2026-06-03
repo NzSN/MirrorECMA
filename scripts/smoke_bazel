@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 [ -n "${1:-}" ] || { echo "Usage: $0 <binary-path>" >&2; exit 1; }
-MIRROR_BIN="$1" npx jest test/smoke.test.ts
+MIRROR_BIN="$(realpath "$1")"
+PKG_JSON="${TEST_SRCDIR:-$PWD}/_main/package.json"
+WS="$(dirname "$(realpath "$PKG_JSON")")"
+cd "$WS"
+MIRROR_BIN="$MIRROR_BIN" npx jest test/smoke.test.ts

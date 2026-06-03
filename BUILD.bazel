@@ -23,3 +23,19 @@ genrule(
     """,
     tags = ["local", "no-sandbox"],
 )
+
+sh_test(
+    name = "smoke",
+    srcs = ["scripts/smoke_bazel"],
+    args = ["$(rootpath @modelmirros//app:ModelMirros)"],
+    data = [
+        "@modelmirros//app:ModelMirros",
+        "test/smoke.test.ts",
+        "specs/Counter.tla",
+        "package.json",
+        "jest.config.ts",
+        "tsconfig.json",
+    ],
+    tags = ["local", "no-sandbox"],
+    env = {"NODE_OPTIONS": "--experimental-vm-modules"},
+)
