@@ -11,11 +11,13 @@ npm run build       # tsc → dist/
 npm run check       # tsc --noEmit (type-check only)
 npm run test        # jest (unit + integration, requires --experimental-vm-modules)
 npm run smoke -- <path-to-ModelMirros-binary>   # integration test, needs built binary
+bazel build //:lib  # TypeScript compile via Bazel (genrule → tsc)
 ```
 
 - Tests need `NODE_OPTIONS="--experimental-vm-modules"` — the `test` script handles this.
 - The smoke test auto-skips if `MIRROR_BIN` env var is not set.
 - No lint/format scripts configured. Only TypeScript compilation and tests.
+- Bazel requires `node_modules/` present (run `npm install` first). The genrule calls `tsc` from the workspace's `node_modules/` via `--local --no-sandbox`. Outputs to `bazel-bin/`.
 
 ## Architecture
 

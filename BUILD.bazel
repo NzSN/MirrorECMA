@@ -1,0 +1,25 @@
+genrule(
+    name = "lib",
+    srcs = glob(["src/**/*.ts"]) + [
+        "tsconfig.json",
+        "package.json",
+    ],
+    outs = [
+        "index.js",
+        "index.d.ts",
+        "protocol.js",
+        "protocol.d.ts",
+        "client.js",
+        "client.d.ts",
+        "transport.js",
+        "transport.d.ts",
+    ],
+    cmd = """
+        WS=$$(dirname $$(realpath $(execpath package.json)))
+        "$$WS"/node_modules/.bin/tsc \
+            --project "$$WS"/tsconfig.json \
+            --outDir $(RULEDIR) \
+            --rootDir "$$WS"/src
+    """,
+    tags = ["local", "no-sandbox"],
+)
