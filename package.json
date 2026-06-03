@@ -1,0 +1,19 @@
+{
+  "name": "mirrorecma",
+  "version": "1.0.0",
+  "description": "TypeScript client for ModelMirros protocol",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5",
+    "@types/node": "^22"
+  }
+}

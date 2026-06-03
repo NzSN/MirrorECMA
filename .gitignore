@@ -1,0 +1,5 @@
+dist/
+node_modules/
+dist-test/
+_apalache-out/
+package-lock.json

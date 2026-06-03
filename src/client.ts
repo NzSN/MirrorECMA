@@ -1,0 +1,82 @@
+import { spawnMirror } from "./transport.js";
+import {
+  MirrorMessage,
+  State,
+  StateComputer,
+  TraceGenerationConfig,
+  encodeClientMessage,
+  encodeState,
+  decodeMirrorMessage,
+} from "./protocol.js";
+
+export type { State, StateComputer, TraceGenerationConfig } from "./protocol.js";
+
+export async function runClient(
+  binPath: string,
+  specPath: string,
+  config: TraceGenerationConfig,
+  compute: StateComputer
+): Promise<void> {
+  const t = spawnMirror(binPath);
+  t.send(encodeClientMessage({
+    proto_step: "register",
+    specPath,
+    traceConfig: config,
+  }));
+
+  const it = t[Symbol.asyncIterator]();
+
+  const msg0 = await recv(it);
+  if (msg0.proto_step === "protocol_error") { await t.close(); throw new Error(msg0.error); }
+  if (msg0.proto_step === "spec_validated" && typeof msg0.result !== "string") {
+    await t.close();
+    throw new Error(`spec invalid: ${msg0.result.invalid}`);
+  }
+
+  let msg = await recv(it);
+  let state: State = {};
+  for (;;) {
+    switch (msg.proto_step) {
+      case "initial_state":
+        state = compute(msg.action, msg.state, {});
+        t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
+        break;
+      case "step_ok":
+        break;
+      case "all_steps_done":
+        await t.close();
+        return;
+      case "next_step":
+        state = compute(msg.action, msg.parameters, state);
+        t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
+        break;
+      case "step_mismatch":
+        await t.close();
+        throw new Error(
+          `step mismatch: expected ${JSON.stringify(msg.expected, bigintReplacer)}, got ${JSON.stringify(msg.actual, bigintReplacer)}`
+        );
+      default:
+        await t.close();
+        throw new Error(`unexpected message: ${msg.proto_step}`);
+    }
+    msg = await recv(it);
+  }
+}
+
+export function presetClient(states: State[]): StateComputer {
+  let i = 0;
+  return () => {
+    if (i >= states.length) throw new Error("presetClient exhausted");
+    return states[i++]!;
+  };
+}
+
+async function recv(it: AsyncIterator<string>): Promise<MirrorMessage> {
+  const { value, done } = await it.next();
+  if (done) throw new Error("transport closed unexpectedly");
+  return decodeMirrorMessage(value);
+}
+
+function bigintReplacer(_key: string, v: unknown): unknown {
+  return typeof v === "bigint" ? String(v) : v;
+}
