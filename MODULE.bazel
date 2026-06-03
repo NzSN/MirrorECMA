@@ -3,4 +3,34 @@ module(
     version = "1.0.0",
 )
 
+bazel_dep(name = "modelmirros", version = "0.1.0.0")
+git_override(
+    module_name = "modelmirros",
+    remote = "https://github.com/NzSN/ModelMirrors",
+    commit = "c6647b25f053326671f56cfde535cd35379b9dca",
+    patches = ["//patches:modelmirros-remove-snapshot.patch"],
+    patch_args = ["-p1"],
+)
+
+git_override(
+    module_name = "rules_haskell",
+    remote = "https://github.com/tweag/rules_haskell",
+    commit = "b459268dee8e73244babdaa84c4feb7796e923df",
+)
+
+git_override(
+    module_name = "rules_sh",
+    remote = "https://github.com/tweag/rules_sh",
+    commit = "c28667efc2fd9c95ceada90ce2b27d928fa36971",
+)
+
+bazel_dep(name = "rules_haskell", version = "1.0")
+
+stack_snapshot = use_extension(
+    "@rules_haskell//extensions:stack_snapshot.bzl",
+    "stack_snapshot",
+)
+stack_snapshot.snapshot(local_snapshot = "@modelmirros//:stackage_snapshot.yaml")
+use_repo(stack_snapshot, "stackage", "stackage-exe")
+
 bazel_dep(name = "platforms", version = "1.0.0")

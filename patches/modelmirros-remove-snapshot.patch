@@ -1,0 +1,10 @@
+--- a/MODULE.bazel
++++ b/MODULE.bazel
+@@ -65,7 +65,6 @@
+ stack_snapshot.package(name = "tasty")
+ stack_snapshot.package(name = "tasty-hunit")
+ 
+-stack_snapshot.snapshot(local_snapshot = "@modelmirros//:stackage_snapshot.yaml")
+ 
+ use_repo(stack_snapshot, "stackage", "stackage-exe")
+ 
