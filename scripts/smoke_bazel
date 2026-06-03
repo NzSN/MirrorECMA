@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export MIRROR_BIN="$1"
-npx jest test/smoke.test.ts
+[ -n "${1:-}" ] || { echo "Usage: $0 <binary-path>" >&2; exit 1; }
+MIRROR_BIN="$1" npx jest test/smoke.test.ts
