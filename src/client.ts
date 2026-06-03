@@ -7,6 +7,7 @@ import {
   encodeClientMessage,
   encodeState,
   decodeMirrorMessage,
+  prettifyState,
 } from "./protocol.js";
 
 export type { State, StateComputer, TraceGenerationConfig } from "./protocol.js";
@@ -39,9 +40,11 @@ export async function runClient(
 
   let msg = await recv(it);
   let state: State = {};
+  let lastAction = "";
   for (;;) {
     switch (msg.proto_step) {
       case "initial_state":
+        lastAction = msg.action;
         state = compute(msg.action, msg.state, {});
         t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
         break;
@@ -51,13 +54,14 @@ export async function runClient(
         await t.close();
         return;
       case "next_step":
+        lastAction = msg.action;
         state = compute(msg.action, msg.parameters, state);
         t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
         break;
       case "step_mismatch":
         await t.close();
         throw new Error(
-          `step mismatch: expected ${JSON.stringify(msg.expected, bigintReplacer)}, got ${JSON.stringify(msg.actual, bigintReplacer)}`
+          `step mismatch on action "${msg.action ?? lastAction}": expected ${JSON.stringify(prettifyState(msg.expected))}, got ${JSON.stringify(prettifyState(msg.actual))}`
         );
       case "protocol_error":
         await t.close();
@@ -82,8 +86,4 @@ async function recv(it: AsyncIterator<string>): Promise<MirrorMessage> {
   const { value, done } = await it.next();
   if (done) throw new Error("transport closed unexpectedly");
   return decodeMirrorMessage(value);
-}
-
-function bigintReplacer(_key: string, v: unknown): unknown {
-  return typeof v === "bigint" ? String(v) : v;
 }

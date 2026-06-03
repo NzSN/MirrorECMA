@@ -100,12 +100,14 @@ describe("decodeMirrorMessage", () => {
   it("decodes step_mismatch", () => {
     const line = JSON.stringify({
       proto_step: "step_mismatch",
+      action: "Inc",
       expected: { count: 1 },
       actual: { count: 2 },
     });
     const msg = decodeMirrorMessage(line);
     expect(msg.proto_step).toBe("step_mismatch");
     const sm = msg as any;
+    expect(sm.action).toBe("Inc");
     expect(sm.expected).toEqual({ count: { tag: "int", val: BigInt(1) } });
     expect(sm.actual).toEqual({ count: { tag: "int", val: BigInt(2) } });
   });

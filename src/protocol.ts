@@ -71,6 +71,7 @@ export interface StepOk {
 
 export interface StepMismatch {
   proto_step: "step_mismatch";
+  action?: string;
   expected: State;
   actual: State;
 }
@@ -181,6 +182,7 @@ function walkMessage(obj: Record<string, unknown>): MirrorMessage {
     case "step_mismatch":
       return {
         proto_step: "step_mismatch",
+        action: obj.action as string | undefined,
         expected: (walk(obj.expected) as { tag: "record"; val: Record<string, Value> }).val,
         actual: (walk(obj.actual) as { tag: "record"; val: Record<string, Value> }).val,
       };
@@ -219,4 +221,32 @@ export function getParamInt(params: State, varName: string, field: string): numb
   if (!rec) return 0;
   const v = rec[field];
   return v && v.tag === "int" ? Number(v.val) : 0;
+}
+
+// ---- Prettify for error messages ----
+
+export function prettifyState(state: State): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(state)) {
+    out[k] = prettifyValue(v);
+  }
+  return out;
+}
+
+function prettifyValue(v: Value): unknown {
+  switch (v.tag) {
+    case "int": return Number(v.val);
+    case "bool": return v.val;
+    case "str": return v.val;
+    case "set": return v.val.map(prettifyValue);
+    case "tuple": return v.val.map(prettifyValue);
+    case "record": {
+      const rec: Record<string, unknown> = {};
+      for (const [k, val] of Object.entries(v.val)) {
+        rec[k] = prettifyValue(val);
+      }
+      return rec;
+    }
+    case "null": return null;
+  }
 }
