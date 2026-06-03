@@ -7,13 +7,20 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
+    "smoke": "./scripts/smoke"
   },
   "devDependencies": {
-    "typescript": "^5.5",
-    "@types/node": "^22"
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.19.19",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
+    "typescript": "^5.5"
   }
 }

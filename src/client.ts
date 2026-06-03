@@ -28,7 +28,11 @@ export async function runClient(
 
   const msg0 = await recv(it);
   if (msg0.proto_step === "protocol_error") { await t.close(); throw new Error(msg0.error); }
-  if (msg0.proto_step === "spec_validated" && typeof msg0.result !== "string") {
+  if (msg0.proto_step !== "spec_validated") {
+    await t.close();
+    throw new Error(`expected spec_validated, got ${msg0.proto_step}`);
+  }
+  if (typeof msg0.result !== "string") {
     await t.close();
     throw new Error(`spec invalid: ${msg0.result.invalid}`);
   }
@@ -55,6 +59,9 @@ export async function runClient(
         throw new Error(
           `step mismatch: expected ${JSON.stringify(msg.expected, bigintReplacer)}, got ${JSON.stringify(msg.actual, bigintReplacer)}`
         );
+      case "protocol_error":
+        await t.close();
+        throw new Error(msg.error);
       default:
         await t.close();
         throw new Error(`unexpected message: ${msg.proto_step}`);

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BIN="${1:-}"
+if [ -z "$BIN" ]; then
+  echo "Usage: ./smoke <path-to-ModelMirros-binary>"
+  exit 1
+fi
+
+if [ ! -x "$BIN" ]; then
+  echo "Error: '$BIN' is not executable"
+  exit 1
+fi
+
+MIRROR_BIN="$BIN" npx jest test/smoke.test.ts
