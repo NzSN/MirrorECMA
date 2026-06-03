@@ -1,4 +1,4 @@
 build --enable_runfiles
 build --incompatible_enable_cc_toolchain_resolution
-build --noincompatible_disallow_ctx_resolve_tools
+build --noincompatible_disallow_ctx_resolve_tools  # Bazel 8 compat: rules_haskell uses deprecated ctx.resolve_tools()
 test --test_output=errors

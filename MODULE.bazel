@@ -12,6 +12,9 @@ git_override(
     patch_args = ["-p1"],
 )
 
+# Transitive overrides: modelmirros uses non-BCR versions of rules_haskell/rules_sh
+# for Bazel 8 compatibility. bzlmod requires the root module to repeat override pins
+# because non-root overrides don't propagate transitively.
 git_override(
     module_name = "rules_haskell",
     remote = "https://github.com/tweag/rules_haskell",
