@@ -12,6 +12,7 @@ npm run check       # tsc --noEmit (type-check only)
 npm run test        # jest (unit + integration, requires --experimental-vm-modules)
 npm run smoke -- <path-to-ModelMirros-binary>   # integration test, needs built binary
 bazel build //:lib  # TypeScript compile via Bazel (genrule → tsc)
+bazel test //:smoke # hermetic smoke test (builds ModelMirros binary)
 ```
 
 - Tests need `NODE_OPTIONS="--experimental-vm-modules"` — the `test` script handles this.
