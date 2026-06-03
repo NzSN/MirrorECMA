@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export MIRROR_BIN="$1"
+npx jest test/smoke.test.ts
