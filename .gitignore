@@ -3,6 +3,5 @@ node_modules/
 dist-test/
 _apalache-out/
 package-lock.json
-pnpm-lock.yaml
 /.agent-shell/
 bazel-*
