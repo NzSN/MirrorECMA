@@ -138,3 +138,60 @@ State maps use the Apalache ITF value encoding:
 
 In the tagged `Value` representation these become `{ tag: "int", val: 42n }`,
 `{ tag: "record", val: { field: ... } }`, etc.
+
+## Known Issues
+### CJS output with `"type": "module"`
+
+When built via Bazel's `ts_project(transpiler = "tsc")`, the compiled `.js` output is
+CommonJS (`exports.*` / `require()`), but the source `package.json` declares
+`"type": "module"`.  This mismatch means:
+
+- **Node.js in ESM mode** (including Jest with `ts-jest/presets/default-esm`)
+  cannot import named exports from the package — it sees `"type": "module"`,
+  treats the `.js` files as ESM, and fails because they contain CJS syntax.
+- **Jest cannot transform the module** because the default
+  `transformIgnorePatterns` excludes `/node_modules/`.
+
+#### Workaround (used by projects consuming MirrorECMA)
+
+Create a local ESM wrapper that loads the CJS module via `createRequire` and
+re-exports its symbols:
+
+```bash
+# In the consuming project's test / build script:
+cp -rL "$(bazel-out)/node_modules/mirrorecma" node_modules/mirrorecma
+chmod -R u+w node_modules/mirrorecma
+
+# Create an .mjs wrapper (always ESM, regardless of "type" field):
+cat > node_modules/mirrorecma/index.mjs <<'ESM'
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const cjs = require("./src/index.js");
+export const {
+  runClient, presetClient, encodeClientMessage, encodeState,
+  decodeMirrorMessage, asInt, asStr, asRecord, getParam, getParamInt,
+  spawnMirror,
+} = cjs;
+ESM
+
+# Override package.json to point main → index.mjs and set type → commonjs:
+cat > node_modules/mirrorecma/package.json <<'PKGJSON'
+{
+  "name": "mirrorecma",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "main": "index.mjs",
+  "types": "index.d.ts"
+}
+PKGJSON
+```
+
+This makes the CJS source files load correctly as CommonJS while exposing
+proper named ESM exports to the consuming project.
+
+#### Proper Fix
+
+The root cause should be addressed in MirrorECMA's build configuration:
+either compile to ESM output (e.g. set `"module": "es2022"` in tsconfig) or
+remove `"type": "module"` from the package.json so the published package is
+recognised as CommonJS.
