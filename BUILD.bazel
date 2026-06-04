@@ -1,27 +1,23 @@
-genrule(
+load("@npm//:defs.bzl", "npm_link_all_packages")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_config", "ts_project")
+
+npm_link_all_packages(name = "node_modules")
+
+ts_config(
+    name = "tsconfig",
+    src = "tsconfig.bazel.json",
+    deps = [
+        ":node_modules/@types/node",
+    ],
+)
+
+ts_project(
     name = "lib",
-    srcs = glob(["src/**/*.ts"]) + [
-        "tsconfig.json",
-        "package.json",
-    ],
-    outs = [
-        "index.js",
-        "index.d.ts",
-        "protocol.js",
-        "protocol.d.ts",
-        "client.js",
-        "client.d.ts",
-        "transport.js",
-        "transport.d.ts",
-    ],
-    cmd = """
-        WS=$$(dirname $$(realpath $(execpath package.json)))
-        "$$WS"/node_modules/.bin/tsc \
-            --project "$$WS"/tsconfig.json \
-            --outDir $(RULEDIR) \
-            --rootDir "$$WS"/src
-    """,
-    tags = ["local", "no-sandbox"],
+    srcs = glob(["src/**/*.ts"]),
+    tsconfig = ":tsconfig",
+    transpiler = "tsc",
+    declaration = True,
+    visibility = ["//visibility:public"],
 )
 
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
@@ -32,6 +28,7 @@ sh_test(
     args = ["$(execpath @modelmirros//app:ModelMirrors)"],
     data = [
         "@modelmirros//app:ModelMirrors",
+        ":lib",
         "test/smoke.test.ts",
         "specs/Counter.tla",
         "package.json",
