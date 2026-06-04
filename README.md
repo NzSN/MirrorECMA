@@ -78,10 +78,19 @@ await runClient(bin, spec, config, presetClient(states));
 | `cinit?` | `string \| null` | Constant initialization operator name (`--cinit`) |
 | `paramVars?` | `string` | Variable to treat as action parameters |
 
+### `StateComputer`
+
+```ts
+type StateComputer = (action: string, params: State, prevState: State) => State;
+```
+
+The function passed to `runClient`. Called on each step with the action name, the mirror's parameters (or initial state), and the previous computed state. Must return the next state as a `Record<string, Value>`.
+
 ### Value Helpers
 
 ```ts
-getParamInt(state, "parameters", "stride")  // extract int from nested record
+getParam(state, "parameters")       // extract nested record from state
+getParamInt(state, "parameters", "stride")  // extract int field from nested record
 asInt(value)    // → bigint | null
 asStr(value)    // → string | null
 asRecord(value) // → Record<string, Value> | null
