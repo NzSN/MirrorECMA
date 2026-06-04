@@ -29,11 +29,17 @@ git_override(
 
 bazel_dep(name = "rules_haskell", version = "1.0")
 
+stack_snapshot_dev = use_extension(
+    "@rules_haskell//extensions:stack_snapshot.bzl",
+    "stack_snapshot",
+    dev_dependency = True,
+)
+stack_snapshot_dev.snapshot(local_snapshot = "@modelmirros//:stackage_snapshot.yaml")
+
 stack_snapshot = use_extension(
     "@rules_haskell//extensions:stack_snapshot.bzl",
     "stack_snapshot",
 )
-stack_snapshot.snapshot(local_snapshot = "@modelmirros//:stackage_snapshot.yaml")
 use_repo(stack_snapshot, "stackage", "stackage-exe")
 
 bazel_dep(name = "platforms", version = "1.0.0")
