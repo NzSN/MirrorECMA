@@ -12,11 +12,29 @@ ts_config(
 )
 
 ts_project(
-    name = "lib",
+    name = "lib_src",
     srcs = glob(["src/**/*.ts"]),
     tsconfig = ":tsconfig",
     transpiler = "tsc",
     declaration = True,
+)
+
+load("@aspect_rules_js//npm:defs.bzl", "npm_package")
+
+genrule(
+    name = "package_json",
+    srcs = ["package.bazel.json"],
+    outs = ["package.json"],
+    cmd = "cp $(execpath package.bazel.json) $@",
+)
+
+npm_package(
+    name = "lib",
+    srcs = [
+        ":lib_src",
+        ":package_json",
+    ],
+    package = "mirrorecma",
     visibility = ["//visibility:public"],
 )
 
