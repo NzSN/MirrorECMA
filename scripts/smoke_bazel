@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 [ -n "${1:-}" ] || { echo "Usage: $0 <binary-path>" >&2; exit 1; }
+export PATH="/home/nzsn/.local/bin/apalache/bin:$PATH"
 PKG_JSON="${TEST_SRCDIR:-$PWD}/_main/package.json"
 WS="$(dirname "$(realpath "$PKG_JSON")")"
 cd "$WS"

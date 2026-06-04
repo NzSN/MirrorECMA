@@ -1,4 +1,4 @@
-import { runClient, type TraceGenerationConfig, type StateComputer } from "../src/index.js";
+import { runClient, type TraceGenerationConfig, type StateComputer, type State, asInt, getParam } from "../src/index.js";
 
 const BIN = process.env.MIRROR_BIN ?? "";
 const SPEC = "./specs/Counter.tla";
@@ -7,41 +7,52 @@ const runSmoke = BIN ? test : test.skip;
 
 const config: TraceGenerationConfig = {
   invariant: "TraceComplete",
-  lengthBound: 5,
+  lengthBound: 6,
   numTraces: 1,
   cinit: "CInit",
   paramVars: "parameters",
 };
 
-const compute: StateComputer = (action, params, prevState) => {
-  if (action === "Init" || !prevState.count) {
-    return {
-      count: { tag: "int", val: 0n },
-      action_taken: { tag: "str", val: "init" },
-      step_count: { tag: "int", val: 0n },
-    };
+class Counter {
+  count: bigint;
+
+  constructor() {
+    this.count = 0n;
   }
 
-  const stride = params.parameters?.tag === "record"
-    ? params.parameters.val.stride?.tag === "int"
-      ? params.parameters.val.stride.val
-      : 0n
-    : 0n;
+  tick(stride: bigint): void {
+    this.count += stride + BigInt(1);
+  }
 
-  const prevCount = prevState.count?.tag === "int" ? prevState.count.val : 0n;
-  const prevStep = prevState.step_count?.tag === "int" ? prevState.step_count.val : 0n;
+  toState(): State {
+    return {
+      count: { tag: "int", val: this.count }
+    };
+  }
+}
 
-  return {
-    count: { tag: "int", val: prevCount + stride },
-    action_taken: { tag: "str", val: "tick" },
-    step_count: { tag: "int", val: prevStep + 1n },
-  };
-};
+class CounterComputer {
+  private counter = new Counter();
+
+  compute(action: string, params: State, prevState: State): State {
+    if (action === "Init" || !prevState.count) {
+      this.counter = new Counter();
+      return this.counter.toState();
+    }
+
+    const rec = getParam(params, "parameters");
+    const stride = rec ? asInt(rec.stride!) ?? 0n : 0n;
+
+    this.counter.tick(stride);
+    return this.counter.toState();
+  }
+}
 
 describe("smoke test", () => {
   runSmoke("Counter.tla end-to-end", async () => {
     const start = Date.now();
-    await runClient(BIN, SPEC, config, compute);
+    const computer = new CounterComputer();
+    await runClient(BIN, SPEC, config, computer.compute.bind(computer));
     const elapsed = Date.now() - start;
     expect(elapsed).toBeLessThan(60000);
     console.log(`OK (${elapsed}ms)`);

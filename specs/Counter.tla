@@ -11,15 +11,12 @@ VARIABLE
   \* @type: { stride: Int };
   parameters,
   \* @type: Str;
-  action_taken,
-  \* @type: Int;
-  step_count
+  action_taken
 
 Init ==
   count = 0 /\
   parameters = [stride |-> 0] /\
-  action_taken = "init" /\
-  step_count = 0
+  action_taken = "init"
 
 \* @type: () => Bool;
 CInit == STRIDES = {2, 3}
@@ -28,14 +25,13 @@ TICK(S) ==
   S \in STRIDES /\
   count' = count + S /\
   parameters' = [stride |-> S] /\
-  action_taken' = "tick" /\
-  step_count' = step_count + 1
+  action_taken' = "tick"
 
 Next ==
   \E S \in STRIDES: TICK(S)
 
 \* Apalache treats a violated invariant as a counterexample = the test trace.
-TraceComplete == step_count < 5
+TraceComplete == count < 12
 
 Spec == Init /\ [][Next]_<<count, parameters>>
 ========================================================

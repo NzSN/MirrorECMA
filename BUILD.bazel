@@ -24,16 +24,18 @@ genrule(
     tags = ["local", "no-sandbox"],
 )
 
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
 sh_test(
     name = "smoke",
     srcs = ["scripts/smoke_bazel"],
-    args = ["$(rootpath @modelmirros//app:ModelMirros)"],
+    args = ["$(execpath @modelmirros//app:ModelMirrors)"],
     data = [
-        "@modelmirros//app:ModelMirros",
+        "@modelmirros//app:ModelMirrors",
         "test/smoke.test.ts",
         "specs/Counter.tla",
         "package.json",
-        "jest.config.ts",
+        "jest.config.cjs",
         "tsconfig.json",
     ],
     tags = ["local", "no-sandbox"],
