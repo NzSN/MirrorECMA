@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-[ -n "${1:-}" ] || { echo "Usage: $0 <binary-path>" >&2; exit 1; }
-export PATH="/home/nzsn/.local/bin/apalache/bin:$PATH"
-MIRROR_BIN="$(realpath "${TEST_SRCDIR}/${1}")"
-WS="$(dirname "$(realpath "${TEST_SRCDIR:-$PWD}/_main/jest.config.cjs")")"
-cd "$WS"
-MIRROR_BIN="$MIRROR_BIN" npx jest test/smoke.test.ts
