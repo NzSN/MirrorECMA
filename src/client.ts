@@ -40,6 +40,7 @@ export async function runClient(
 
   let msg = await recv(it);
   let state: State = {};
+  let lastParam: State = {}
   let lastAction = "";
   for (;;) {
     switch (msg.proto_step) {
@@ -56,12 +57,13 @@ export async function runClient(
       case "next_step":
         lastAction = msg.action;
         state = compute(msg.action, msg.parameters, state);
+        lastParam = msg.parameters;
         t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
         break;
       case "step_mismatch":
         await t.close();
         throw new Error(
-          `step mismatch on action "${msg.action ?? lastAction}": expected ${JSON.stringify(prettifyState(msg.expected))}, got ${JSON.stringify(prettifyState(msg.actual))}`
+            `step mismatch on action "${msg.action ?? lastAction}" with param "${lastParam}": expected ${JSON.stringify(prettifyState(msg.expected))}, got ${JSON.stringify(prettifyState(msg.actual))}`
         );
       case "protocol_error":
         await t.close();
