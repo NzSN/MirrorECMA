@@ -5,7 +5,7 @@ module(
 
 bazel_dep(name = "rules_shell", version = "0.6.1")
 
-bazel_dep(name = "modelmirros", version = "0.1.0.0")
+bazel_dep(name = "modelmirrors", version = "0.1.0.0")
 git_override(
     module_name = "modelmirrors",
     remote = "https://github.com/NzSN/ModelMirrors",
@@ -34,7 +34,7 @@ stack_snapshot_dev = use_extension(
     "stack_snapshot",
     dev_dependency = True,
 )
-stack_snapshot_dev.snapshot(local_snapshot = "@modelmirros//:stackage_snapshot.yaml")
+stack_snapshot_dev.snapshot(local_snapshot = "@modelmirrors//:stackage_snapshot.yaml")
 
 stack_snapshot = use_extension(
     "@rules_haskell//extensions:stack_snapshot.bzl",
