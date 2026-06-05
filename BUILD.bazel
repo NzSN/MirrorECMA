@@ -1,5 +1,7 @@
 load("@npm//:defs.bzl", "npm_link_all_packages")
 load("@aspect_rules_ts//ts:defs.bzl", "ts_config", "ts_project")
+load("@aspect_rules_js//npm:defs.bzl", "npm_package")
+load("@aspect_rules_js//js:defs.bzl", "js_test")
 
 npm_link_all_packages(name = "node_modules")
 
@@ -13,13 +15,14 @@ ts_config(
 
 ts_project(
     name = "lib_src",
-    srcs = glob(["src/**/*.ts"]),
+    srcs = glob([
+        "src/**/*.ts",
+        "test/smoke.test.ts"]),
     tsconfig = ":tsconfig",
     transpiler = "tsc",
     declaration = True,
 )
 
-load("@aspect_rules_js//npm:defs.bzl", "npm_package")
 
 genrule(
     name = "package_json",
@@ -38,27 +41,14 @@ npm_package(
     visibility = ["//visibility:public"],
 )
 
-load("@aspect_rules_jest//jest:defs.bzl", "jest_test")
-
-jest_test(
+js_test(
     name = "smoke",
-    data = glob(["src/**/*.ts", "test/**/*.ts"]) + [
+    entry_point = "test/smoke.test.js",
+    data = [
+        ":lib_src",
         "@modelmirrors//app:ModelMirrors",
         "specs/Counter.tla",
-        "jest.config.cjs",
-        "package.json",
-        "tsconfig.json",
-        ":node_modules/ts-jest",
-        ":node_modules/typescript",
-        ":node_modules/@types/jest",
-        ":node_modules/@types/node",
     ],
-    config = "jest.config.cjs",
-    node_modules = ":node_modules",
-    node_options = [
-        "--experimental-vm-modules",
-    ],
-    auto_configure_reporters = False,
     env = {
         "MIRROR_BIN": "$(rlocationpath @modelmirrors//app:ModelMirrors)",
     },

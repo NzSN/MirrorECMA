@@ -1,13 +1,17 @@
 import { runClient, type TraceGenerationConfig, type StateComputer, type State, asInt, getParam } from "../src/index.js";
 
 import { resolve } from "node:path";
+
 let BIN = process.env.MIRROR_BIN ?? "";
 if (BIN && process.env.RUNFILES && !/^\//.test(BIN)) {
   BIN = resolve(process.env.RUNFILES, BIN);
 }
-const SPEC = "./specs/Counter.tla";
+if (!BIN) {
+  console.error("MIRROR_BIN not set");
+  process.exit(1);
+}
 
-const runSmoke = BIN ? test : test.skip;
+const SPEC = process.env.SPEC ?? "./specs/Counter.tla";
 
 const config: TraceGenerationConfig = {
   invariant: "TraceComplete",
@@ -25,12 +29,12 @@ class Counter {
   }
 
   tick(stride: bigint): void {
-    this.count += stride;
+    this.count += stride + 1n;
   }
 
   toState(): State {
     return {
-      count: { tag: "int", val: this.count }
+      count: { tag: "int", val: this.count },
     };
   }
 }
@@ -52,9 +56,14 @@ class CounterComputer {
   }
 }
 
-describe("smoke test", () => {
-  runSmoke("Counter.tla end-to-end", async () => {
-    const computer = new CounterComputer();
-    await runClient(BIN, SPEC, config, computer.compute.bind(computer));
-  }, 1200);
+async function main() {
+  const computer = new CounterComputer();
+  console.log(`Running smoke test with spec: ${SPEC}`);
+  await runClient(BIN, SPEC, config, computer.compute.bind(computer));
+  console.log("OK: smoke test passed");
+}
+
+main().catch((err) => {
+  console.error("FAIL:", err.message);
+  process.exit(1);
 });
