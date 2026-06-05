@@ -7,9 +7,9 @@ bazel_dep(name = "rules_shell", version = "0.6.1")
 
 bazel_dep(name = "modelmirros", version = "0.1.0.0")
 git_override(
-    module_name = "modelmirros",
+    module_name = "modelmirrors",
     remote = "https://github.com/NzSN/ModelMirrors",
-    commit = "8f351ddb87910dded892efa2e005563961d3b54f",
+    commit = "aad59642c3ca290dff97c4c35f5ac6ffe7188f7e",
 )
 
 # Transitive overrides: modelmirros uses non-BCR versions of rules_haskell/rules_sh
