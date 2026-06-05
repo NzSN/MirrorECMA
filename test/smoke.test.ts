@@ -1,7 +1,6 @@
 import { runClient, type TraceGenerationConfig, type StateComputer, type State, asInt, getParam } from "../src/index.js";
 
 import { resolve } from "node:path";
-
 let BIN = process.env.MIRROR_BIN ?? "";
 if (BIN && process.env.RUNFILES && !/^\//.test(BIN)) {
   BIN = resolve(process.env.RUNFILES, BIN);
@@ -55,11 +54,7 @@ class CounterComputer {
 
 describe("smoke test", () => {
   runSmoke("Counter.tla end-to-end", async () => {
-    const start = Date.now();
     const computer = new CounterComputer();
     await runClient(BIN, SPEC, config, computer.compute.bind(computer));
-    const elapsed = Date.now() - start;
-    expect(elapsed).toBeLessThan(60000);
-    console.log(`OK (${elapsed}ms)`);
-  }, 120000);
+  }, 1200);
 });

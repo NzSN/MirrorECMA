@@ -11,8 +11,7 @@
   "scripts": {
     "build": "tsc",
     "check": "tsc --noEmit",
-    "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
-    "smoke": "./scripts/smoke"
+    "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest"
   },
   "pnpm": {
     "onlyBuiltDependencies": []
