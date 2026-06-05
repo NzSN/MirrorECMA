@@ -1,6 +1,11 @@
 import { runClient, type TraceGenerationConfig, type StateComputer, type State, asInt, getParam } from "../src/index.js";
 
-const BIN = process.env.MIRROR_BIN ?? "";
+import { resolve } from "node:path";
+
+let BIN = process.env.MIRROR_BIN ?? "";
+if (BIN && process.env.RUNFILES && !/^\//.test(BIN)) {
+  BIN = resolve(process.env.RUNFILES, BIN);
+}
 const SPEC = "./specs/Counter.tla";
 
 const runSmoke = BIN ? test : test.skip;

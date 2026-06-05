@@ -61,6 +61,8 @@ use_repo(node, "nodejs_toolchains")
 
 bazel_dep(name = "aspect_rules_ts", version = "3.8.10")
 
+bazel_dep(name = "aspect_rules_jest", version = "0.25.2")
+
 rules_ts_ext = use_extension("@aspect_rules_ts//ts:extensions.bzl", "ext")
 rules_ts_ext.deps(
     ts_version = "5.9.3",
