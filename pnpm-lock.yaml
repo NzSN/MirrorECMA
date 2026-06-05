@@ -7,17 +7,13 @@ settings:
 importers:
 
   .:
-    dependencies:
-      '@types/node':
-        specifier: ^22.19.19
-        version: 22.19.19
-      undici-types:
-        specifier: ^6.0.0
-        version: 6.21.0
     devDependencies:
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
+      '@types/node':
+        specifier: ^22.19.19
+        version: 22.19.19
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@22.19.19)(ts-node@10.9.2(@types/node@22.19.19)(typescript@5.9.3))
