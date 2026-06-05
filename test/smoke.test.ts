@@ -29,7 +29,7 @@ class Counter {
   }
 
   tick(stride: bigint): void {
-    this.count += stride + 1n;
+    this.count += stride;
   }
 
   toState(): State {

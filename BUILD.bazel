@@ -5,6 +5,11 @@ load("@aspect_rules_js//js:defs.bzl", "js_test")
 
 npm_link_all_packages(name = "node_modules")
 
+config_setting(
+    name = "smoke_enabled",
+    define_values = {"smoke": "true"},
+)
+
 ts_config(
     name = "tsconfig",
     src = "tsconfig.bazel.json",
@@ -15,12 +20,19 @@ ts_config(
 
 ts_project(
     name = "lib_src",
-    srcs = glob([
-        "src/**/*.ts",
-        "test/smoke.test.ts"]),
+    srcs = glob(["src/**/*.ts"]),
     tsconfig = ":tsconfig",
     transpiler = "tsc",
     declaration = True,
+)
+
+ts_project(
+    name = "smoke_test",
+    srcs = ["test/smoke.test.ts"],
+    tsconfig = ":tsconfig",
+    transpiler = "tsc",
+    declaration = True,
+    deps = [":lib_src"],
 )
 
 
@@ -36,7 +48,10 @@ npm_package(
     srcs = [
         ":lib_src",
         ":package_json",
-    ],
+    ] + select({
+        ":smoke_enabled": [":smoke_test"],
+        "//conditions:default": [],
+    }),
     package = "mirrorecma",
     visibility = ["//visibility:public"],
 )
@@ -46,6 +61,7 @@ js_test(
     entry_point = "test/smoke.test.js",
     data = [
         ":lib_src",
+        ":smoke_test",
         "@modelmirrors//app:ModelMirrors",
         "specs/Counter.tla",
     ],
