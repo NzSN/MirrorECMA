@@ -43,9 +43,9 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 sh_test(
     name = "smoke",
     srcs = ["scripts/smoke_bazel"],
-    args = ["$(execpath @modelmirros//app:ModelMirrors)"],
+    args = ["$(rlocationpath @modelmirrors//app:ModelMirrors)"],
     data = [
-        "@modelmirros//app:ModelMirrors",
+        "@modelmirrors//app:ModelMirrors",
         ":lib",
         "test/smoke.test.ts",
         "specs/Counter.tla",
