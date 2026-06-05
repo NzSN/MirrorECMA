@@ -7,9 +7,7 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "build": "tsc",
     "check": "tsc --noEmit",
@@ -23,6 +21,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.19.19",
     "jest": "^30.4.2",
+    "jest-cli": "^30.4.2",
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.5"

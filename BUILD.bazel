@@ -38,21 +38,26 @@ npm_package(
     visibility = ["//visibility:public"],
 )
 
-load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("@aspect_rules_js//js:defs.bzl", "js_test")
 
-sh_test(
+js_test(
     name = "smoke",
-    srcs = ["scripts/smoke_bazel"],
-    args = ["$(rlocationpath @modelmirrors//app:ModelMirrors)"],
-    data = [
+    entry_point = "scripts/jest_runner.mjs",
+    data = glob(["src/**/*.ts", "test/**/*.ts"]) + [
         "@modelmirrors//app:ModelMirrors",
-        ":lib",
-        "test/smoke.test.ts",
         "specs/Counter.tla",
-        "package.json",
         "jest.config.cjs",
+        "package.json",
         "tsconfig.json",
+        ":node_modules/jest-cli",
+        ":node_modules/ts-jest",
+        ":node_modules/typescript",
+        ":node_modules/@types/jest",
+        ":node_modules/@types/node",
     ],
-    tags = ["local", "no-sandbox"],
-    env = {"NODE_OPTIONS": "--experimental-vm-modules"},
+    env = {
+        "MIRROR_BIN": "$(rlocationpath @modelmirrors//app:ModelMirrors)",
+        "NODE_OPTIONS": "--experimental-vm-modules",
+    },
+    env_inherit = ["PATH"],
 )

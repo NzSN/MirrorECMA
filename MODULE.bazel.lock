@@ -297,7 +297,7 @@
     "@@rules_haskell+//extensions:ghc_version.bzl%ghc_default_version": {
       "general": {
         "bzlTransitiveDigest": "Pcsih8RRkNXUIwl5ryRAQ58WtIBM1H2PYhT16OnEbRg=",
-        "usagesDigest": "kqQKRh60nLgjobatY2jax/BnLCiUPt/e3eyMwhjzIH8=",
+        "usagesDigest": "R0wcfDlS02DJNCmufDrM5RkQ07diFb9RxfC/6J9Diz0=",
         "recordedInputs": [
           "REPO_MAPPING:rules_haskell+,rules_haskell rules_haskell+"
         ],
@@ -312,7 +312,7 @@
     "@@rules_haskell+//extensions:haskell_toolchains.bzl%haskell_toolchains": {
       "general": {
         "bzlTransitiveDigest": "9Nlm7huES8tfYOdK0FWP4kJ0zibQ2TbbBxAQ8/hVKO4=",
-        "usagesDigest": "jrV64HlgGdRIQF1D+DXwjHlk4wU/c9sPTRA9V5wOwQ4=",
+        "usagesDigest": "3DFUtT4YOJOHYShyA1Fnalq4//mMAEwjvZ88kg2t694=",
         "recordedInputs": [
           "REPO_MAPPING:rules_cc+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_cc+,bazel_tools bazel_tools",
@@ -466,7 +466,7 @@
     "@@rules_haskell+//extensions:rules_haskell_dependencies.bzl%rules_haskell_dependencies": {
       "general": {
         "bzlTransitiveDigest": "35n7tOME9/WhNby9EIYejx8/u5fJIqGVyf29KW702xs=",
-        "usagesDigest": "wSRDGBPQHG/2goSbK5xnzdtRNjjiqf3xe/ThqBZp/fA=",
+        "usagesDigest": "K8VwdGIO3v4SEPpMEQo8NNEK1Y7oGpam4Zm8m45a8qs=",
         "recordedInputs": [
           "REPO_MAPPING:bazel_features+,bazel_features_globals bazel_features++version_extension+bazel_features_globals",
           "REPO_MAPPING:bazel_features+,bazel_features_version bazel_features++version_extension+bazel_features_version",
@@ -605,9 +605,9 @@
     "@@rules_haskell+//extensions:stack_snapshot.bzl%stack_snapshot": {
       "general": {
         "bzlTransitiveDigest": "nVjY60LUdU8AN43+CNYfpBT/L/7YS3oKJtx+k6LG1xk=",
-        "usagesDigest": "coEZOMKD16DfbrdPOQeDiQ1QkGKSZKpyq6lHySE0z1Y=",
+        "usagesDigest": "WVYXP7B2jeNfv6UYSX5DCNodSnLOnguxAuqHzBDqqnc=",
         "recordedInputs": [
-          "REPO_MAPPING:,modelmirros modelmirros+",
+          "REPO_MAPPING:,modelmirrors modelmirrors+",
           "REPO_MAPPING:bazel_features+,bazel_features_globals bazel_features++version_extension+bazel_features_globals",
           "REPO_MAPPING:bazel_features+,bazel_features_version bazel_features++version_extension+bazel_features_version",
           "REPO_MAPPING:protobuf+,bazel_skylib bazel_skylib+",
@@ -647,7 +647,7 @@
               "stack_update": "@@rules_haskell++stack_snapshot+rules_haskell_stack_update//:stack_update",
               "vendored_packages": {},
               "snapshot": "",
-              "local_snapshot": "@@modelmirros+//:stackage_snapshot.yaml",
+              "local_snapshot": "@@modelmirrors+//:stackage_snapshot.yaml",
               "packages": [
                 "aeson",
                 "bytestring",
@@ -673,7 +673,7 @@
               "extra_deps": {},
               "vendored_packages": {},
               "snapshot": "",
-              "local_snapshot": "@@modelmirros+//:stackage_snapshot.yaml",
+              "local_snapshot": "@@modelmirrors+//:stackage_snapshot.yaml",
               "packages": [
                 "aeson",
                 "bytestring",
