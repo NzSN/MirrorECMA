@@ -18,7 +18,7 @@ export type StateComputer = (
 
 // ---- Message types ----
 
-export type ClientMessage = Register | ReportState;
+export type ClientMessage = Register | RegisterTraces | ReportState;
 
 export type MirrorMessage =
   | SpecValidated
@@ -34,6 +34,11 @@ export interface Register {
   proto_step: "register";
   specPath: string;
   traceConfig: TraceGenerationConfig;
+}
+
+export interface RegisterTraces {
+  proto_step: "register_traces";
+  itfTracePaths: string[];
 }
 
 export interface TraceGenerationConfig {

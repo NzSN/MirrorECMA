@@ -1,4 +1,13 @@
-import { runClient, type TraceGenerationConfig, type StateComputer, type State, asInt, getParam } from "../src/index.js";
+import {
+  runClient,
+  runClientWithTraces,
+  presetClient,
+  type TraceGenerationConfig,
+  type StateComputer,
+  type State,
+  asInt,
+  getParam,
+} from "../src/index.js";
 
 import { resolve } from "node:path";
 
@@ -57,11 +66,38 @@ class CounterComputer {
   }
 }
 
-async function main() {
+async function testRegister() {
   const computer = new CounterComputer();
-  console.log(`Running smoke test with spec: ${SPEC}`);
+  console.log(`Running smoke test (register) with spec: ${SPEC}`);
   await runClient(BIN, SPEC, config, computer.compute.bind(computer));
-  console.log("OK: smoke test passed");
+  console.log("OK: register smoke test passed");
+}
+
+async function testRegisterTraces() {
+  let tracePath = "specs/traces/violation.itf.json";
+  if (process.env.RUNFILES) {
+    tracePath = resolve(process.env.RUNFILES, "_main", tracePath);
+  } else {
+    tracePath = resolve(tracePath);
+  }
+  const states: State[] = [
+    { count: { tag: "int", val: 0n } },
+    { count: { tag: "int", val: 2n } },
+    { count: { tag: "int", val: 4n } },
+    { count: { tag: "int", val: 6n } },
+    { count: { tag: "int", val: 8n } },
+    { count: { tag: "int", val: 10n } },
+    { count: { tag: "int", val: 13n } },
+  ];
+
+  console.log("Running smoke test (register_traces)");
+  await runClientWithTraces(BIN, [tracePath], presetClient(states));
+  console.log("OK: register_traces smoke test passed");
+}
+
+async function main() {
+  await testRegister();
+  await testRegisterTraces();
 }
 
 main().catch((err) => {

@@ -9,8 +9,22 @@ import {
   decodeMirrorMessage,
   prettifyState,
 } from "./protocol.js";
+import type { Transport } from "./transport.js";
 
 export type { State, StateComputer, TraceGenerationConfig } from "./protocol.js";
+
+export async function runClientWithTraces(
+  binPath: string,
+  tracePaths: string[],
+  compute: StateComputer
+): Promise<void> {
+  const t = spawnMirror(binPath);
+  t.send(encodeClientMessage({
+    proto_step: "register_traces",
+    itfTracePaths: tracePaths,
+  }));
+  await mainLoop(t, compute);
+}
 
 export async function runClient(
   binPath: string,
@@ -24,7 +38,10 @@ export async function runClient(
     specPath,
     traceConfig: config,
   }));
+  await mainLoop(t, compute);
+}
 
+async function mainLoop(t: Transport, compute: StateComputer): Promise<void> {
   const it = t[Symbol.asyncIterator]();
 
   const msg0 = await recv(it);

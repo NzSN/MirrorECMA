@@ -1,5 +1,6 @@
 export {
   runClient,
+  runClientWithTraces,
   presetClient,
   type State,
   type StateComputer,
@@ -10,6 +11,7 @@ export {
   type MirrorMessage,
   type Value,
   type Register,
+  type RegisterTraces,
   type ReportState,
   type SpecValidated,
   type InitialState,

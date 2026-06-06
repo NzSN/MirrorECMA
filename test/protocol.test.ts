@@ -36,6 +36,18 @@ describe("encodeClientMessage / decodeMirrorMessage", () => {
     });
   });
 
+  it("encodes a register_traces message", () => {
+    const msg: ClientMessage = {
+      proto_step: "register_traces",
+      itfTracePaths: ["/tmp/trace1.itf.json", "/tmp/trace2.itf.json"],
+    };
+    const encoded = encodeClientMessage(msg);
+    expect(JSON.parse(encoded)).toEqual({
+      proto_step: "register_traces",
+      itfTracePaths: ["/tmp/trace1.itf.json", "/tmp/trace2.itf.json"],
+    });
+  });
+
   it("round-trips a report_state message with bigints", () => {
     const state: State = {
       count: { tag: "int", val: BigInt("9007199254740991") },
