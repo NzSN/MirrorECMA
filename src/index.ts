@@ -18,6 +18,7 @@ export {
   type StepMismatch,
   type AllStepsDone,
   type ProtocolError,
+  type RegisterError,
   encodeClientMessage,
   encodeState,
   decodeMirrorMessage,

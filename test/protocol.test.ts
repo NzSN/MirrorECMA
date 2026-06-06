@@ -122,6 +122,11 @@ describe("decodeMirrorMessage", () => {
     expect(msg).toEqual({ proto_step: "protocol_error", error: "bad!" });
   });
 
+  it("decodes register_error", () => {
+    const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "register_error", error: "spec not found" }));
+    expect(msg).toEqual({ proto_step: "register_error", error: "spec not found" });
+  });
+
   it("returns protocol_error for unknown proto_step", () => {
     const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "unknown_thing", x: 1 }));
     expect(msg).toEqual({

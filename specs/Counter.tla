@@ -30,6 +30,8 @@ TICK(S) ==
 Next ==
   \E S \in STRIDES: TICK(S)
 
+View == count
+
 \* Apalache treats a violated invariant as a counterexample = the test trace.
 TraceComplete == count < 12
 

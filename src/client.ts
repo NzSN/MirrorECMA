@@ -29,6 +29,7 @@ export async function runClient(
 
   const msg0 = await recv(it);
   if (msg0.proto_step === "protocol_error") { await t.close(); throw new Error(msg0.error); }
+  if (msg0.proto_step === "register_error") { await t.close(); throw new Error(`register failed: ${msg0.error}`); }
   if (msg0.proto_step !== "spec_validated") {
     await t.close();
     throw new Error(`expected spec_validated, got ${msg0.proto_step}`);
@@ -68,6 +69,9 @@ export async function runClient(
       case "protocol_error":
         await t.close();
         throw new Error(msg.error);
+      case "register_error":
+        await t.close();
+        throw new Error(`register failed: ${msg.error}`);
       default:
         await t.close();
         throw new Error(`unexpected message: ${msg.proto_step}`);

@@ -27,7 +27,8 @@ export type MirrorMessage =
   | StepOk
   | StepMismatch
   | AllStepsDone
-  | ProtocolError;
+  | ProtocolError
+  | RegisterError;
 
 export interface Register {
   proto_step: "register";
@@ -41,6 +42,7 @@ export interface TraceGenerationConfig {
   numTraces: number;
   cinit?: string | null;
   paramVars?: string;
+  view?: string;
 }
 
 export interface ReportState {
@@ -82,6 +84,11 @@ export interface AllStepsDone {
 
 export interface ProtocolError {
   proto_step: "protocol_error";
+  error: string;
+}
+
+export interface RegisterError {
+  proto_step: "register_error";
   error: string;
 }
 
@@ -129,6 +136,7 @@ export function decodeMirrorMessage(line: string): MirrorMessage {
     case "step_mismatch":
     case "all_steps_done":
     case "protocol_error":
+    case "register_error":
       return msg;
     default:
       return { proto_step: "protocol_error", error: `unknown step: ${(msg as any).proto_step}` };
@@ -190,6 +198,8 @@ function walkMessage(obj: Record<string, unknown>): MirrorMessage {
       return { proto_step: "all_steps_done" };
     case "protocol_error":
       return { proto_step: "protocol_error", error: obj.error as string };
+    case "register_error":
+      return { proto_step: "register_error", error: obj.error as string };
     default:
       return { proto_step: "protocol_error", error: `unknown proto_step: ${step}` };
   }

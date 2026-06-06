@@ -16,9 +16,10 @@ const SPEC = process.env.SPEC ?? "./specs/Counter.tla";
 const config: TraceGenerationConfig = {
   invariant: "TraceComplete",
   lengthBound: 6,
-  numTraces: 1,
+  numTraces: 100,
   cinit: "CInit",
   paramVars: "parameters",
+  view: "View"
 };
 
 class Counter {
