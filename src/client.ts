@@ -3,6 +3,7 @@ import {
   MirrorMessage,
   State,
   StateComputer,
+  ApalacheConfig,
   TraceGenerationConfig,
   encodeClientMessage,
   encodeState,
@@ -11,16 +12,18 @@ import {
 } from "./protocol.js";
 import type { Transport } from "./transport.js";
 
-export type { State, StateComputer, TraceGenerationConfig } from "./protocol.js";
+export type { State, StateComputer, ApalacheConfig, TraceGenerationConfig } from "./protocol.js";
 
 export async function runClientWithTraces(
   binPath: string,
+  apalacheConfig: ApalacheConfig,
   tracePaths: string[],
   compute: StateComputer
 ): Promise<void> {
   const t = spawnMirror(binPath);
   t.send(encodeClientMessage({
     proto_step: "register_traces",
+    apalacheConfig,
     itfTracePaths: tracePaths,
   }));
   await mainLoop(t, compute);
@@ -28,14 +31,14 @@ export async function runClientWithTraces(
 
 export async function runClient(
   binPath: string,
-  specPath: string,
+  apalacheConfig: ApalacheConfig,
   config: TraceGenerationConfig,
   compute: StateComputer
 ): Promise<void> {
   const t = spawnMirror(binPath);
   t.send(encodeClientMessage({
     proto_step: "register",
-    specPath,
+    apalacheConfig,
     traceConfig: config,
   }));
   await mainLoop(t, compute);
@@ -43,14 +46,14 @@ export async function runClient(
 
 export async function runClientGenTraces(
   binPath: string,
-  specPath: string,
+  apalacheConfig: ApalacheConfig,
   destPath: string,
   config: TraceGenerationConfig
 ): Promise<void> {
   const t = spawnMirror(binPath);
   t.send(encodeClientMessage({
     proto_step: "register_trace_gen",
-    specPath,
+    apalacheConfig,
     traceConfig: config,
     destPath,
   }));

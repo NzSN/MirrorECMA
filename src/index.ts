@@ -5,6 +5,7 @@ export {
   presetClient,
   type State,
   type StateComputer,
+  type ApalacheConfig,
   type TraceGenerationConfig,
 } from "./client.js";
 

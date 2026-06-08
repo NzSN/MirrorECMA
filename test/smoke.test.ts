@@ -3,6 +3,7 @@ import {
   runClientWithTraces,
   runClientGenTraces,
   presetClient,
+  type ApalacheConfig,
   type TraceGenerationConfig,
   type StateComputer,
   type State,
@@ -25,12 +26,16 @@ if (!BIN) {
 
 const SPEC = process.env.SPEC ?? "./specs/Counter.tla";
 
-const config: TraceGenerationConfig = {
+const apalacheConfig: ApalacheConfig = {
+  specPath: SPEC,
   invariant: "TraceComplete",
   lengthBound: 6,
-  numTraces: 100,
-  cinit: "CInit",
+  constInit: "CInit",
   paramVars: "parameters",
+};
+
+const traceConfig: TraceGenerationConfig = {
+  numTraces: 100,
   view: "View"
 };
 
@@ -72,7 +77,7 @@ class CounterComputer {
 async function testRegister() {
   const computer = new CounterComputer();
   console.log(`Running smoke test (register) with spec: ${SPEC}`);
-  await runClient(BIN, SPEC, config, computer.compute.bind(computer));
+  await runClient(BIN, apalacheConfig, traceConfig, computer.compute.bind(computer));
   console.log("OK: register smoke test passed");
 }
 
@@ -94,14 +99,14 @@ async function testRegisterTraces() {
   ];
 
   console.log("Running smoke test (register_traces)");
-  await runClientWithTraces(BIN, [tracePath], presetClient(states));
+  await runClientWithTraces(BIN, apalacheConfig, [tracePath], presetClient(states));
   console.log("OK: register_traces smoke test passed");
 }
 
 async function testRegisterGenTraces() {
   const destDir = await mkdtemp(tmpdir() + "/mirrorecma-gen-");
   console.log(`Running smoke test (register_trace_gen) with spec: ${SPEC}, dest: ${destDir}`);
-  await runClientGenTraces(BIN, SPEC, destDir, config);
+  await runClientGenTraces(BIN, apalacheConfig, destDir, traceConfig);
   const files = await readdir(destDir);
   const traceFiles = files.filter(f => f.endsWith(".itf.json"));
   if (traceFiles.length === 0) throw new Error("no trace files generated");

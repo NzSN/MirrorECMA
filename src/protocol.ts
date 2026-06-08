@@ -31,31 +31,38 @@ export type MirrorMessage =
   | ProtocolError
   | RegisterError;
 
+export interface ApalacheConfig {
+  specPath: string;
+  initPredicate?: string | null;
+  nextPredicate?: string | null;
+  constInit?: string | null;
+  invariant: string;
+  lengthBound: number;
+  paramVars?: string;
+}
+
+export interface TraceGenerationConfig {
+  numTraces: number;
+  view?: string;
+}
+
 export interface Register {
   proto_step: "register";
-  specPath: string;
+  apalacheConfig: ApalacheConfig;
   traceConfig: TraceGenerationConfig;
 }
 
 export interface RegisterTraces {
   proto_step: "register_traces";
+  apalacheConfig: ApalacheConfig;
   itfTracePaths: string[];
 }
 
 export interface RegisterTraceGen {
   proto_step: "register_trace_gen";
-  specPath: string;
+  apalacheConfig: ApalacheConfig;
   traceConfig: TraceGenerationConfig;
   destPath: string;
-}
-
-export interface TraceGenerationConfig {
-  invariant: string;
-  lengthBound: number;
-  numTraces: number;
-  cinit?: string | null;
-  paramVars?: string;
-  view?: string;
 }
 
 export interface ReportState {
@@ -97,6 +104,7 @@ export interface AllStepsDone {
 
 export interface GenTracesDone {
   proto_step: "gen_traces_done";
+  itfTracePaths: string[];
 }
 
 export interface ProtocolError {
@@ -215,7 +223,10 @@ function walkMessage(obj: Record<string, unknown>): MirrorMessage {
     case "all_steps_done":
       return { proto_step: "all_steps_done" };
     case "gen_traces_done":
-      return { proto_step: "gen_traces_done" };
+      return {
+        proto_step: "gen_traces_done",
+        itfTracePaths: (obj.itfTracePaths as string[]) ?? [],
+      };
     case "protocol_error":
       return { proto_step: "protocol_error", error: obj.error as string };
     case "register_error":

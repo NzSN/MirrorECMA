@@ -21,29 +21,37 @@ describe("encodeClientMessage / decodeMirrorMessage", () => {
   it("round-trips a register message", () => {
     const msg: ClientMessage = {
       proto_step: "register",
-      specPath: "/foo/bar.tla",
-      traceConfig: {
+      apalacheConfig: {
+        specPath: "/foo/bar.tla",
         invariant: "TraceComplete",
         lengthBound: 5,
+      },
+      traceConfig: {
         numTraces: 10,
       },
     };
     const encoded = encodeClientMessage(msg);
     expect(JSON.parse(encoded)).toMatchObject({
       proto_step: "register",
-      specPath: "/foo/bar.tla",
-      traceConfig: { invariant: "TraceComplete", lengthBound: 5, numTraces: 10 },
+      apalacheConfig: { specPath: "/foo/bar.tla", invariant: "TraceComplete", lengthBound: 5 },
+      traceConfig: { numTraces: 10 },
     });
   });
 
   it("encodes a register_traces message", () => {
     const msg: ClientMessage = {
       proto_step: "register_traces",
+      apalacheConfig: {
+        specPath: "/foo/bar.tla",
+        invariant: "TraceComplete",
+        lengthBound: 5,
+      },
       itfTracePaths: ["/tmp/trace1.itf.json", "/tmp/trace2.itf.json"],
     };
     const encoded = encodeClientMessage(msg);
     expect(JSON.parse(encoded)).toEqual({
       proto_step: "register_traces",
+      apalacheConfig: { specPath: "/foo/bar.tla", invariant: "TraceComplete", lengthBound: 5 },
       itfTracePaths: ["/tmp/trace1.itf.json", "/tmp/trace2.itf.json"],
     });
   });
@@ -130,8 +138,8 @@ describe("decodeMirrorMessage", () => {
   });
 
   it("decodes gen_traces_done", () => {
-    const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "gen_traces_done" }));
-    expect(msg).toEqual({ proto_step: "gen_traces_done" });
+    const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "gen_traces_done", itfTracePaths: ["/tmp/t1.itf.json"] }));
+    expect(msg).toEqual({ proto_step: "gen_traces_done", itfTracePaths: ["/tmp/t1.itf.json"] });
   });
 
   it("decodes protocol_error", () => {
