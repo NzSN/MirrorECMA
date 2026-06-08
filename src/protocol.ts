@@ -18,7 +18,7 @@ export type StateComputer = (
 
 // ---- Message types ----
 
-export type ClientMessage = Register | RegisterTraces | ReportState;
+export type ClientMessage = Register | RegisterTraces | RegisterTraceGen | ReportState;
 
 export type MirrorMessage =
   | SpecValidated
@@ -27,6 +27,7 @@ export type MirrorMessage =
   | StepOk
   | StepMismatch
   | AllStepsDone
+  | GenTracesDone
   | ProtocolError
   | RegisterError;
 
@@ -39,6 +40,13 @@ export interface Register {
 export interface RegisterTraces {
   proto_step: "register_traces";
   itfTracePaths: string[];
+}
+
+export interface RegisterTraceGen {
+  proto_step: "register_trace_gen";
+  specPath: string;
+  traceConfig: TraceGenerationConfig;
+  destPath: string;
 }
 
 export interface TraceGenerationConfig {
@@ -85,6 +93,10 @@ export interface StepMismatch {
 
 export interface AllStepsDone {
   proto_step: "all_steps_done";
+}
+
+export interface GenTracesDone {
+  proto_step: "gen_traces_done";
 }
 
 export interface ProtocolError {
@@ -140,6 +152,7 @@ export function decodeMirrorMessage(line: string): MirrorMessage {
     case "step_ok":
     case "step_mismatch":
     case "all_steps_done":
+    case "gen_traces_done":
     case "protocol_error":
     case "register_error":
       return msg;
@@ -201,6 +214,8 @@ function walkMessage(obj: Record<string, unknown>): MirrorMessage {
       };
     case "all_steps_done":
       return { proto_step: "all_steps_done" };
+    case "gen_traces_done":
+      return { proto_step: "gen_traces_done" };
     case "protocol_error":
       return { proto_step: "protocol_error", error: obj.error as string };
     case "register_error":

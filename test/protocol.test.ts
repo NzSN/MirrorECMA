@@ -129,6 +129,11 @@ describe("decodeMirrorMessage", () => {
     expect(msg).toEqual({ proto_step: "all_steps_done" });
   });
 
+  it("decodes gen_traces_done", () => {
+    const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "gen_traces_done" }));
+    expect(msg).toEqual({ proto_step: "gen_traces_done" });
+  });
+
   it("decodes protocol_error", () => {
     const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "protocol_error", error: "bad!" }));
     expect(msg).toEqual({ proto_step: "protocol_error", error: "bad!" });

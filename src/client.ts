@@ -41,6 +41,22 @@ export async function runClient(
   await mainLoop(t, compute);
 }
 
+export async function runClientGenTraces(
+  binPath: string,
+  specPath: string,
+  destPath: string,
+  config: TraceGenerationConfig
+): Promise<void> {
+  const t = spawnMirror(binPath);
+  t.send(encodeClientMessage({
+    proto_step: "register_trace_gen",
+    specPath,
+    traceConfig: config,
+    destPath,
+  }));
+  await genTracesLoop(t);
+}
+
 async function mainLoop(t: Transport, compute: StateComputer): Promise<void> {
   const it = t[Symbol.asyncIterator]();
 
@@ -109,4 +125,15 @@ async function recv(it: AsyncIterator<string>): Promise<MirrorMessage> {
   const { value, done } = await it.next();
   if (done) throw new Error("transport closed unexpectedly");
   return decodeMirrorMessage(value);
+}
+
+async function genTracesLoop(t: Transport): Promise<void> {
+  const it = t[Symbol.asyncIterator]();
+
+  const msg = await recv(it);
+  if (msg.proto_step === "protocol_error") { await t.close(); throw new Error(msg.error); }
+  if (msg.proto_step === "register_error") { await t.close(); throw new Error(`register failed: ${msg.error}`); }
+  if (msg.proto_step === "gen_traces_done") { await t.close(); return; }
+  await t.close();
+  throw new Error(`expected gen_traces_done, got ${msg.proto_step}`);
 }

@@ -1,6 +1,7 @@
 import {
   runClient,
   runClientWithTraces,
+  runClientGenTraces,
   presetClient,
   type TraceGenerationConfig,
   type StateComputer,
@@ -10,6 +11,8 @@ import {
 } from "../src/index.js";
 
 import { resolve } from "node:path";
+import { mkdtemp, readdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
 
 let BIN = process.env.MIRROR_BIN ?? "";
 if (BIN && process.env.RUNFILES && !/^\//.test(BIN)) {
@@ -95,9 +98,20 @@ async function testRegisterTraces() {
   console.log("OK: register_traces smoke test passed");
 }
 
+async function testRegisterGenTraces() {
+  const destDir = await mkdtemp(tmpdir() + "/mirrorecma-gen-");
+  console.log(`Running smoke test (register_trace_gen) with spec: ${SPEC}, dest: ${destDir}`);
+  await runClientGenTraces(BIN, SPEC, destDir, config);
+  const files = await readdir(destDir);
+  const traceFiles = files.filter(f => f.endsWith(".itf.json"));
+  if (traceFiles.length === 0) throw new Error("no trace files generated");
+  console.log(`OK: register_trace_gen smoke test passed (${traceFiles.length} traces)`);
+}
+
 async function main() {
   await testRegister();
   await testRegisterTraces();
+  await testRegisterGenTraces();
 }
 
 main().catch((err) => {
