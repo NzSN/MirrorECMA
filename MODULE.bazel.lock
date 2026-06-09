@@ -610,7 +610,7 @@
     "@@rules_haskell+//extensions:stack_snapshot.bzl%stack_snapshot": {
       "general": {
         "bzlTransitiveDigest": "nVjY60LUdU8AN43+CNYfpBT/L/7YS3oKJtx+k6LG1xk=",
-        "usagesDigest": "WVYXP7B2jeNfv6UYSX5DCNodSnLOnguxAuqHzBDqqnc=",
+        "usagesDigest": "XW3Sujl8ojy1fFym1geTFepQB0dmhoJU+jxLD94ter8=",
         "recordedInputs": [
           "REPO_MAPPING:,modelmirrors modelmirrors+",
           "REPO_MAPPING:bazel_features+,bazel_features_globals bazel_features++version_extension+bazel_features_globals",
@@ -655,10 +655,13 @@
               "local_snapshot": "@@modelmirrors+//:stackage_snapshot.yaml",
               "packages": [
                 "aeson",
+                "base64-bytestring",
                 "bytestring",
                 "containers",
                 "directory",
                 "filepath",
+                "http-client",
+                "http-types",
                 "process",
                 "text",
                 "tasty",
@@ -681,10 +684,13 @@
               "local_snapshot": "@@modelmirrors+//:stackage_snapshot.yaml",
               "packages": [
                 "aeson",
+                "base64-bytestring",
                 "bytestring",
                 "containers",
                 "directory",
                 "filepath",
+                "http-client",
+                "http-types",
                 "process",
                 "text",
                 "tasty",
