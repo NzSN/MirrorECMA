@@ -138,7 +138,7 @@ function encodeValue(v: Value): unknown {
     case "int":  return { "#bigint": String(v.val) };
     case "bool": return v.val;
     case "str":  return v.val;
-    case "set":  return v.val.map(encodeValue);
+    case "set":  return { "#set": v.val.map(encodeValue) };
     case "tuple": return { "#tup": v.val.map(encodeValue) };
     case "record": {
       const rec: Record<string, unknown> = {};
@@ -181,6 +181,8 @@ function walk(v: unknown): any {
       return { tag: "int", val: BigInt(obj["#bigint"] as string) };
     if ("#tup" in obj && Array.isArray(obj["#tup"]))
       return { tag: "tuple", val: (obj["#tup"] as unknown[]).map(walk) };
+    if ("#set" in obj && Array.isArray(obj["#set"]))
+      return { tag: "set", val: (obj["#set"] as unknown[]).map(walk) };
     if ("proto_step" in obj)
       return walkMessage(obj);
     const rec: Record<string, Value> = {};
