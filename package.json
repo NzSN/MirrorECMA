@@ -9,6 +9,7 @@
   "types": "dist/index.d.ts",
   "files": ["dist"],
   "scripts": {
+    "prepare": "tsc",
     "build": "tsc",
     "check": "tsc --noEmit",
     "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
