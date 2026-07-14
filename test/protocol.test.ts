@@ -376,4 +376,44 @@ describe("value encoding round-trip via initial_state", () => {
     const encoded = encodeState(state);
     expect(encoded.fun).toEqual({ "#map": [["a", { "#bigint": "1" }]] });
   });
+
+  it("decodes variant values", () => {
+    const line = JSON.stringify({
+      proto_step: "initial_state",
+      action: "Init",
+      state: { v: { tag: "Some", value: 42 } },
+    });
+    const msg = decodeMirrorMessage(line) as any;
+    expect(msg.state.v).toEqual({
+      tag: "variant",
+      variantTag: "Some",
+      value: { tag: "int", val: BigInt(42) },
+    });
+  });
+
+  it("encodes variant values", () => {
+    const state: State = {
+      v: { tag: "variant", variantTag: "None", value: { tag: "null" } },
+    };
+    const encoded = encodeState(state);
+    expect(encoded.v).toEqual({ tag: "None", value: null });
+  });
+
+  it("decodes unserializable values", () => {
+    const line = JSON.stringify({
+      proto_step: "initial_state",
+      action: "Init",
+      state: { u: { "#unserializable": "Int" } },
+    });
+    const msg = decodeMirrorMessage(line) as any;
+    expect(msg.state.u).toEqual({ tag: "unserializable", val: "Int" });
+  });
+
+  it("encodes unserializable values", () => {
+    const state: State = {
+      u: { tag: "unserializable", val: "Nat" },
+    };
+    const encoded = encodeState(state);
+    expect(encoded.u).toEqual({ "#unserializable": "Nat" });
+  });
 });

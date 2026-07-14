@@ -8,6 +8,8 @@ export type Value =
   | { tag: "tuple"; val: Value[] }
   | { tag: "map"; val: [Value, Value][] }
   | { tag: "record"; val: Record<string, Value> }
+  | { tag: "variant"; variantTag: string; value: Value }
+  | { tag: "unserializable"; val: string }
   | { tag: "null" };
 
 export type State = Record<string, Value>;
@@ -150,6 +152,8 @@ function encodeValue(v: Value): unknown {
         rec[k] = encodeValue(iv);
       return rec;
     }
+    case "variant": return { tag: v.variantTag, value: encodeValue(v.value) };
+    case "unserializable": return { "#unserializable": v.val };
     case "null": return null;
   }
 }
@@ -192,8 +196,12 @@ function walk(v: unknown): any {
         tag: "map",
         val: (obj["#map"] as unknown[][]).map(([k, v]) => [walk(k), walk(v)]),
       };
+    if ("#unserializable" in obj && typeof obj["#unserializable"] === "string")
+      return { tag: "unserializable", val: obj["#unserializable"] as string };
     if ("proto_step" in obj)
       return walkMessage(obj);
+    if ("tag" in obj && "value" in obj && typeof obj.tag === "string")
+      return { tag: "variant", variantTag: obj.tag as string, value: walk(obj.value) };
     const rec: Record<string, Value> = {};
     for (const [k, val] of Object.entries(obj))
       rec[k] = walk(val) as Value;
@@ -301,6 +309,8 @@ function prettifyValue(v: Value): unknown {
       }
       return rec;
     }
+    case "variant": return { tag: v.variantTag, value: prettifyValue(v.value) };
+    case "unserializable": return v.val;
     case "null": return null;
   }
 }
