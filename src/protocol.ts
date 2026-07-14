@@ -4,6 +4,7 @@ export type Value =
   | { tag: "bool"; val: boolean }
   | { tag: "str"; val: string }
   | { tag: "set"; val: Value[] }
+  | { tag: "seq"; val: Value[] }
   | { tag: "tuple"; val: Value[] }
   | { tag: "map"; val: [Value, Value][] }
   | { tag: "record"; val: Record<string, Value> }
@@ -139,7 +140,8 @@ function encodeValue(v: Value): unknown {
     case "int":  return { "#bigint": String(v.val) };
     case "bool": return v.val;
     case "str":  return v.val;
-    case "set":  return { "#set": v.val.map(encodeValue) };
+    case "set":   return { "#set": v.val.map(encodeValue) };
+    case "seq":   return v.val.map(encodeValue);
     case "tuple": return { "#tup": v.val.map(encodeValue) };
     case "map":   return { "#map": v.val.map(([k, iv]) => [encodeValue(k), encodeValue(iv)]) };
     case "record": {
@@ -176,7 +178,7 @@ function walk(v: unknown): any {
   if (typeof v === "boolean") return { tag: "bool", val: v };
   if (typeof v === "string") return { tag: "str", val: v };
   if (typeof v === "number") return { tag: "int", val: BigInt(v) };
-  if (Array.isArray(v)) return { tag: "set", val: v.map(walk) };
+  if (Array.isArray(v)) return { tag: "seq", val: v.map(walk) };
   if (typeof v === "object") {
     const obj = v as Record<string, unknown>;
     if ("#bigint" in obj && typeof obj["#bigint"] === "string")
@@ -289,6 +291,7 @@ function prettifyValue(v: Value): unknown {
     case "bool": return v.val;
     case "str": return v.val;
     case "set": return v.val.map(prettifyValue);
+    case "seq": return v.val.map(prettifyValue);
     case "tuple": return v.val.map(prettifyValue);
     case "map": return v.val.map(([k, iv]) => [prettifyValue(k), prettifyValue(iv)]);
     case "record": {

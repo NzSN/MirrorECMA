@@ -314,7 +314,7 @@ describe("value encoding round-trip via initial_state", () => {
     });
   });
 
-  it("decodes set values (arrays)", () => {
+  it("decodes plain arrays as seq", () => {
     const line = JSON.stringify({
       proto_step: "initial_state",
       action: "Init",
@@ -324,7 +324,7 @@ describe("value encoding round-trip via initial_state", () => {
     });
     const msg = decodeMirrorMessage(line) as any;
     expect(msg.state.items).toEqual({
-      tag: "set",
+      tag: "seq",
       val: [
         { tag: "int", val: BigInt(1) },
         { tag: "int", val: BigInt(2) },
