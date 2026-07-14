@@ -332,4 +332,48 @@ describe("value encoding round-trip via initial_state", () => {
       ],
     });
   });
+
+  it("decodes set values (#set format)", () => {
+    const line = JSON.stringify({
+      proto_step: "initial_state",
+      action: "Init",
+      state: { items: { "#set": [1, 2, 3] } },
+    });
+    const msg = decodeMirrorMessage(line) as any;
+    expect(msg.state.items).toEqual({
+      tag: "set",
+      val: [
+        { tag: "int", val: BigInt(1) },
+        { tag: "int", val: BigInt(2) },
+        { tag: "int", val: BigInt(3) },
+      ],
+    });
+  });
+
+  it("decodes map values (#map format)", () => {
+    const line = JSON.stringify({
+      proto_step: "initial_state",
+      action: "Init",
+      state: { fun: { "#map": [["a", 1], ["b", 2]] } },
+    });
+    const msg = decodeMirrorMessage(line) as any;
+    expect(msg.state.fun).toEqual({
+      tag: "map",
+      val: [
+        [{ tag: "str", val: "a" }, { tag: "int", val: BigInt(1) }],
+        [{ tag: "str", val: "b" }, { tag: "int", val: BigInt(2) }],
+      ],
+    });
+  });
+
+  it("encodes map with #map wrapper", () => {
+    const state: State = {
+      fun: {
+        tag: "map",
+        val: [[{ tag: "str", val: "a" }, { tag: "int", val: BigInt(1) }]],
+      },
+    };
+    const encoded = encodeState(state);
+    expect(encoded.fun).toEqual({ "#map": [["a", { "#bigint": "1" }]] });
+  });
 });

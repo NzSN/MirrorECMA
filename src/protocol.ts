@@ -5,6 +5,7 @@ export type Value =
   | { tag: "str"; val: string }
   | { tag: "set"; val: Value[] }
   | { tag: "tuple"; val: Value[] }
+  | { tag: "map"; val: [Value, Value][] }
   | { tag: "record"; val: Record<string, Value> }
   | { tag: "null" };
 
@@ -140,6 +141,7 @@ function encodeValue(v: Value): unknown {
     case "str":  return v.val;
     case "set":  return { "#set": v.val.map(encodeValue) };
     case "tuple": return { "#tup": v.val.map(encodeValue) };
+    case "map":   return { "#map": v.val.map(([k, iv]) => [encodeValue(k), encodeValue(iv)]) };
     case "record": {
       const rec: Record<string, unknown> = {};
       for (const [k, iv] of Object.entries(v.val))
@@ -183,6 +185,11 @@ function walk(v: unknown): any {
       return { tag: "tuple", val: (obj["#tup"] as unknown[]).map(walk) };
     if ("#set" in obj && Array.isArray(obj["#set"]))
       return { tag: "set", val: (obj["#set"] as unknown[]).map(walk) };
+    if ("#map" in obj && Array.isArray(obj["#map"]))
+      return {
+        tag: "map",
+        val: (obj["#map"] as unknown[][]).map(([k, v]) => [walk(k), walk(v)]),
+      };
     if ("proto_step" in obj)
       return walkMessage(obj);
     const rec: Record<string, Value> = {};
@@ -283,6 +290,7 @@ function prettifyValue(v: Value): unknown {
     case "str": return v.val;
     case "set": return v.val.map(prettifyValue);
     case "tuple": return v.val.map(prettifyValue);
+    case "map": return v.val.map(([k, iv]) => [prettifyValue(k), prettifyValue(iv)]);
     case "record": {
       const rec: Record<string, unknown> = {};
       for (const [k, val] of Object.entries(v.val)) {
