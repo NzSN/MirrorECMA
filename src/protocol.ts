@@ -1,3 +1,6 @@
+// Itftraces file format specifications:
+// https://apalache-mc.org/docs/adr/015adr-trace.html#summary
+
 // Mirrors the Haskell Apalache.Types.Value
 export type Value =
   | { tag: "int"; val: bigint }
