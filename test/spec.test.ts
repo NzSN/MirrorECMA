@@ -67,4 +67,31 @@ describe("specFromFiles", () => {
     expect(spec.sources).toContain(MID);
     expect(spec.sources).toContain(DEP);
   });
+
+  it("uses TLA_LIBRARY_PATH when searchDirs is omitted", async () => {
+    const dir = await makeSpecDir({ "Root.tla": ROOT });
+    const libDir = await mkdtemp(join(tmpdir(), "mirrorecma-lib-"));
+    await writeFile(join(libDir, "Mid.tla"), MID);
+    await writeFile(join(libDir, "Dep.tla"), DEP);
+    const prev = process.env.TLA_LIBRARY_PATH;
+    process.env.TLA_LIBRARY_PATH = libDir;
+    try {
+      const spec = await specFromFiles(join(dir, "Root.tla"));
+      expect(spec.sources[0]).toBe(ROOT);
+      expect(spec.sources).toContain(MID);
+      expect(spec.sources).toContain(DEP);
+    } finally {
+      if (prev === undefined) delete process.env.TLA_LIBRARY_PATH;
+      else process.env.TLA_LIBRARY_PATH = prev;
+    }
+  });
+
+  it("throws on ambiguous module found in multiple directories", async () => {
+    const dir = await makeSpecDir({ "Root.tla": ROOT, "Mid.tla": MID, "Dep.tla": DEP });
+    const libDir = await mkdtemp(join(tmpdir(), "mirrorecma-lib-"));
+    await writeFile(join(libDir, "Mid.tla"), MID);
+    await expect(specFromFiles(join(dir, "Root.tla"), [libDir])).rejects.toThrow(
+      /module Mid required by .*Root\.tla is ambiguous: found at .*,/
+    );
+  });
 });

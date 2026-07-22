@@ -178,9 +178,12 @@ registration messages.
 
 Reads a root TLA+ file **and its dependency closure** (`EXTENDS` / `INSTANCE`
 clauses, resolved transitively as `<Name>.tla` next to the importing file, then
-in `searchDirs`). Builtin modules (`Naturals`, `Integers`, `Sequences`, …) are
-skipped. The result is `{ sources: [root, ...deps] }` — root first, as apalache
-requires.
+in `searchDirs`). When `searchDirs` is omitted it defaults to the
+`TLA_LIBRARY_PATH` environment variable (colon-separated). Builtin modules
+(`Naturals`, `Integers`, `Sequences`, …) are skipped. A module name found in
+more than one directory is an **ambiguity error** (the wrong file would
+otherwise be shipped silently). The result is `{ sources: [root, ...deps] }` —
+root first, as apalache requires.
 
 ### Inline spec sources (remote mirrors)
 
