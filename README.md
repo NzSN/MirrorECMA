@@ -68,6 +68,63 @@ const states = [
 await runClient(bin, spec, config, presetClient(states));
 ```
 
+### `runClientExplore(binPath, spec, invariants, exports, maxSteps, compute)`
+
+Mirror-driven **interactive symbolic model checking**. Instead of replaying
+precomputed concrete traces, the mirror starts a live apalache explorer server
+and computes each successor state symbolically; your `compute` implementation is
+conformance-checked against those states. The message flow is identical to
+`runClient` (`spec_validated` → `initial_state`/`next_step` → … → `all_steps_done`).
+
+```ts
+const spec = await specFromFile("./specs/HourClock.tla");
+await runClientExplore(bin, spec, ["Inv"], [], 4, computer);
+```
+
+| Arg | Description |
+|---|---|
+| `spec` | `ApalacheSpec` (`{ sources: string[] }`) — TLA+ source text; use `specFromFile` |
+| `invariants` | Names of state-invariant operators, checked after every step |
+| `exports` | Operator names declared for later `OPERATOR`-kind RPC queries. Unused by the mirror's current session commands — pass `[]` |
+| `maxSteps` | Exploration depth; `all_steps_done` is sent when it is reached |
+
+Differences from the trace flows:
+
+- `next_step.parameters` carries the **full expected state** (not
+  paramVars-extracted params), so a computer may echo it — but an independent
+  implementation makes the check non-vacuous.
+- The reported state must contain **every** state variable, including
+  `action_taken` if the spec has one (the mirror derives action names from it).
+  The `paramVars` omit-from-report rule does not apply.
+
+### `startExploreSession(binPath, spec, invariants, exports)` → `ExploreSession`
+
+Client-driven symbolic checking: opens an explorer session and lets you issue
+explorer commands yourself; the mirror proxies each one to the apalache server.
+
+```ts
+const session = await startExploreSession(bin, spec, ["Inv"], []);
+session.ready;            // { initTransitions, nextTransitions, stateInvariants }
+
+await session.assumeTransition(0);   // → "ENABLED" | "DISABLED" | "UNKNOWN"
+await session.nextStep();            // → step number
+const state = await session.queryState();
+await session.checkInvariant(0);     // → "SATISFIED" | "VIOLATED" | "UNKNOWN"
+await session.assumeState({ hr });   // → "ENABLED" | "DISABLED" | "UNKNOWN"
+await session.rollback(0);           // → snapshot id
+await session.done();                // ends the session and closes the mirror
+```
+
+Commands and replies strictly alternate. A rejected command throws
+(`protocol_error`) but the **session stays open** — you may keep issuing
+commands. `invariantId` indexes into the `invariants` list passed at open.
+
+### `specFromFile(path)` → `ApalacheSpec`
+
+Reads a TLA+ file into the `{ sources: [text] }` shape expected by the explore
+registration messages.
+
+
 ### `TraceGenerationConfig`
 
 | Field | Type | Description |

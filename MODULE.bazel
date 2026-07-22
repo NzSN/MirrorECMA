@@ -9,7 +9,10 @@ bazel_dep(name = "modelmirrors", version = "0.1.0.0")
 git_override(
     module_name = "modelmirrors",
     remote = "https://github.com/NzSN/ModelMirrors",
-    commit = "1636dcfd5778a0c24fd8afe2ab8d701213f0e57e",
+    # Explorer feature (interactive branch). A pinned hash does NOT follow the
+    # branch: this silently goes stale as `interactive` advances. Repoint when
+    # picking up newer explorer changes, ideally at main once merged.
+    commit = "2cabc401f0eb7c05131beb3a2e16afd7ec32e247",
 )
 
 # Transitive overrides: modelmirros uses non-BCR versions of rules_haskell/rules_sh

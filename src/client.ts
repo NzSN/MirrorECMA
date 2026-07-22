@@ -4,15 +4,23 @@ import {
   State,
   StateComputer,
   ApalacheConfig,
+  ApalacheSpec,
   TraceGenerationConfig,
+  TransitionStatus,
+  InvariantStatus,
   encodeClientMessage,
   encodeState,
   decodeMirrorMessage,
   prettifyState,
 } from "./protocol.js";
 import type { Transport } from "./transport.js";
+import { readFile } from "node:fs/promises";
 
-export type { State, StateComputer, ApalacheConfig, TraceGenerationConfig } from "./protocol.js";
+export type { State, StateComputer, ApalacheConfig, ApalacheSpec, TraceGenerationConfig, TransitionStatus, InvariantStatus } from "./protocol.js";
+
+export async function specFromFile(path: string): Promise<ApalacheSpec> {
+  return { sources: [await readFile(path, "utf8")] };
+}
 
 export async function runClientWithTraces(
   binPath: string,
@@ -58,6 +66,132 @@ export async function runClientGenTraces(
     destPath,
   }));
   await genTracesLoop(t);
+}
+
+export async function runClientExplore(
+  binPath: string,
+  spec: ApalacheSpec,
+  invariants: string[],
+  exports: string[],
+  maxSteps: number,
+  compute: StateComputer
+): Promise<void> {
+  const t = spawnMirror(binPath);
+  t.send(encodeClientMessage({
+    proto_step: "register_explore",
+    spec,
+    invariants,
+    exports,
+    maxSteps,
+  }));
+  await mainLoop(t, compute);
+}
+
+export class ExploreSession {
+  private constructor(
+    private t: Transport,
+    private it: AsyncIterator<string>,
+    public readonly ready: {
+      initTransitions: number;
+      nextTransitions: number;
+      stateInvariants: number;
+    }
+  ) {}
+
+  static async open(
+    binPath: string,
+    spec: ApalacheSpec,
+    invariants: string[],
+    exports: string[]
+  ): Promise<ExploreSession> {
+    const t = spawnMirror(binPath);
+    const it = t[Symbol.asyncIterator]();
+    t.send(encodeClientMessage({
+      proto_step: "register_explore_session",
+      spec,
+      invariants,
+      exports,
+    }));
+    const msg = await recv(it);
+    if (msg.proto_step === "register_error") { await t.close(); throw new Error(`register failed: ${msg.error}`); }
+    if (msg.proto_step === "protocol_error") { await t.close(); throw new Error(msg.error); }
+    if (msg.proto_step !== "explorer_ready") {
+      await t.close();
+      throw new Error(`expected explorer_ready, got ${msg.proto_step}`);
+    }
+    return new ExploreSession(t, it, {
+      initTransitions: msg.initTransitions,
+      nextTransitions: msg.nextTransitions,
+      stateInvariants: msg.stateInvariants,
+    });
+  }
+
+  async assumeTransition(transitionId: number): Promise<TransitionStatus> {
+    const msg = await this.cmd({ proto_step: "explore_assume_transition", transitionId });
+    if (msg.proto_step !== "explore_transition_status")
+      throw new Error(`unexpected reply: ${msg.proto_step}`);
+    return msg.status;
+  }
+
+  async nextStep(): Promise<number> {
+    const msg = await this.cmd({ proto_step: "explore_next_step" });
+    if (msg.proto_step !== "explore_step_done")
+      throw new Error(`unexpected reply: ${msg.proto_step}`);
+    return msg.stepNo;
+  }
+
+  async queryState(): Promise<State> {
+    const msg = await this.cmd({ proto_step: "explore_query_state" });
+    if (msg.proto_step !== "explore_state")
+      throw new Error(`unexpected reply: ${msg.proto_step}`);
+    return msg.state;
+  }
+
+  async checkInvariant(invariantId: number): Promise<InvariantStatus> {
+    const msg = await this.cmd({ proto_step: "explore_check_invariant", invariantId });
+    if (msg.proto_step !== "explore_invariant_status")
+      throw new Error(`unexpected reply: ${msg.proto_step}`);
+    return msg.status;
+  }
+
+  async assumeState(eqs: State): Promise<TransitionStatus> {
+    this.t.send(JSON.stringify({ proto_step: "explore_assume_state", state: encodeState(eqs) }));
+    const msg = await recv(this.it);
+    if (msg.proto_step === "protocol_error") throw new Error(msg.error);
+    if (msg.proto_step !== "explore_assume_status")
+      throw new Error(`unexpected reply: ${msg.proto_step}`);
+    return msg.status;
+  }
+
+  async rollback(snapshotId: number): Promise<number> {
+    const msg = await this.cmd({ proto_step: "explore_rollback", snapshotId });
+    if (msg.proto_step !== "explore_rollback_done")
+      throw new Error(`unexpected reply: ${msg.proto_step}`);
+    return msg.snapshotId;
+  }
+
+  async done(): Promise<void> {
+    const msg = await this.cmd({ proto_step: "explore_done" });
+    if (msg.proto_step !== "explore_session_done")
+      throw new Error(`unexpected reply: ${msg.proto_step}`);
+    await this.t.close();
+  }
+
+  private async cmd(m: Parameters<typeof encodeClientMessage>[0]): Promise<MirrorMessage> {
+    this.t.send(encodeClientMessage(m));
+    const msg = await recv(this.it);
+    if (msg.proto_step === "protocol_error") throw new Error(msg.error);
+    return msg;
+  }
+}
+
+export function startExploreSession(
+  binPath: string,
+  spec: ApalacheSpec,
+  invariants: string[],
+  exports: string[]
+): Promise<ExploreSession> {
+  return ExploreSession.open(binPath, spec, invariants, exports);
 }
 
 async function mainLoop(t: Transport, compute: StateComputer): Promise<void> {

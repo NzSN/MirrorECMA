@@ -64,6 +64,7 @@ js_test(
         ":smoke_test",
         "@modelmirrors//app:ModelMirrors",
         "specs/Counter.tla",
+        "specs/HourClock.tla",
     ] + glob(["specs/traces/*.itf.json"]),
     env = {
         "MIRROR_BIN": "$(rlocationpath @modelmirrors//app:ModelMirrors)",

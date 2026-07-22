@@ -25,7 +25,27 @@ export type StateComputer = (
 
 // ---- Message types ----
 
-export type ClientMessage = Register | RegisterTraces | RegisterTraceGen | ReportState;
+export interface ApalacheSpec {
+  sources: string[];
+}
+
+export type TransitionStatus = "ENABLED" | "DISABLED" | "UNKNOWN";
+export type InvariantStatus = "SATISFIED" | "VIOLATED" | "UNKNOWN";
+
+export type ClientMessage =
+  | Register
+  | RegisterTraces
+  | RegisterTraceGen
+  | RegisterExplore
+  | RegisterExploreSession
+  | ExploreAssumeTransition
+  | ExploreNextStep
+  | ExploreQueryState
+  | ExploreCheckInvariant
+  | ExploreAssumeState
+  | ExploreRollback
+  | ExploreDone
+  | ReportState;
 
 export type MirrorMessage =
   | SpecValidated
@@ -36,7 +56,15 @@ export type MirrorMessage =
   | AllStepsDone
   | GenTracesDone
   | ProtocolError
-  | RegisterError;
+  | RegisterError
+  | ExplorerReady
+  | ExploreTransitionStatus
+  | ExploreStepDone
+  | ExploreState
+  | ExploreInvariantStatus
+  | ExploreAssumeStatus
+  | ExploreRollbackDone
+  | ExploreSessionDone;
 
 export interface ApalacheConfig {
   specPath: string;
@@ -70,6 +98,53 @@ export interface RegisterTraceGen {
   apalacheConfig: ApalacheConfig;
   traceConfig: TraceGenerationConfig;
   destPath: string;
+}
+
+export interface RegisterExplore {
+  proto_step: "register_explore";
+  spec: ApalacheSpec;
+  invariants: string[];
+  exports: string[];
+  maxSteps: number;
+}
+
+export interface RegisterExploreSession {
+  proto_step: "register_explore_session";
+  spec: ApalacheSpec;
+  invariants: string[];
+  exports: string[];
+}
+
+export interface ExploreAssumeTransition {
+  proto_step: "explore_assume_transition";
+  transitionId: number;
+}
+
+export interface ExploreNextStep {
+  proto_step: "explore_next_step";
+}
+
+export interface ExploreQueryState {
+  proto_step: "explore_query_state";
+}
+
+export interface ExploreCheckInvariant {
+  proto_step: "explore_check_invariant";
+  invariantId: number;
+}
+
+export interface ExploreAssumeState {
+  proto_step: "explore_assume_state";
+  state: State;
+}
+
+export interface ExploreRollback {
+  proto_step: "explore_rollback";
+  snapshotId: number;
+}
+
+export interface ExploreDone {
+  proto_step: "explore_done";
 }
 
 export interface ReportState {
@@ -124,6 +199,47 @@ export interface RegisterError {
   error: string;
 }
 
+export interface ExplorerReady {
+  proto_step: "explorer_ready";
+  initTransitions: number;
+  nextTransitions: number;
+  stateInvariants: number;
+}
+
+export interface ExploreTransitionStatus {
+  proto_step: "explore_transition_status";
+  status: TransitionStatus;
+}
+
+export interface ExploreStepDone {
+  proto_step: "explore_step_done";
+  stepNo: number;
+}
+
+export interface ExploreState {
+  proto_step: "explore_state";
+  state: State;
+}
+
+export interface ExploreInvariantStatus {
+  proto_step: "explore_invariant_status";
+  status: InvariantStatus;
+}
+
+export interface ExploreAssumeStatus {
+  proto_step: "explore_assume_status";
+  status: TransitionStatus;
+}
+
+export interface ExploreRollbackDone {
+  proto_step: "explore_rollback_done";
+  snapshotId: number;
+}
+
+export interface ExploreSessionDone {
+  proto_step: "explore_session_done";
+}
+
 // ---- JSON encode/decode ----
 
 export function encodeClientMessage(msg: ClientMessage): string {
@@ -174,6 +290,14 @@ export function decodeMirrorMessage(line: string): MirrorMessage {
     case "gen_traces_done":
     case "protocol_error":
     case "register_error":
+    case "explorer_ready":
+    case "explore_transition_status":
+    case "explore_step_done":
+    case "explore_state":
+    case "explore_invariant_status":
+    case "explore_assume_status":
+    case "explore_rollback_done":
+    case "explore_session_done":
       return msg;
     default:
       return { proto_step: "protocol_error", error: `unknown step: ${(msg as any).proto_step}` };
@@ -253,6 +377,30 @@ function walkMessage(obj: Record<string, unknown>): MirrorMessage {
       return { proto_step: "protocol_error", error: obj.error as string };
     case "register_error":
       return { proto_step: "register_error", error: obj.error as string };
+    case "explorer_ready":
+      return {
+        proto_step: "explorer_ready",
+        initTransitions: obj.initTransitions as number,
+        nextTransitions: obj.nextTransitions as number,
+        stateInvariants: obj.stateInvariants as number,
+      };
+    case "explore_transition_status":
+      return { proto_step: "explore_transition_status", status: obj.status as TransitionStatus };
+    case "explore_step_done":
+      return { proto_step: "explore_step_done", stepNo: obj.stepNo as number };
+    case "explore_state":
+      return {
+        proto_step: "explore_state",
+        state: (walk(obj.state) as { tag: "record"; val: Record<string, Value> }).val,
+      };
+    case "explore_invariant_status":
+      return { proto_step: "explore_invariant_status", status: obj.status as InvariantStatus };
+    case "explore_assume_status":
+      return { proto_step: "explore_assume_status", status: obj.status as TransitionStatus };
+    case "explore_rollback_done":
+      return { proto_step: "explore_rollback_done", snapshotId: obj.snapshotId as number };
+    case "explore_session_done":
+      return { proto_step: "explore_session_done" };
     default:
       return { proto_step: "protocol_error", error: `unknown proto_step: ${step}` };
   }

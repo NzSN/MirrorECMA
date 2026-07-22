@@ -161,6 +161,133 @@ describe("decodeMirrorMessage", () => {
   });
 });
 
+describe("explore messages (encode)", () => {
+  const spec = { sources: ["---- MODULE M ----\n===="] };
+
+  it("encodes register_explore", () => {
+    const encoded = encodeClientMessage({
+      proto_step: "register_explore",
+      spec,
+      invariants: ["Inv"],
+      exports: [],
+      maxSteps: 4,
+    });
+    expect(JSON.parse(encoded)).toEqual({
+      proto_step: "register_explore",
+      spec,
+      invariants: ["Inv"],
+      exports: [],
+      maxSteps: 4,
+    });
+  });
+
+  it("encodes register_explore_session", () => {
+    const encoded = encodeClientMessage({
+      proto_step: "register_explore_session",
+      spec,
+      invariants: ["Inv"],
+      exports: [],
+    });
+    expect(JSON.parse(encoded)).toEqual({
+      proto_step: "register_explore_session",
+      spec,
+      invariants: ["Inv"],
+      exports: [],
+    });
+  });
+
+  it("encodes explore_assume_transition", () => {
+    expect(JSON.parse(encodeClientMessage({ proto_step: "explore_assume_transition", transitionId: 3 })))
+      .toEqual({ proto_step: "explore_assume_transition", transitionId: 3 });
+  });
+
+  it("encodes explore_next_step", () => {
+    expect(JSON.parse(encodeClientMessage({ proto_step: "explore_next_step" })))
+      .toEqual({ proto_step: "explore_next_step" });
+  });
+
+  it("encodes explore_query_state", () => {
+    expect(JSON.parse(encodeClientMessage({ proto_step: "explore_query_state" })))
+      .toEqual({ proto_step: "explore_query_state" });
+  });
+
+  it("encodes explore_check_invariant", () => {
+    expect(JSON.parse(encodeClientMessage({ proto_step: "explore_check_invariant", invariantId: 2 })))
+      .toEqual({ proto_step: "explore_check_invariant", invariantId: 2 });
+  });
+
+  it("encodes explore_rollback", () => {
+    expect(JSON.parse(encodeClientMessage({ proto_step: "explore_rollback", snapshotId: 5 })))
+      .toEqual({ proto_step: "explore_rollback", snapshotId: 5 });
+  });
+
+  it("encodes explore_done", () => {
+    expect(JSON.parse(encodeClientMessage({ proto_step: "explore_done" })))
+      .toEqual({ proto_step: "explore_done" });
+  });
+});
+
+describe("decodeMirrorMessage (explorer)", () => {
+  it("decodes explorer_ready", () => {
+    const msg = decodeMirrorMessage(JSON.stringify({
+      proto_step: "explorer_ready",
+      initTransitions: 1,
+      nextTransitions: 2,
+      stateInvariants: 1,
+    }));
+    expect(msg).toEqual({
+      proto_step: "explorer_ready",
+      initTransitions: 1,
+      nextTransitions: 2,
+      stateInvariants: 1,
+    });
+  });
+
+  it("decodes explore_transition_status", () => {
+    const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "explore_transition_status", status: "ENABLED" }));
+    expect(msg).toEqual({ proto_step: "explore_transition_status", status: "ENABLED" });
+  });
+
+  it("decodes explore_step_done", () => {
+    const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "explore_step_done", stepNo: 1 }));
+    expect(msg).toEqual({ proto_step: "explore_step_done", stepNo: 1 });
+  });
+
+  it("decodes explore_state with #bigint fields", () => {
+    const msg = decodeMirrorMessage(JSON.stringify({
+      proto_step: "explore_state",
+      state: { hr: { "#bigint": "7" }, ticked: true },
+    }));
+    expect(msg).toEqual({
+      proto_step: "explore_state",
+      state: {
+        hr: { tag: "int", val: 7n },
+        ticked: { tag: "bool", val: true },
+      },
+    });
+  });
+
+  it("decodes explore_invariant_status", () => {
+    const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "explore_invariant_status", status: "SATISFIED" }));
+    expect(msg).toEqual({ proto_step: "explore_invariant_status", status: "SATISFIED" });
+  });
+
+  it("decodes explore_assume_status", () => {
+    const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "explore_assume_status", status: "DISABLED" }));
+    expect(msg).toEqual({ proto_step: "explore_assume_status", status: "DISABLED" });
+  });
+
+  it("decodes explore_rollback_done", () => {
+    const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "explore_rollback_done", snapshotId: 0 }));
+    expect(msg).toEqual({ proto_step: "explore_rollback_done", snapshotId: 0 });
+  });
+
+  it("decodes explore_session_done", () => {
+    const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "explore_session_done" }));
+    expect(msg).toEqual({ proto_step: "explore_session_done" });
+  });
+});
+
 describe("encodeState / decodeMirrorMessage round-trip", () => {
   it("encodes and decodes #bigint values correctly", () => {
     const state: State = { count: { tag: "int", val: BigInt("12345678901234567890") } };

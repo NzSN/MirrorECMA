@@ -2,6 +2,9 @@ import {
   runClient,
   runClientWithTraces,
   runClientGenTraces,
+  runClientExplore,
+  startExploreSession,
+  specFromFile,
   presetClient,
   type ApalacheConfig,
   type TraceGenerationConfig,
@@ -113,10 +116,81 @@ async function testRegisterGenTraces() {
   console.log(`OK: register_trace_gen smoke test passed (${traceFiles.length} traces)`);
 }
 
+function hourClockSpecPath(): string {
+  const p = "specs/HourClock.tla";
+  return process.env.RUNFILES ? resolve(process.env.RUNFILES, "_main", p) : resolve(p);
+}
+
+// Faithful HourClock implementation: reports all 6 state vars, including
+// action_taken — the mirror derives the action name from it and
+// conformance-checks the full reported state.
+// Note: mainLoop passes the received state as `params` for initial_state
+// (prevState is {}), so init echoes params.
+class HourClockComputer {
+  compute(action: string, params: State, prevState: State): State {
+    void action;
+    if (!prevState.hr) return params;
+
+    const oldHr = asInt(prevState.hr!) ?? 0n;
+    const oldStep = asInt(prevState.step_count!) ?? 0n;
+    return {
+      hr: { tag: "int", val: oldHr !== 12n ? oldHr + 1n : 1n },
+      latest_hr: { tag: "int", val: oldHr },
+      ticked: { tag: "bool", val: true },
+      action_taken: { tag: "str", val: "tick" },
+      nondet_picks: prevState.nondet_picks!,
+      step_count: { tag: "int", val: oldStep + 1n },
+    };
+  }
+}
+
+async function testExplore() {
+  const spec = await specFromFile(hourClockSpecPath());
+  console.log("Running smoke test (register_explore)");
+  const computer = new HourClockComputer();
+  await runClientExplore(BIN, spec, ["Inv"], [], 4, computer.compute.bind(computer));
+  console.log("OK: register_explore smoke test passed");
+}
+
+async function testExploreSession() {
+  const spec = await specFromFile(hourClockSpecPath());
+  console.log("Running smoke test (register_explore_session)");
+  const session = await startExploreSession(BIN, spec, ["Inv"], []);
+
+  const { initTransitions, nextTransitions, stateInvariants } = session.ready;
+  if (initTransitions !== 1) throw new Error(`expected 1 init transition, got ${initTransitions}`);
+  if (nextTransitions < 1) throw new Error(`expected >= 1 next transition, got ${nextTransitions}`);
+  if (stateInvariants !== 1) throw new Error(`expected 1 state invariant, got ${stateInvariants}`);
+
+  const status1 = await session.assumeTransition(0);
+  if (status1 !== "ENABLED") throw new Error(`assumeTransition: expected ENABLED, got ${status1}`);
+
+  const stepNo = await session.nextStep();
+  if (stepNo !== 1) throw new Error(`nextStep: expected step 1, got ${stepNo}`);
+
+  const state = await session.queryState();
+  const hr = state.hr;
+  if (!hr) throw new Error("queryState: state has no hr");
+
+  const invStatus = await session.checkInvariant(0);
+  if (invStatus !== "SATISFIED") throw new Error(`checkInvariant: expected SATISFIED, got ${invStatus}`);
+
+  const status2 = await session.assumeState({ hr });
+  if (status2 !== "ENABLED") throw new Error(`assumeState: expected ENABLED, got ${status2}`);
+
+  const snap = await session.rollback(0);
+  if (snap !== 0) throw new Error(`rollback: expected snapshot 0, got ${snap}`);
+
+  await session.done();
+  console.log("OK: register_explore_session smoke test passed");
+}
+
 async function main() {
   await testRegister();
   await testRegisterTraces();
   await testRegisterGenTraces();
+  await testExplore();
+  await testExploreSession();
 }
 
 main().catch((err) => {
