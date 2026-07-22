@@ -25,13 +25,14 @@ bazel test //:smoke     # hermetic smoke test (builds ModelMirros via Bazel)
 ## Architecture
 
 - `src/protocol.ts` — `Value`, `State`, message types, JSON encode/decode (ITF format with `#bigint`/`#tup` markers), value helpers (`asInt`, `asStr`, `asRecord`, `getParam`, `getParamInt`)
-- `src/client.ts` — `runClient()` (trace generation), `runClientWithTraces()` (pre-computed traces), `runClientGenTraces()` (generate traces to disk), `presetClient()` (pre-defined state sequence)
-- `src/transport.ts` — `spawnMirror()`: spawns the Haskell binary over stdio, exposes async iterable via readline
+- `src/client.ts` — `runClient()` (trace generation), `runClientWithTraces()` (pre-computed traces), `runClientGenTraces()` (generate traces to disk), `runClientExplore()` (mirror-driven symbolic checking), `startExploreSession()`/`ExploreSession` (client-driven explorer sessions), `presetClient()` (pre-defined state sequence)
+- `src/spec.ts` — `specFromFiles()`: EXTENDS/INSTANCE dependency-closure resolver producing `{sources: [root, ...deps]}` (root first — apalache treats `sources[0]` as the root module)
+- `src/transport.ts` — `spawnMirror()`: spawns the Haskell binary over stdio; `connectMirror(host, port)`: TCP transport for a mirror daemon (`ModelMirrors --serve <port>`). Both expose the same async-iterable JSON-lines `Transport`
 - `src/index.ts` — public API barrel, re-exports all symbols
-- `specs/Counter.tla` — TLA+ spec for testing
+- `specs/Counter.tla`, `specs/HourClock.tla`, `specs/ExtMain.tla`+`specs/ExtDep.tla` — TLA+ specs for testing (HourClock: explorer flows; Ext*: multi-module inline-spec flow)
 - `specs/traces/` — pre-generated ITF JSON traces
-- `test/smoke.test.ts` — self-executing integration test (not a jest suite — it calls `main()` at bottom)
-- `test/protocol.test.ts` — jest unit tests for encoding/decoding/helpers
+- `test/smoke.test.ts` — self-executing integration test (not a jest suite — it calls `main()` at bottom); covers all flows over stdio AND over TCP
+- `test/protocol.test.ts`, `test/spec.test.ts` — jest unit tests
 
 ## Key config files
 

@@ -56,6 +56,31 @@ describe("encodeClientMessage / decodeMirrorMessage", () => {
     });
   });
 
+  it("round-trips a register message with inline spec", () => {
+    const msg: ClientMessage = {
+      proto_step: "register",
+      apalacheConfig: {
+        specPath: "/nonexistent/ExtMain.tla",
+        invariant: "TraceComplete",
+        lengthBound: 3,
+      },
+      traceConfig: { numTraces: 1 },
+      spec: { sources: ["---- MODULE ExtMain ----\n====\n", "---- MODULE ExtDep ----\n====\n"] },
+    };
+    const parsed = JSON.parse(encodeClientMessage(msg));
+    expect(parsed.spec.sources).toHaveLength(2);
+    expect(parsed.spec.sources[0]).toContain("MODULE ExtMain");
+  });
+
+  it("omits spec from register when not provided", () => {
+    const msg: ClientMessage = {
+      proto_step: "register",
+      apalacheConfig: { specPath: "/foo.tla", invariant: "Inv", lengthBound: 1 },
+      traceConfig: { numTraces: 1 },
+    };
+    expect("spec" in JSON.parse(encodeClientMessage(msg))).toBe(false);
+  });
+
   it("round-trips a report_state message with bigints", () => {
     const state: State = {
       count: { tag: "int", val: BigInt("9007199254740991") },

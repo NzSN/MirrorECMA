@@ -7,11 +7,14 @@ export {
   ExploreSession,
   specFromFile,
   presetClient,
+  type RunOptions,
   type State,
   type StateComputer,
   type ApalacheConfig,
   type TraceGenerationConfig,
 } from "./client.js";
+
+export { specFromFiles } from "./spec.js";
 
 export {
   type MirrorMessage,
@@ -59,4 +62,4 @@ export {
   getParamInt,
 } from "./protocol.js";
 
-export { spawnMirror, type Transport } from "./transport.js";
+export { spawnMirror, connectMirror, type Transport, type ConnectTransport } from "./transport.js";

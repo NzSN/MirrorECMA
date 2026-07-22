@@ -85,6 +85,7 @@ export interface Register {
   proto_step: "register";
   apalacheConfig: ApalacheConfig;
   traceConfig: TraceGenerationConfig;
+  spec?: ApalacheSpec;
 }
 
 export interface RegisterTraces {
@@ -98,6 +99,7 @@ export interface RegisterTraceGen {
   apalacheConfig: ApalacheConfig;
   traceConfig: TraceGenerationConfig;
   destPath: string;
+  spec?: ApalacheSpec;
 }
 
 export interface RegisterExplore {

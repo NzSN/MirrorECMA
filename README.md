@@ -124,6 +124,49 @@ commands. `invariantId` indexes into the `invariants` list passed at open.
 Reads a TLA+ file into the `{ sources: [text] }` shape expected by the explore
 registration messages.
 
+### `specFromFiles(rootPath, searchDirs?)` → `ApalacheSpec`
+
+Reads a root TLA+ file **and its dependency closure** (`EXTENDS` / `INSTANCE`
+clauses, resolved transitively as `<Name>.tla` next to the importing file, then
+in `searchDirs`). Builtin modules (`Naturals`, `Integers`, `Sequences`, …) are
+skipped. The result is `{ sources: [root, ...deps] }` — root first, as apalache
+requires.
+
+### Inline spec sources (remote mirrors)
+
+`register` and `register_trace_gen` accept an optional `spec` field carrying
+the spec's full source text. When present, the mirror materializes the sources
+to a temp directory and **ignores `apalacheConfig.specPath`** — the mirror
+never needs filesystem access to the client's files. This is what makes
+running the mirror on another machine possible.
+
+```ts
+const spec = await specFromFiles("./specs/ExtMain.tla"); // resolves EXTENDS deps
+await runClient(bin, { specPath: "ignored", invariant: "TraceComplete", lengthBound: 3 },
+  { numTraces: 1 }, compute, { spec });
+```
+
+Note: `register_traces` sends `itfTracePaths`, which remain **mirror-local** —
+for remote mirrors use `register`, `register_trace_gen`, or the explore flows.
+
+### TCP transport
+
+All client entry points accept either a binary path (spawns the mirror over
+stdio, as before) or a `Transport`. `connectMirror` provides a TCP transport;
+run the mirror as a daemon with `--serve <port>` (one protocol session per
+connection, sequential accept loop):
+
+```ts
+// mirror side:  ModelMirrors --serve 8823
+import { connectMirror, runClient } from "mirrorecma";
+
+await runClient(connectMirror("192.168.1.10", 8823), apalacheConfig, traceConfig, compute);
+// or await startExploreSession(connectMirror("192.168.1.10", 8823), spec, ["Inv"], []);
+```
+
+The wire format is the same JSON-lines as stdio. Plain TCP, no TLS — use
+SSH/stunnel for untrusted networks.
+
 
 ### `TraceGenerationConfig`
 

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "TypeScript client for ModelMirros protocol",
   "license": "ISC",
-  "type": "module",
+  "type": "commonjs",
   "main": "src/index.js",
   "types": "src/index.d.ts"
 }

@@ -18,17 +18,24 @@ import { readFile } from "node:fs/promises";
 
 export type { State, StateComputer, ApalacheConfig, ApalacheSpec, TraceGenerationConfig, TransitionStatus, InvariantStatus } from "./protocol.js";
 
+export interface RunOptions {
+  /** Inline spec sources (root module first); when present, the mirror
+   *  materializes them and ignores apalacheConfig.specPath. Use
+   *  specFromFiles to build this from a root .tla file. */
+  spec?: ApalacheSpec;
+}
+
 export async function specFromFile(path: string): Promise<ApalacheSpec> {
   return { sources: [await readFile(path, "utf8")] };
 }
 
 export async function runClientWithTraces(
-  binPath: string,
+  target: string | Transport,
   apalacheConfig: ApalacheConfig,
   tracePaths: string[],
   compute: StateComputer
 ): Promise<void> {
-  const t = spawnMirror(binPath);
+  const t = resolveTransport(target);
   t.send(encodeClientMessage({
     proto_step: "register_traces",
     apalacheConfig,
@@ -38,45 +45,49 @@ export async function runClientWithTraces(
 }
 
 export async function runClient(
-  binPath: string,
+  target: string | Transport,
   apalacheConfig: ApalacheConfig,
   config: TraceGenerationConfig,
-  compute: StateComputer
+  compute: StateComputer,
+  opts: RunOptions = {}
 ): Promise<void> {
-  const t = spawnMirror(binPath);
+  const t = resolveTransport(target);
   t.send(encodeClientMessage({
     proto_step: "register",
     apalacheConfig,
     traceConfig: config,
+    spec: opts.spec,
   }));
   await mainLoop(t, compute);
 }
 
 export async function runClientGenTraces(
-  binPath: string,
+  target: string | Transport,
   apalacheConfig: ApalacheConfig,
   destPath: string,
-  config: TraceGenerationConfig
+  config: TraceGenerationConfig,
+  opts: RunOptions = {}
 ): Promise<void> {
-  const t = spawnMirror(binPath);
+  const t = resolveTransport(target);
   t.send(encodeClientMessage({
     proto_step: "register_trace_gen",
     apalacheConfig,
     traceConfig: config,
     destPath,
+    spec: opts.spec,
   }));
   await genTracesLoop(t);
 }
 
 export async function runClientExplore(
-  binPath: string,
+  target: string | Transport,
   spec: ApalacheSpec,
   invariants: string[],
   exports: string[],
   maxSteps: number,
   compute: StateComputer
 ): Promise<void> {
-  const t = spawnMirror(binPath);
+  const t = resolveTransport(target);
   t.send(encodeClientMessage({
     proto_step: "register_explore",
     spec,
@@ -99,12 +110,12 @@ export class ExploreSession {
   ) {}
 
   static async open(
-    binPath: string,
+    target: string | Transport,
     spec: ApalacheSpec,
     invariants: string[],
     exports: string[]
   ): Promise<ExploreSession> {
-    const t = spawnMirror(binPath);
+    const t = resolveTransport(target);
     const it = t[Symbol.asyncIterator]();
     t.send(encodeClientMessage({
       proto_step: "register_explore_session",
@@ -186,12 +197,16 @@ export class ExploreSession {
 }
 
 export function startExploreSession(
-  binPath: string,
+  target: string | Transport,
   spec: ApalacheSpec,
   invariants: string[],
   exports: string[]
 ): Promise<ExploreSession> {
-  return ExploreSession.open(binPath, spec, invariants, exports);
+  return ExploreSession.open(target, spec, invariants, exports);
+}
+
+function resolveTransport(target: string | Transport): Transport {
+  return typeof target === "string" ? spawnMirror(target) : target;
 }
 
 async function mainLoop(t: Transport, compute: StateComputer): Promise<void> {

@@ -65,9 +65,14 @@ js_test(
         "@modelmirrors//app:ModelMirrors",
         "specs/Counter.tla",
         "specs/HourClock.tla",
+        "specs/ExtMain.tla",
+        "specs/ExtDep.tla",
     ] + glob(["specs/traces/*.itf.json"]),
     env = {
         "MIRROR_BIN": "$(rlocationpath @modelmirrors//app:ModelMirrors)",
     },
     env_inherit = ["PATH"],
+    # The TCP smoke scenarios need loopback sockets (mirror daemon +
+    # connectMirror), which the sandbox blocks.
+    tags = ["local", "no-sandbox"],
 )
