@@ -14,7 +14,7 @@ apalache-mc and conformance-checks every state the SUT reports
                model side                        SUT side
 ┌──────────────┐  JSON-RPC  ┌─────────┐ JSON-lines ┌──────────┐
 │ apalache-mc  │◄──────────►│ mirror  │◄══════════►│ your SUT │
-│ (CLI/server) │            │ (daemon)│ stdio | TCP │ (this lib)│
+│ (CLI/server) │            │ (daemon)│ stdio | TCP│(this lib)│
 └──────────────┘            └─────────┘            └──────────┘
      produces expected states        checks reported states
 ```
