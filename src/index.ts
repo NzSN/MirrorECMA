@@ -3,10 +3,20 @@ export {
   runClientWithTraces,
   runClientGenTraces,
   presetClient,
+  connectMirror,
   type State,
   type StateComputer,
   type ApalacheConfig,
   type TraceGenerationConfig,
+  type ClientTarget,
+  type MirrorEndpoint,
+  type StdioEndpoint,
+  type TcpEndpoint,
+  type TlsEndpoint,
+  type RegistryEndpoint,
+  type TcpConnectOptions,
+  type TlsConnectOptions,
+  type ServiceInfo,
 } from "./client.js";
 
 export {
@@ -35,4 +45,12 @@ export {
   getParamInt,
 } from "./protocol.js";
 
-export { spawnMirror, type Transport } from "./transport.js";
+export {
+  spawnMirror,
+  connectMirrorTcp,
+  connectMirrorTls,
+  FingerprintMismatchError,
+  type Transport,
+} from "./transport.js";
+
+export { discoverServices, type DiscoverOptions } from "./discovery.js";

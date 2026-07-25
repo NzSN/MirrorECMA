@@ -1,6 +1,6 @@
 # MirrorECMA
 
-TypeScript client for the [ModelMirros](https://github.com/NzSN/ModelMirrors) protocol — replay TLA+ traces against your state machine implementation over stdio.
+TypeScript client for the [ModelMirros](https://github.com/NzSN/ModelMirrors) protocol — replay TLA+ traces against your state machine implementation over stdio, plain TCP, or mutual TLS, with optional service discovery via a Consul-compatible registry.
 
 ## Install & Build
 
@@ -15,18 +15,18 @@ npm run check        # type-check only
 ```ts
 import { runClient, getParamInt } from "mirrorecma";
 
-const v = (n: number) => ({ tag: "int", val: BigInt(n) } as const);
+const v = (n: number | bigint) => ({ tag: "int", val: BigInt(n) } as const);
 
 await runClient(
-  "/path/to/ModelMirros",
-  "specs/Counter.tla",
+  "/path/to/ModelMirros",          // stdio endpoint
   {
+    specPath: "specs/Counter.tla",
     invariant: "TraceComplete",
     lengthBound: 5,
-    numTraces: 1,
-    cinit: "CInit",
+    constInit: "CInit",
     paramVars: "parameters",
   },
+  { numTraces: 1, view: "View" },
   (action, params, prev) => {
     if (action === "init")
       return { count: v(0), step_count: v(0) };
@@ -39,13 +39,123 @@ await runClient(
 );
 ```
 
+## Connecting
+
+All client functions (`runClient`, `runClientWithTraces`, `runClientGenTraces`)
+take a `ClientTarget` as their first argument:
+
+```ts
+type ClientTarget = string | MirrorEndpoint;
+
+type MirrorEndpoint =
+  | { binPath: string }                                   // stdio (same as passing a string)
+  | { server: TcpConnectOptions }                         // plain TCP  (ModelMirrors --serve)
+  | { server: TlsConnectOptions }                         // mTLS       (ModelMirrors --server --tls)
+  | { registry: string; tls: TlsOptions; serviceName? };  // discovery via registry
+```
+
+### Stdio (default)
+
+```ts
+await runClient("/path/to/ModelMirros", apalacheConfig, traceConfig, compute);
+```
+
+### Plain TCP
+
+```ts
+await runClient(
+  { server: { host: "127.0.0.1", port: 7777 } },
+  apalacheConfig, traceConfig, compute
+);
+```
+
+### Mutual TLS
+
+Start the server with a certificate signed by your private CA (see
+`scripts/gen-test-certs.sh` for a throwaway CA, or ModelMirros'
+`scripts/gen-certs.sh` for a real one):
+
+```
+ModelMirrors --server 7777 --tls \
+    --cert server.crt --key server.key --ca ca.crt
+```
+
+Then connect with the CA and a client certificate:
+
+```ts
+await runClient(
+  {
+    server: {
+      host: "mirror1.example.com",
+      port: 7777,
+      ca,                 // CA certificate (PEM)
+      cert,               // client certificate (PEM)
+      key,                // client private key (PEM)
+      servername: "mirror1.example.com",  // optional SNI/hostname override
+      certSha256: "ab12...",              // optional: pin server cert fingerprint
+    },
+  },
+  apalacheConfig, traceConfig, compute
+);
+```
+
+TLS 1.3 only. If `certSha256` is given, the peer certificate's SHA-256
+fingerprint is checked after the handshake (colon-separated and uppercase
+forms accepted); a mismatch throws `FingerprintMismatchError`.
+
+### Service discovery via registry
+
+When the server is started with `--registry <url>` (a Consul-compatible HTTP
+API), clients can discover it instead of hardcoding a host:
+
+```ts
+await runClient(
+  {
+    registry: "http://consul:8500",
+    tls: { ca, cert, key },   // mTLS credentials; host/port/fingerprint come
+                              // from the registry entry
+  },
+  apalacheConfig, traceConfig, compute
+);
+```
+
+The client queries `GET <registry>/v1/health/service/modelmirrors?passing=true`
+and tries each healthy candidate in turn. The `cert-sha256` service meta (if
+present) is pinned automatically. If no candidate is usable, or the registry
+is unreachable, the call fails closed — use a direct `server` endpoint as a
+fallback. Use `serviceName` to override the default `"modelmirrors"` name.
+
+You can also query a registry directly:
+
+```ts
+import { discoverServices } from "mirrorecma";
+
+const services = await discoverServices("http://consul:8500");
+// → [{ address: "mirror1.example.com", port: 7777, certSha256: "ab12..." }, ...]
+```
+
 ## API
 
-### `runClient(binPath, specPath, config, compute)`
+### `runClient(target, apalacheConfig, traceConfig, compute)`
 
-Connects to a ModelMirros binary via stdio, registers a spec, and replays all
-traces. Throws on step mismatch or protocol error. Returns when `all_steps_done`
-is received.
+Connects to ModelMirros, registers a spec for trace generation, and replays all
+traces. Throws on step mismatch or protocol error. Returns when
+`all_steps_done` is received.
+
+### `runClientWithTraces(target, apalacheConfig, tracePaths, compute)`
+
+Like `runClient`, but replays pre-generated ITF trace files instead of
+generating new ones.
+
+### `runClientGenTraces(target, apalacheConfig, destPath, traceConfig)`
+
+Registers a trace-generation job; the mirror writes ITF traces to `destPath`
+(on the machine running the mirror) and returns.
+
+### `connectMirror(target)` → `Promise<Transport>`
+
+Resolves a `ClientTarget` to a connected `Transport` (`send(line)`, async
+iteration of received lines, `close()`). Useful for custom protocol drivers.
 
 The `compute` function is called with:
 
@@ -65,18 +175,27 @@ const states = [
   { count: v(1), step_count: v(1) },
   // ...
 ];
-await runClient(bin, spec, config, presetClient(states));
+await runClient(bin, apalacheConfig, traceConfig, presetClient(states));
 ```
+
+### `ApalacheConfig`
+
+| Field | Type | Description |
+|---|---|---|
+| `specPath` | `string` | Path to the TLA+ spec (on the machine running the mirror) |
+| `invariant` | `string` | Invariant to violate (Apalache `--inv`) |
+| `lengthBound` | `number` | Max Next steps (Apalache `--length`) |
+| `initPredicate?` | `string \| null` | Init predicate override (`--init`) |
+| `nextPredicate?` | `string \| null` | Next predicate override (`--next`) |
+| `constInit?` | `string \| null` | Constant initialization operator name (`--cinit`) |
+| `paramVars?` | `string` | Variable to treat as action parameters |
 
 ### `TraceGenerationConfig`
 
 | Field | Type | Description |
 |---|---|---|
-| `invariant` | `string` | Invariant to violate (Apalache `--inv`) |
-| `lengthBound` | `number` | Max Next steps (Apalache `--length`) |
 | `numTraces` | `number` | Number of counterexample traces (`--max-error`) |
-| `cinit?` | `string \| null` | Constant initialization operator name (`--cinit`) |
-| `paramVars?` | `string` | Variable to treat as action parameters |
+| `view?` | `string` | Apalache view operator (`--view`) |
 
 ### `StateComputer`
 
@@ -98,8 +217,9 @@ asRecord(value) // → Record<string, Value> | null
 
 ## Protocol
 
-The client communicates with a ModelMirros process over stdio using
-newline-delimited JSON. Message types (tagged by `proto_step`):
+The client communicates with the mirror over newline-delimited JSON (stdio,
+TCP, or TLS — the session protocol is identical on all transports). Message
+types (tagged by `proto_step`):
 
 ```
 Client → Mirror:   register, report_state
@@ -138,6 +258,18 @@ State maps use the Apalache ITF value encoding:
 
 In the tagged `Value` representation these become `{ tag: "int", val: 42n }`,
 `{ tag: "record", val: { field: ... } }`, etc.
+
+## Testing
+
+```bash
+npm test                                # unit tests (protocol, discovery, transports)
+MIRROR_BIN=/path/to/ModelMirros npx tsx test/smoke.test.ts   # end-to-end smoke
+```
+
+The smoke test exercises stdio, plain TCP, mTLS, and registry discovery
+(against a built-in fake Consul). TLS tests need a cabal-built ModelMirros
+binary — the Bazel build has no TLS support. Set `MODELMIRRORS_REGISTRY` to a
+real Consul URL to additionally verify against a live registry.
 
 ## Known Issues
 ### CJS output with `"type": "module"`

@@ -1,4 +1,4 @@
-import { spawnMirror } from "./transport.js";
+import { connectMirrorTcp, connectMirrorTls, spawnMirror } from "./transport.js";
 import {
   MirrorMessage,
   State,
@@ -10,17 +10,82 @@ import {
   decodeMirrorMessage,
   prettifyState,
 } from "./protocol.js";
-import type { Transport } from "./transport.js";
+import { discoverServices } from "./discovery.js";
+import type {
+  TcpConnectOptions,
+  TlsConnectOptions,
+  Transport,
+} from "./transport.js";
 
 export type { State, StateComputer, ApalacheConfig, TraceGenerationConfig } from "./protocol.js";
+export type { TcpConnectOptions, TlsConnectOptions, Transport } from "./transport.js";
+export type { ServiceInfo } from "./discovery.js";
+
+export interface StdioEndpoint {
+  binPath: string;
+}
+
+export interface TcpEndpoint {
+  server: TcpConnectOptions;
+}
+
+export interface TlsEndpoint {
+  server: TlsConnectOptions;
+}
+
+export interface RegistryEndpoint {
+  registry: string;
+  tls: Omit<TlsConnectOptions, "host" | "port" | "certSha256">;
+  serviceName?: string;
+}
+
+export type MirrorEndpoint = StdioEndpoint | TcpEndpoint | TlsEndpoint | RegistryEndpoint;
+
+export type ClientTarget = string | MirrorEndpoint;
+
+function isTlsServer(
+  s: TcpConnectOptions | TlsConnectOptions
+): s is TlsConnectOptions {
+  return "ca" in s || "cert" in s || "key" in s;
+}
+
+export async function connectMirror(target: ClientTarget): Promise<Transport> {
+  if (typeof target === "string") return spawnMirror(target);
+  if ("binPath" in target) return spawnMirror(target.binPath);
+  if ("registry" in target) {
+    const candidates = await discoverServices(target.registry, {
+      ...(target.serviceName !== undefined ? { serviceName: target.serviceName } : {}),
+    });
+    let lastError: unknown;
+    for (const c of candidates) {
+      try {
+        return await connectMirrorTls({
+          ...target.tls,
+          host: c.address,
+          port: c.port,
+          ...(c.certSha256 !== undefined ? { certSha256: c.certSha256 } : {}),
+        });
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw new Error(
+      candidates.length === 0
+        ? `no healthy "modelmirrors" services in registry ${target.registry}`
+        : `no usable mirror among ${candidates.length} candidate(s): ${String(lastError)}`
+    );
+  }
+  if (isTlsServer(target.server)) return connectMirrorTls(target.server);
+  return connectMirrorTcp(target.server);
+}
 
 export async function runClientWithTraces(
-  binPath: string,
+  target: ClientTarget,
   apalacheConfig: ApalacheConfig,
   tracePaths: string[],
   compute: StateComputer
 ): Promise<void> {
-  const t = spawnMirror(binPath);
+  const t = await connectMirror(target);
   t.send(encodeClientMessage({
     proto_step: "register_traces",
     apalacheConfig,
@@ -30,12 +95,12 @@ export async function runClientWithTraces(
 }
 
 export async function runClient(
-  binPath: string,
+  target: ClientTarget,
   apalacheConfig: ApalacheConfig,
   config: TraceGenerationConfig,
   compute: StateComputer
 ): Promise<void> {
-  const t = spawnMirror(binPath);
+  const t = await connectMirror(target);
   t.send(encodeClientMessage({
     proto_step: "register",
     apalacheConfig,
@@ -45,12 +110,12 @@ export async function runClient(
 }
 
 export async function runClientGenTraces(
-  binPath: string,
+  target: ClientTarget,
   apalacheConfig: ApalacheConfig,
   destPath: string,
   config: TraceGenerationConfig
 ): Promise<void> {
-  const t = spawnMirror(binPath);
+  const t = await connectMirror(target);
   t.send(encodeClientMessage({
     proto_step: "register_trace_gen",
     apalacheConfig,
