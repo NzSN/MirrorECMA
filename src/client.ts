@@ -12,6 +12,7 @@ import {
   encodeState,
   decodeMirrorMessage,
   prettifyState,
+  renderDiffHints,
 } from "./protocol.js";
 import type { Transport } from "./transport.js";
 import { readFile } from "node:fs/promises";
@@ -246,11 +247,15 @@ async function mainLoop(t: Transport, compute: StateComputer): Promise<void> {
         lastParam = msg.parameters;
         t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
         break;
-      case "step_mismatch":
+      case "step_mismatch": {
         await t.close();
+        const hintText = msg.hints?.length
+          ? `: ${renderDiffHints(msg.hints)}`
+          : `: expected ${JSON.stringify(prettifyState(msg.expected))}, got ${JSON.stringify(prettifyState(msg.actual))}`;
         throw new Error(
-            `step mismatch on action "${msg.action ?? lastAction}" with param "${lastParam}": expected ${JSON.stringify(prettifyState(msg.expected))}, got ${JSON.stringify(prettifyState(msg.actual))}`
+            `step mismatch on action "${msg.action ?? lastAction}" with param "${lastParam}"${hintText}`
         );
+      }
       case "protocol_error":
         await t.close();
         throw new Error(msg.error);

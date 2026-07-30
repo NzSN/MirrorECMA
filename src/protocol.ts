@@ -180,7 +180,19 @@ export interface StepMismatch {
   action?: string;
   expected: State;
   actual: State;
+  hints?: DiffHint[];
 }
+
+// ---- Diff hints (path-based mismatch explanation) ----
+
+export type PathSeg = { field: string } | { index: number };
+
+export type DiffHint =
+  | { kind: "value_mismatch"; path: PathSeg[]; expected: Value; actual: Value }
+  | { kind: "missing"; path: PathSeg[]; expected: Value }
+  | { kind: "extra"; path: PathSeg[]; actual: Value }
+  | { kind: "type_mismatch"; path: PathSeg[]; expected: Value; actual: Value }
+  | { kind: "truncated"; path: PathSeg[] };
 
 export interface AllStepsDone {
   proto_step: "all_steps_done";
@@ -367,6 +379,7 @@ function walkMessage(obj: Record<string, unknown>): MirrorMessage {
         action: obj.action as string | undefined,
         expected: (walk(obj.expected) as { tag: "record"; val: Record<string, Value> }).val,
         actual: (walk(obj.actual) as { tag: "record"; val: Record<string, Value> }).val,
+        hints: decodeHints(obj.hints),
       };
     case "all_steps_done":
       return { proto_step: "all_steps_done" };
@@ -406,6 +419,62 @@ function walkMessage(obj: Record<string, unknown>): MirrorMessage {
     default:
       return { proto_step: "protocol_error", error: `unknown proto_step: ${step}` };
   }
+}
+
+function decodeHints(raw: unknown): DiffHint[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  return raw.map((h): DiffHint => {
+    const o = h as Record<string, unknown>;
+    const path = ((o.path as unknown[]) ?? []).map((seg): PathSeg => {
+      const s = seg as Record<string, unknown>;
+      if (typeof s.field === "string") return { field: s.field };
+      return { index: s.index as number };
+    });
+    switch (o.kind as string) {
+      case "value_mismatch":
+        return { kind: "value_mismatch", path, expected: walk(o.expected) as Value, actual: walk(o.actual) as Value };
+      case "missing":
+        return { kind: "missing", path, expected: walk(o.expected) as Value };
+      case "extra":
+        return { kind: "extra", path, actual: walk(o.actual) as Value };
+      case "type_mismatch":
+        return { kind: "type_mismatch", path, expected: walk(o.expected) as Value, actual: walk(o.actual) as Value };
+      default:
+        return { kind: "truncated", path };
+    }
+  });
+}
+
+export function renderPath(path: PathSeg[]): string {
+  const s = path
+    .map((seg) => ("field" in seg ? `.${seg.field}` : `[${seg.index}]`))
+    .join("");
+  return s.startsWith(".") ? s.slice(1) : s || "<state>";
+}
+
+function renderHintValue(v: Value): string {
+  return JSON.stringify(prettifyValue(v));
+}
+
+export function renderDiffHint(h: DiffHint): string {
+  const at = `at ${renderPath(h.path)}`;
+  switch (h.kind) {
+    case "value_mismatch":
+      return `${at}: expected ${renderHintValue(h.expected)}, got ${renderHintValue(h.actual)}`;
+    case "missing":
+      return `${at}: missing ${renderHintValue(h.expected)}`;
+    case "extra":
+      return `${at}: unexpected ${renderHintValue(h.actual)}`;
+    case "type_mismatch":
+      return `${at}: expected a value of shape ${renderHintValue(h.expected)}, got ${renderHintValue(h.actual)}`;
+    case "truncated":
+      return `${at}: further differences truncated`;
+  }
+}
+
+export function renderDiffHints(hints: DiffHint[]): string {
+  if (hints.length === 0) return "states differ";
+  return hints.map(renderDiffHint).join("; ");
 }
 
 // Helpers to extract values from the deeply-nested representation

@@ -3,6 +3,8 @@ import {
   type State,
   type ClientMessage,
   type MirrorMessage,
+  type StepMismatch,
+  type DiffHint,
   encodeClientMessage,
   encodeState,
   decodeMirrorMessage,
@@ -11,6 +13,9 @@ import {
   asRecord,
   getParam,
   getParamInt,
+  renderPath,
+  renderDiffHint,
+  renderDiffHints,
 } from "../src/protocol.js";
 
 function roundTrip(msg: ClientMessage): MirrorMessage {
@@ -157,11 +162,83 @@ describe("decodeMirrorMessage", () => {
     expect(sm.actual).toEqual({ count: { tag: "int", val: BigInt(2) } });
   });
 
+  it("decodes step_mismatch hints", () => {
+    const line = JSON.stringify({
+      proto_step: "step_mismatch",
+      expected: { x: { rec: [1, 2] } },
+      actual: { x: { rec: [1, 3] }, y: "extra" },
+      hints: [
+        {
+          kind: "value_mismatch",
+          path: [{ field: "x" }, { field: "rec" }, { index: 1 }],
+          expected: 2,
+          actual: 3,
+        },
+        { kind: "extra", path: [{ field: "y" }], actual: "extra" },
+        { kind: "missing", path: [{ field: "z" }], expected: true },
+        { kind: "truncated", path: [{ field: "big" }] },
+      ],
+    });
+    const msg = decodeMirrorMessage(line);
+    expect(msg.proto_step).toBe("step_mismatch");
+    const sm = msg as StepMismatch;
+    expect(sm.hints).toHaveLength(4);
+    expect(sm.hints![0]).toEqual({
+      kind: "value_mismatch",
+      path: [{ field: "x" }, { field: "rec" }, { index: 1 }],
+      expected: { tag: "int", val: BigInt(2) },
+      actual: { tag: "int", val: BigInt(3) },
+    });
+    expect(sm.hints![1]).toEqual({
+      kind: "extra",
+      path: [{ field: "y" }],
+      actual: { tag: "str", val: "extra" },
+    });
+    expect(sm.hints![2]).toEqual({
+      kind: "missing",
+      path: [{ field: "z" }],
+      expected: { tag: "bool", val: true },
+    });
+    expect(sm.hints![3]).toEqual({ kind: "truncated", path: [{ field: "big" }] });
+  });
+
+  it("renders diff hints", () => {
+    const hints: DiffHint[] = [
+      {
+        kind: "value_mismatch",
+        path: [{ field: "x" }, { field: "rec" }, { index: 1 }],
+        expected: { tag: "int", val: BigInt(2) },
+        actual: { tag: "int", val: BigInt(3) },
+      },
+      { kind: "extra", path: [{ field: "y" }], actual: { tag: "str", val: "hi" } },
+      { kind: "missing", path: [{ field: "z" }], expected: { tag: "bool", val: true } },
+      { kind: "truncated", path: [{ field: "big" }] },
+    ];
+    expect(renderDiffHint(hints[0])).toBe("at x.rec[1]: expected 2, got 3");
+    expect(renderDiffHint(hints[1])).toBe('at y: unexpected "hi"');
+    expect(renderDiffHint(hints[2])).toBe("at z: missing true");
+    expect(renderDiffHint(hints[3])).toBe("at big: further differences truncated");
+    expect(renderDiffHints(hints)).toBe(
+      'at x.rec[1]: expected 2, got 3; at y: unexpected "hi"; at z: missing true; at big: further differences truncated'
+    );
+    expect(renderDiffHints([])).toBe("states differ");
+    expect(renderPath([])).toBe("<state>");
+  });
+
+  it("decodes step_mismatch without hints (legacy mirror)", () => {
+    const line = JSON.stringify({
+      proto_step: "step_mismatch",
+      expected: { count: 1 },
+      actual: { count: 2 },
+    });
+    const msg = decodeMirrorMessage(line) as StepMismatch;
+    expect(msg.hints).toBeUndefined();
+  });
+
   it("decodes all_steps_done", () => {
     const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "all_steps_done" }));
     expect(msg).toEqual({ proto_step: "all_steps_done" });
   });
-
   it("decodes gen_traces_done", () => {
     const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "gen_traces_done", itfTracePaths: ["/tmp/t1.itf.json"] }));
     expect(msg).toEqual({ proto_step: "gen_traces_done", itfTracePaths: ["/tmp/t1.itf.json"] });
