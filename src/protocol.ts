@@ -203,6 +203,9 @@ export interface AllStepsDone {
 export interface GenTracesDone {
   proto_step: "gen_traces_done";
   itfTracePaths: string[];
+  /** Inline ITF JSON trace contents (raw, untransformed), one per path.
+   *  Present on mirrors >= the inlining change; absent on legacy mirrors. */
+  itfTraces?: unknown[];
 }
 
 export interface ProtocolError {
@@ -389,6 +392,7 @@ function walkMessage(obj: Record<string, unknown>): MirrorMessage {
       return {
         proto_step: "gen_traces_done",
         itfTracePaths: (obj.itfTracePaths as string[]) ?? [],
+        itfTraces: obj.itfTraces as unknown[] | undefined,
       };
     case "protocol_error":
       return { proto_step: "protocol_error", error: obj.error as string };

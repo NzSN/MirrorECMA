@@ -8,6 +8,7 @@ export {
   specFromFile,
   presetClient,
   type RunOptions,
+  type GenTracesResult,
   type State,
   type StateComputer,
   type ApalacheConfig,

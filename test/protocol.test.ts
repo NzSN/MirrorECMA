@@ -257,7 +257,21 @@ describe("decodeMirrorMessage", () => {
   });
   it("decodes gen_traces_done", () => {
     const msg = decodeMirrorMessage(JSON.stringify({ proto_step: "gen_traces_done", itfTracePaths: ["/tmp/t1.itf.json"] }));
-    expect(msg).toEqual({ proto_step: "gen_traces_done", itfTracePaths: ["/tmp/t1.itf.json"] });
+    expect(msg).toEqual({ proto_step: "gen_traces_done", itfTracePaths: ["/tmp/t1.itf.json"], itfTraces: undefined });
+  });
+
+  it("decodes gen_traces_done with inline traces, raw passthrough", () => {
+    const trace = { vars: ["x"], states: [{ x: { "#bigint": "1" } }] };
+    const msg = decodeMirrorMessage(JSON.stringify({
+      proto_step: "gen_traces_done",
+      itfTracePaths: ["/tmp/t1.itf.json"],
+      itfTraces: [trace],
+    }));
+    expect(msg.proto_step).toBe("gen_traces_done");
+    const g = msg as any;
+    expect(g.itfTraces).toHaveLength(1);
+    // raw ITF JSON must pass through untransformed (no #bigint decoding)
+    expect(g.itfTraces[0]).toEqual(trace);
   });
 
   it("decodes protocol_error", () => {

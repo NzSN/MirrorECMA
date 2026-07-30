@@ -62,13 +62,22 @@ export async function runClient(
   await mainLoop(t, compute);
 }
 
+export interface GenTracesResult {
+  /** Server-local paths of the generated trace files (usable only when the
+   *  mirror shares the filesystem, e.g. stdio mode). */
+  itfTracePaths: string[];
+  /** Inline ITF JSON trace contents, one per path; usable in any transport
+   *  mode. Empty when the mirror predates trace inlining. */
+  itfTraces: unknown[];
+}
+
 export async function runClientGenTraces(
   target: string | Transport,
   apalacheConfig: ApalacheConfig,
   destPath: string,
   config: TraceGenerationConfig,
   opts: RunOptions = {}
-): Promise<void> {
+): Promise<GenTracesResult> {
   const t = resolveTransport(target);
   t.send(encodeClientMessage({
     proto_step: "register_trace_gen",
@@ -77,7 +86,7 @@ export async function runClientGenTraces(
     destPath,
     spec: opts.spec,
   }));
-  await genTracesLoop(t);
+  return genTracesLoop(t);
 }
 
 export async function runClientExplore(
@@ -284,13 +293,16 @@ async function recv(it: AsyncIterator<string>): Promise<MirrorMessage> {
   return decodeMirrorMessage(value);
 }
 
-async function genTracesLoop(t: Transport): Promise<void> {
+async function genTracesLoop(t: Transport): Promise<GenTracesResult> {
   const it = t[Symbol.asyncIterator]();
 
   const msg = await recv(it);
   if (msg.proto_step === "protocol_error") { await t.close(); throw new Error(msg.error); }
   if (msg.proto_step === "register_error") { await t.close(); throw new Error(`register failed: ${msg.error}`); }
-  if (msg.proto_step === "gen_traces_done") { await t.close(); return; }
+  if (msg.proto_step === "gen_traces_done") {
+    await t.close();
+    return { itfTracePaths: msg.itfTracePaths, itfTraces: msg.itfTraces ?? [] };
+  }
   await t.close();
   throw new Error(`expected gen_traces_done, got ${msg.proto_step}`);
 }

@@ -112,11 +112,20 @@ async function testRegisterTraces(target: string | Transport = BIN) {
 async function testRegisterGenTraces(target: string | Transport = BIN) {
   const destDir = await mkdtemp(tmpdir() + "/mirrorecma-gen-");
   console.log(`Running smoke test (register_trace_gen) with spec: ${SPEC}, dest: ${destDir}`);
-  await runClientGenTraces(target, apalacheConfig, destDir, traceConfig);
+  const result = await runClientGenTraces(target, apalacheConfig, destDir, traceConfig);
   const files = await readdir(destDir);
   const traceFiles = files.filter(f => f.endsWith(".itf.json"));
   if (traceFiles.length === 0) throw new Error("no trace files generated");
-  console.log(`OK: register_trace_gen smoke test passed (${traceFiles.length} traces)`);
+  if (result.itfTracePaths.length !== traceFiles.length)
+    throw new Error(`expected ${traceFiles.length} paths, got ${result.itfTracePaths.length}`);
+  if (result.itfTraces.length !== result.itfTracePaths.length)
+    throw new Error(`expected ${result.itfTracePaths.length} inline traces, got ${result.itfTraces.length}`);
+  for (const tr of result.itfTraces) {
+    const states = (tr as { states?: unknown[] }).states;
+    if (!Array.isArray(states) || states.length === 0)
+      throw new Error("inline trace has no states");
+  }
+  console.log(`OK: register_trace_gen smoke test passed (${traceFiles.length} traces, inlined)`);
 }
 
 function hourClockSpecPath(): string {
