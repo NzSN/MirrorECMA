@@ -176,13 +176,15 @@ describe("decodeMirrorMessage", () => {
         },
         { kind: "extra", path: [{ field: "y" }], actual: "extra" },
         { kind: "missing", path: [{ field: "z" }], expected: true },
+        { kind: "missing_elem", path: [{ field: "s" }], expected: 7 },
+        { kind: "extra_elem", path: [{ field: "s" }], actual: 8 },
         { kind: "truncated", path: [{ field: "big" }] },
       ],
     });
     const msg = decodeMirrorMessage(line);
     expect(msg.proto_step).toBe("step_mismatch");
     const sm = msg as StepMismatch;
-    expect(sm.hints).toHaveLength(4);
+    expect(sm.hints).toHaveLength(6);
     expect(sm.hints![0]).toEqual({
       kind: "value_mismatch",
       path: [{ field: "x" }, { field: "rec" }, { index: 1 }],
@@ -199,7 +201,17 @@ describe("decodeMirrorMessage", () => {
       path: [{ field: "z" }],
       expected: { tag: "bool", val: true },
     });
-    expect(sm.hints![3]).toEqual({ kind: "truncated", path: [{ field: "big" }] });
+    expect(sm.hints![3]).toEqual({
+      kind: "missing_elem",
+      path: [{ field: "s" }],
+      expected: { tag: "int", val: BigInt(7) },
+    });
+    expect(sm.hints![4]).toEqual({
+      kind: "extra_elem",
+      path: [{ field: "s" }],
+      actual: { tag: "int", val: BigInt(8) },
+    });
+    expect(sm.hints![5]).toEqual({ kind: "truncated", path: [{ field: "big" }] });
   });
 
   it("renders diff hints", () => {
@@ -212,14 +224,18 @@ describe("decodeMirrorMessage", () => {
       },
       { kind: "extra", path: [{ field: "y" }], actual: { tag: "str", val: "hi" } },
       { kind: "missing", path: [{ field: "z" }], expected: { tag: "bool", val: true } },
+      { kind: "missing_elem", path: [{ field: "s" }], expected: { tag: "int", val: BigInt(7) } },
+      { kind: "extra_elem", path: [{ field: "s" }], actual: { tag: "int", val: BigInt(8) } },
       { kind: "truncated", path: [{ field: "big" }] },
     ];
     expect(renderDiffHint(hints[0])).toBe("at x.rec[1]: expected 2, got 3");
     expect(renderDiffHint(hints[1])).toBe('at y: unexpected "hi"');
     expect(renderDiffHint(hints[2])).toBe("at z: missing true");
-    expect(renderDiffHint(hints[3])).toBe("at big: further differences truncated");
+    expect(renderDiffHint(hints[3])).toBe("at s: missing element 7");
+    expect(renderDiffHint(hints[4])).toBe("at s: unexpected element 8");
+    expect(renderDiffHint(hints[5])).toBe("at big: further differences truncated");
     expect(renderDiffHints(hints)).toBe(
-      'at x.rec[1]: expected 2, got 3; at y: unexpected "hi"; at z: missing true; at big: further differences truncated'
+      'at x.rec[1]: expected 2, got 3; at y: unexpected "hi"; at z: missing true; at s: missing element 7; at s: unexpected element 8; at big: further differences truncated'
     );
     expect(renderDiffHints([])).toBe("states differ");
     expect(renderPath([])).toBe("<state>");

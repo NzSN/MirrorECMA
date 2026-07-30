@@ -191,6 +191,8 @@ export type DiffHint =
   | { kind: "value_mismatch"; path: PathSeg[]; expected: Value; actual: Value }
   | { kind: "missing"; path: PathSeg[]; expected: Value }
   | { kind: "extra"; path: PathSeg[]; actual: Value }
+  | { kind: "missing_elem"; path: PathSeg[]; expected: Value }
+  | { kind: "extra_elem"; path: PathSeg[]; actual: Value }
   | { kind: "type_mismatch"; path: PathSeg[]; expected: Value; actual: Value }
   | { kind: "truncated"; path: PathSeg[] };
 
@@ -437,6 +439,10 @@ function decodeHints(raw: unknown): DiffHint[] | undefined {
         return { kind: "missing", path, expected: walk(o.expected) as Value };
       case "extra":
         return { kind: "extra", path, actual: walk(o.actual) as Value };
+      case "missing_elem":
+        return { kind: "missing_elem", path, expected: walk(o.expected) as Value };
+      case "extra_elem":
+        return { kind: "extra_elem", path, actual: walk(o.actual) as Value };
       case "type_mismatch":
         return { kind: "type_mismatch", path, expected: walk(o.expected) as Value, actual: walk(o.actual) as Value };
       default:
@@ -465,6 +471,10 @@ export function renderDiffHint(h: DiffHint): string {
       return `${at}: missing ${renderHintValue(h.expected)}`;
     case "extra":
       return `${at}: unexpected ${renderHintValue(h.actual)}`;
+    case "missing_elem":
+      return `${at}: missing element ${renderHintValue(h.expected)}`;
+    case "extra_elem":
+      return `${at}: unexpected element ${renderHintValue(h.actual)}`;
     case "type_mismatch":
       return `${at}: expected a value of shape ${renderHintValue(h.expected)}, got ${renderHintValue(h.actual)}`;
     case "truncated":
