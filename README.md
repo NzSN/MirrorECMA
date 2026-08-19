@@ -201,6 +201,9 @@ await runClient(bin, { specPath: "ignored", invariant: "TraceComplete", lengthBo
 
 Note: `register_traces` sends `itfTracePaths`, which remain **mirror-local** —
 for remote mirrors use `register`, `register_trace_gen`, or the explore flows.
+`register_trace_gen` returns the generated traces **inline** in its result as
+`itfTraces` (alongside the mirror-local `itfTracePaths` from `gen_traces_done`),
+so the client never needs the mirror's filesystem.
 
 ### TCP transport
 
@@ -219,6 +222,64 @@ await runClient(connectMirror("192.168.1.10", 8823), apalacheConfig, traceConfig
 
 The wire format is the same JSON-lines as stdio. Plain TCP, no TLS — use
 SSH/stunnel for untrusted networks.
+
+### Server mode (mTLS)
+
+Beyond `--serve`, ModelMirros runs as a TLS 1.3 server with **mutual
+authentication** (`ModelMirrors --server <port> --tls --cert ... --key ...
+--ca ...`). `connectTlsMirror` provides the mTLS transport, and
+`connectMirrorFromRegistry` adds optional Consul service-registry discovery:
+
+```ts
+// mirror side:  ModelMirrors --server 8999 --tls \
+//                 --cert server.crt --key server.key --ca ca.crt
+import { connectTlsMirror, runClient } from "mirrorecma";
+
+const transport = await connectTlsMirror("10.0.0.5", 8999, {
+  caPath: "./certs/ca.crt",
+  certPath: "./certs/client.crt",
+  keyPath: "./certs/client.key",
+});
+await runClient(transport, apalacheConfig, traceConfig, compute);
+```
+
+Certificate prerequisites (the same files/paths the Haskell client takes):
+
+- `ca.crt` — the private CA bundle that signed the server certificate; the
+  client verifies the server chain (and the server verifies the client cert)
+  against it.
+- `client.crt` / `client.key` — a client certificate and key signed by that
+  CA. On POSIX the key must be mode `0600` (not accessible by group/other);
+  `connectTlsMirror` rejects otherwise.
+- TLS is pinned to **1.3 only**; no older versions are negotiated.
+
+Fingerprint pinning (optional, defense in depth): pass `pin` to
+`connectTlsMirror` — lowercase hex SHA-256 over the **raw DER** encoding of
+the server leaf certificate. The registry helper supplies it automatically
+from Consul `Meta["cert-sha256"]`; when you do pass `pin`, it **overrides**
+the registry metadata (like the Haskell client's explicit `--pin`).
+
+Discovery with `connectMirrorFromRegistry` — candidates come from
+`GET <url>/v1/health/service/modelmirrors?passing=true`, are tried in
+registry order, and a failed handshake or pin check closes that candidate and
+tries the next. A registry that is unreachable, non-2xx, or malformed yields
+no candidates (fail closed):
+
+```ts
+import { connectMirrorFromRegistry, runClient } from "mirrorecma";
+
+const transport = await connectMirrorFromRegistry("http://consul.local:8500", {
+  caPath: "./certs/ca.crt",
+  certPath: "./certs/client.crt",
+  keyPath: "./certs/client.key",
+});
+await runClient(transport, apalacheConfig, traceConfig, compute);
+```
+
+On the wire it is still the same JSON-lines session protocol — the first
+message is a `register`/`register_traces`/`register_trace_gen`/
+`register_explore`/`register_explore_session` — and all client flows work
+unchanged over the TLS transport.
 
 
 ### `ApalacheConfig`
@@ -356,6 +417,7 @@ strictly alternate until done:
 |---|---|---|---|
 | stdio | `spawnMirror(binPath)` (implicit when passing a path string) | default (no args) | Local child process |
 | TCP | `connectMirror(host, port)` | `ModelMirrors --serve <port>` | One session per connection, sequential accept loop; plain TCP, no TLS |
+| Server (mTLS) | `connectTlsMirror(host, port, tls)` / `connectMirrorFromRegistry(url, tls)` | `ModelMirrors --server <port> --tls --cert ... --key ... --ca ... [--registry <url>]` | mTLS, TLS 1.3 only; optional Consul discovery (`--registry`) + fingerprint pinning |
 
 The message layer is model-checked: `ModelMirros/specs/MirrorProtocol.tla`
 defines the legal sequences, and ModelMirros' MBT tests replay spec-generated
@@ -380,14 +442,17 @@ In the tagged `Value` representation these become `{ tag: "int", val: 42n }`,
 ## Known Issues
 ### CJS output with `"type": "module"`
 
-> **Update (2026-07-22):** `package.bazel.json` now declares
-> `"type": "commonjs"`, matching the actual CJS output of
-> `ts_project(module: "node16")`. The workaround below is only needed when
-> consuming a Bazel build pinned before that change.
+> **Update (2026-08-19):** `package.bazel.json` now declares
+> `"type": "module"`, matching the ESM output of `ts_project(module:
+> "node16")` (the Bazel execroot picks up the repo `package.json`'s
+> `"type": "module"`, so tsc emits ESM). The Bazel build and its
+> `//:smoke` test are self-consistent; the workaround below is only needed
+> when consuming a Bazel build pinned before this change.
 
 When built via Bazel's `ts_project(transpiler = "tsc")`, the compiled `.js` output is
-CommonJS (`exports.*` / `require()`), but the source `package.json` declares
-`"type": "module"`.  This mismatch means:
+ESM (`export` / `import`); with an older `package.bazel.json`
+(`"type": "commonjs"`) the declared type disagreed with that output.  A
+`"type"` mismatch means:
 
 - **Node.js in ESM mode** (including Jest with `ts-jest/presets/default-esm`)
   cannot import named exports from the package — it sees `"type": "module"`,

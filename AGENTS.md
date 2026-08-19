@@ -27,11 +27,12 @@ bazel test //:smoke     # hermetic smoke test (builds ModelMirros via Bazel)
 - `src/protocol.ts` — `Value`, `State`, message types, JSON encode/decode (ITF format with `#bigint`/`#tup` markers), value helpers (`asInt`, `asStr`, `asRecord`, `getParam`, `getParamInt`)
 - `src/client.ts` — `runClient()` (trace generation), `runClientWithTraces()` (pre-computed traces), `runClientGenTraces()` (generate traces to disk), `runClientExplore()` (mirror-driven symbolic checking), `startExploreSession()`/`ExploreSession` (client-driven explorer sessions), `presetClient()` (pre-defined state sequence)
 - `src/spec.ts` — `specFromFiles()`: EXTENDS/INSTANCE dependency-closure resolver producing `{sources: [root, ...deps]}` (root first — apalache treats `sources[0]` as the root module)
-- `src/transport.ts` — `spawnMirror()`: spawns the Haskell binary over stdio; `connectMirror(host, port)`: TCP transport for a mirror daemon (`ModelMirrors --serve <port>`). Both expose the same async-iterable JSON-lines `Transport`
+- `src/transport.ts` — `spawnMirror()`: spawns the Haskell binary over stdio; `connectMirror(host, port)`: TCP transport for a mirror daemon (`ModelMirrors --serve <port>`); `connectTlsMirror(host, port, opts)`: TLS 1.3 mTLS transport for a mirror server (`ModelMirrors --server <port> --tls ...`). All expose the same async-iterable JSON-lines `Transport`
+- `src/registry.ts` — `discoverMirrors(registryUrl)`: Consul-compatible `/v1/health/service/modelmirrors` discovery (fail closed to `[]`); `connectMirrorFromRegistry(registryUrl, tls)` connects to the first usable candidate. Parsing + pin-override live here; it knows nothing about the session protocol
 - `src/index.ts` — public API barrel, re-exports all symbols
 - `specs/Counter.tla`, `specs/HourClock.tla`, `specs/ExtMain.tla`+`specs/ExtDep.tla` — TLA+ specs for testing (HourClock: explorer flows; Ext*: multi-module inline-spec flow)
 - `specs/traces/` — pre-generated ITF JSON traces
-- `test/smoke.test.ts` — self-executing integration test (not a jest suite — it calls `main()` at bottom); covers all flows over stdio AND over TCP
+- `test/smoke.test.ts` — self-executing integration test (not a jest suite — it calls `main()` at bottom); covers all flows over stdio, TCP, mTLS (`--server --tls`), and a Consul registry stub. The TLS/registry scenarios are skipped under Bazel (`RUNFILES` set) because the Bazel-pinned ModelMirros commit builds a cabal-only TLS stub
 - `test/protocol.test.ts`, `test/spec.test.ts` — jest unit tests
 
 ## Key config files
@@ -49,6 +50,12 @@ bazel test //:smoke     # hermetic smoke test (builds ModelMirros via Bazel)
 - **Value encoding**: ints serialize as `{"#bigint": "42"}` in ITF JSON. Use `encodeState()` (not `encodeClientMessage()`) to put states on the wire — `encodeClientMessage` would double-wrap tag representations by running `JSON.stringify` with the bigint replacer over the already-tagged structure.
 - **Bigint**: use `BigInt()` / `0n`, not `number`. JavaScript numbers lose precision beyond `2^53`.
 - **Protocol spec**: `../ModelMirros/specs/MirrorProtocol.tla`
-- **Bazel CJS output mismatch**: Bazel's `ts_project(transpiler = "tsc")` produces CJS output, but `package.bazel.json` declares `"type": "module"`. See README "Known Issues" for consuming workaround.
+- **Node built-ins only for TLS/registry**: `connectTlsMirror` uses `node:tls`, `node:crypto`, `node:net`, `node:fs/promises`; `registry.ts` uses global `fetch`. No npm runtime dependency — the package stays zero-dependency at runtime.
+- **TLS 1.3 only**: `connectTlsMirror` pins `minVersion`/`maxVersion` to `"TLSv1.3"`; the server accepts no other version.
+- **Fingerprint**: the pin is lowercase hex SHA-256 over the **raw DER** encoding of the server leaf certificate (first cert in the presented chain) — use `sock.getPeerX509Certificate().raw`. Case is normalized, never the DER bytes.
+- **`src/protocol.ts` must remain unchanged**: session protocol is transport-independent; mTLS/registry are purely transport-construction concerns.
+- **`.js` import extensions apply everywhere**: `registry.ts` imports `./transport.js` (not `./transport`) exactly like the rest of the package.
+- **Bazel smoke skips TLS/registry**: the commit pinned in `MODULE.bazel` (9cffb8a) is the newest ModelMirros commit that still has a Bazel build, and it compiles a TLS **stub** that exits "TLS is not available in the Bazel build (cabal-only)". So `//:smoke` runs the stdio + TCP scenarios only (see the `RUNFILES` skip), while the full TLS/registry smoke path runs against a cabal-built binary via `MIRROR_BIN` outside Bazel.
+- **Bazel build is ESM**: `ts_project(transpiler = "tsc")` emits ESM (`module: "node16"` under the execroot's `type: "module"` package.json), and `package.bazel.json` declares `"type": "module"` to match — the Bazel build and `//:smoke` are self-consistent. README "Known Issues" documents the history and the legacy consuming workaround for pinned builds.
 - **Smoke test is standalone**: `test/smoke.test.ts` is NOT a jest suite — it calls `main()` at the bottom and uses `process.exit()`. Run it directly with `tsx`.
 - **Smoke test RUNFILES**: when run under Bazel, the `RUNFILES` env var is used to resolve `MIRROR_BIN` and trace paths.

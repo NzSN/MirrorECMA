@@ -9,10 +9,17 @@ bazel_dep(name = "modelmirrors", version = "0.1.0.0")
 git_override(
     module_name = "modelmirrors",
     remote = "https://github.com/NzSN/ModelMirrors",
-    # Explorer + inline-spec + TCP transport, merged to main in ModelMirros
-    # (015e4b2). A pinned hash does NOT follow branch movement: repoint
-    # explicitly to pick up newer mirror changes.
-    commit = "015e4b21ce792bc23d0013229d4754ba1b4996d3",
+    # Explorer + inline-spec + TCP transport + server mode (mTLS), merged to
+    # main in ModelMirros (9cffb8a). A pinned hash does NOT follow branch
+    # movement: repoint explicitly to pick up newer mirror changes.
+    #
+    # 9cffb8a is the newest commit on main that retains the Bazel build:
+    # upstream removed it at eecc41b, and the later server-mode commits
+    # (origin/main 4441c25) have no MODULE.bazel. The real TLS code is
+    # cabal-only (src-tls); the Bazel build compiles a runtime-failing TLS
+    # stub, so the smoke test's stdio + legacy TCP paths work and --server
+    # --tls is exercised against a cabal-built ModelMirrors binary.
+    commit = "9cffb8a7a22b12d5728bdace892268bde6d6177f",
 )
 
 # Transitive overrides: modelmirros uses non-BCR versions of rules_haskell/rules_sh

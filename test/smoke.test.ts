@@ -16,10 +16,27 @@ import {
 } from "../src/index.js";
 
 import { resolve } from "node:path";
-import { mkdtemp, readdir } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { spawn, type ChildProcess } from "node:child_process";
-import { connectMirror, type Transport } from "../src/transport.js";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:http";
+import { promisify } from "node:util";
+import { X509Certificate } from "node:crypto";
+import {
+  connectMirror,
+  connectTlsMirror,
+  sha256Hex,
+  type TlsConnectTransport,
+  type TlsOptions,
+  type Transport,
+} from "../src/transport.js";
+import { connectMirrorFromRegistry } from "../src/registry.js";
+
+// Node 24 warns (DEP0123) that setting an SNI servername to an IP literal is
+// not permitted by RFC 6066. connectTlsMirror defaults servername to the host
+// ("127.0.0.1" here); the warning is benign — hostname/IP-SAN validation still
+// runs against the connect host — but would spam the smoke output.
+process.noDeprecation = true;
 
 let BIN = process.env.MIRROR_BIN ?? "";
 if (BIN && process.env.RUNFILES && !/^\//.test(BIN)) {
@@ -266,6 +283,286 @@ async function testOverTcp() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// TLS server-mode (mTLS) scenarios
+// ---------------------------------------------------------------------------
+
+// Throwaway PKI for the server-mode smoke scenarios, generated into a fresh
+// temp dir with openssl (never committed). All private keys are chmod 600 to
+// satisfy the client and server key-mode checks. The caller removes the dir
+// in a finally block.
+interface TestCerts {
+  dir: string;
+  caCrt: string;
+  serverCrt: string;
+  serverKey: string;
+  clientCrt: string;
+  clientKey: string;
+  rogueCaCrt: string;
+  rogueClientCrt: string;
+  rogueClientKey: string;
+}
+
+const runOpenssl = promisify(execFile);
+
+async function generateTestCerts(): Promise<TestCerts> {
+  const dir = await mkdtemp(tmpdir() + "/mirrorecma-tls-");
+  const p = (f: string) => resolve(dir, f);
+  const run = async (args: string[]) => {
+    await runOpenssl("openssl", args, { cwd: dir });
+  };
+
+  // Self-signed CA.
+  await run(["req", "-x509", "-newkey", "rsa:2048", "-keyout", "ca.key",
+    "-out", "ca.crt", "-days", "30", "-nodes", "-subj", "/CN=MirrorECMA Test CA"]);
+  // Server certificate with IP SAN, signed by the CA.
+  await writeFile(p("server.ext"),
+    "subjectAltName=IP:127.0.0.1\n" +
+    "basicConstraints=CA:FALSE\n" +
+    "keyUsage=digitalSignature,keyEncipherment\n" +
+    "extendedKeyUsage=serverAuth\n");
+  await run(["req", "-newkey", "rsa:2048", "-keyout", "server.key", "-out", "server.csr",
+    "-nodes", "-subj", "/CN=127.0.0.1"]);
+  await run(["x509", "-req", "-in", "server.csr", "-CA", "ca.crt", "-CAkey", "ca.key",
+    "-CAcreateserial", "-out", "server.crt", "-days", "30", "-extfile", "server.ext"]);
+  // Client certificate with clientAuth EKU, signed by the CA.
+  await writeFile(p("client.ext"),
+    "basicConstraints=CA:FALSE\n" +
+    "keyUsage=digitalSignature,keyEncipherment\n" +
+    "extendedKeyUsage=clientAuth\n");
+  await run(["req", "-newkey", "rsa:2048", "-keyout", "client.key", "-out", "client.csr",
+    "-nodes", "-subj", "/CN=modelmirrors-client"]);
+  await run(["x509", "-req", "-in", "client.csr", "-CA", "ca.crt", "-CAkey", "ca.key",
+    "-CAcreateserial", "-out", "client.crt", "-days", "30", "-extfile", "client.ext"]);
+  // Rogue CA + rogue client certificate (negative tests).
+  await run(["req", "-x509", "-newkey", "rsa:2048", "-keyout", "rogue-ca.key",
+    "-out", "rogue-ca.crt", "-days", "30", "-nodes", "-subj", "/CN=MirrorECMA Rogue CA"]);
+  await writeFile(p("rogue-client.ext"),
+    "basicConstraints=CA:FALSE\n" +
+    "keyUsage=digitalSignature,keyEncipherment\n" +
+    "extendedKeyUsage=clientAuth\n");
+  await run(["req", "-newkey", "rsa:2048", "-keyout", "rogue-client.key", "-out", "rogue-client.csr",
+    "-nodes", "-subj", "/CN=rogue-client"]);
+  await run(["x509", "-req", "-in", "rogue-client.csr", "-CA", "rogue-ca.crt", "-CAkey", "rogue-ca.key",
+    "-CAcreateserial", "-out", "rogue-client.crt", "-days", "30", "-extfile", "rogue-client.ext"]);
+
+  // All private keys must be 0600 (the client and server both enforce this).
+  for (const f of ["ca.key", "server.key", "client.key", "rogue-ca.key", "rogue-client.key"]) {
+    await chmod(p(f), 0o600);
+  }
+
+  return {
+    dir,
+    caCrt: p("ca.crt"),
+    serverCrt: p("server.crt"),
+    serverKey: p("server.key"),
+    clientCrt: p("client.crt"),
+    clientKey: p("client.key"),
+    rogueCaCrt: p("rogue-ca.crt"),
+    rogueClientCrt: p("rogue-client.crt"),
+    rogueClientKey: p("rogue-client.key"),
+  };
+}
+
+// Valid mTLS client options for the throwaway CA.
+function clientTls(certs: TestCerts): TlsOptions {
+  return {
+    caPath: certs.caCrt,
+    certPath: certs.clientCrt,
+    keyPath: certs.clientKey,
+  };
+}
+
+// Async target factory for the TLS scenarios: each call opens a fresh mTLS
+// connection, mirroring tcpTarget()'s fresh-connection-per-scenario pattern.
+function tlsTarget(port: number, certs: TestCerts): Promise<TlsConnectTransport> {
+  return connectTlsMirror("127.0.0.1", port, clientTls(certs));
+}
+
+async function testOverTls() {
+  const certs = await generateTestCerts();
+  const port = 30000 + Math.floor(Math.random() * 20000);
+  const child: ChildProcess = spawn(BIN, [
+    "--server", String(port), "--tls",
+    "--cert", certs.serverCrt, "--key", certs.serverKey, "--ca", certs.caCrt,
+  ], { stdio: ["ignore", "inherit", "inherit"] });
+  try {
+    let connected = false;
+    for (let i = 0; i < 50 && !connected; i++) {
+      try {
+        const probe = await tlsTarget(port, certs);
+        await probe.close();
+        connected = true;
+      } catch {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+    if (!connected) throw new Error("mirror TLS server did not start listening");
+
+    console.log("Running smoke tests over TLS (mTLS)");
+    await testRegister(await tlsTarget(port, certs));
+    await testRegisterTraces(await tlsTarget(port, certs));
+    await testRegisterGenTraces(await tlsTarget(port, certs));
+    await testExplore(await tlsTarget(port, certs));
+    await testExploreSession(await tlsTarget(port, certs));
+    await testRegisterInlineSpec(await tlsTarget(port, certs));
+    console.log("OK: all TLS smoke tests passed");
+
+    await testNegativeTls(port, certs);
+    await testRegistryStub(port, certs);
+  } finally {
+    child.kill();
+    await rm(certs.dir, { recursive: true, force: true });
+  }
+}
+
+async function expectRejects(promise: Promise<unknown>, re?: RegExp): Promise<void> {
+  try {
+    await promise;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (re && !re.test(msg)) {
+      throw new Error(`expected rejection matching ${re}, got: ${msg}`);
+    }
+    return;
+  }
+  throw new Error("expected the promise to reject, but it resolved");
+}
+
+async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// A client certificate signed by a rogue CA must not be able to use the
+// server. Note: in TLS 1.3 the client finishes its own handshake before the
+// server's client-certificate rejection alert arrives, so connectTlsMirror
+// can resolve here; the observable failure is that the server closed the
+// connection and no register session can complete. The test accepts either
+// a handshake rejection or a session that fails on first use.
+async function assertWrongCaClientRejected(port: number, certs: TestCerts): Promise<void> {
+  let t: TlsConnectTransport;
+  try {
+    t = await connectTlsMirror("127.0.0.1", port, {
+      caPath: certs.caCrt,
+      certPath: certs.rogueClientCrt,
+      keyPath: certs.rogueClientKey,
+    });
+  } catch {
+    console.log("OK: wrong-CA client rejected at handshake");
+    return;
+  }
+
+  let sessionFailed = false;
+  try {
+    await withTimeout(testRegister(t), 30_000, "wrong-CA register");
+  } catch {
+    sessionFailed = true;
+  }
+  await t.close();
+  if (!sessionFailed) throw new Error("wrong-CA client completed a register session");
+  console.log("OK: wrong-CA client rejected (handshake ok, no usable session)");
+}
+
+async function testNegativeTls(port: number, certs: TestCerts) {
+  console.log("Running negative mTLS tests");
+  await assertWrongCaClientRejected(port, certs);
+
+  await expectRejects(
+    connectTlsMirror("127.0.0.1", port, { ...clientTls(certs), pin: "0".repeat(64) }),
+    /fingerprint mismatch/,
+  );
+  console.log("OK: direct pin mismatch rejected");
+
+  if (process.platform !== "win32") {
+    const looseKey = resolve(certs.dir, "client-loose.key");
+    await writeFile(looseKey, await readFile(certs.clientKey));
+    await chmod(looseKey, 0o644);
+    await expectRejects(
+      connectTlsMirror("127.0.0.1", port, { ...clientTls(certs), keyPath: looseKey }),
+      /chmod 0600/,
+    );
+    console.log("OK: client key mode 0644 rejected");
+  }
+}
+
+// Fingerprint of the server leaf cert, computed the same way the client does:
+// SHA-256 over the raw DER encoding, lowercase hex.
+async function serverFingerprint(certs: TestCerts): Promise<string> {
+  const pem = await readFile(certs.serverCrt, "utf8");
+  return sha256Hex(new X509Certificate(pem).raw);
+}
+
+async function testRegistryStub(port: number, certs: TestCerts) {
+  const realPin = await serverFingerprint(certs);
+  const wrongPin = "0".repeat(64);
+
+  // Canned Consul health payloads, consumed one per discovery request:
+  // 1. single correct entry (positive), 2. wrong pin then correct pin
+  // (failover), 3. malformed JSON (fail closed), 4. empty array (fail closed).
+  const malformed = "{this is not json";
+  const queue: unknown[] = [
+    [{ Service: { ID: "mirror-a", Address: "127.0.0.1", Port: port, Meta: { "cert-sha256": realPin } } }],
+    [
+      { Service: { ID: "mirror-wrong", Address: "127.0.0.1", Port: port, Meta: { "cert-sha256": wrongPin } } },
+      { Service: { ID: "mirror-good", Address: "127.0.0.1", Port: port, Meta: { "cert-sha256": realPin } } },
+    ],
+    malformed,
+    [],
+  ];
+
+  const server = createServer((req, res) => {
+    void req;
+    const body = queue.shift() ?? [];
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(typeof body === "string" ? body : JSON.stringify(body));
+  });
+  await new Promise<void>((resolvePromise) => server.listen(0, "127.0.0.1", resolvePromise));
+  const addr = server.address();
+  if (addr === null || typeof addr === "string") throw new Error("registry stub: no address");
+  const stubUrl = `http://127.0.0.1:${addr.port}`;
+  try {
+    console.log(`Running registry stub tests (stub ${stubUrl})`);
+
+    // Positive: discovery + connect + a full register session.
+    const t = await connectMirrorFromRegistry(stubUrl, clientTls(certs));
+    if (t.peerFingerprint !== realPin)
+      throw new Error(`registry pin mismatch: expected ${realPin}, got ${t.peerFingerprint}`);
+    await testRegister(t);
+    console.log("OK: registry discovery connected and completed register");
+
+    // Failover: first entry advertises the wrong pin, second the right one.
+    const t2 = await connectMirrorFromRegistry(stubUrl, clientTls(certs));
+    if (t2.peerFingerprint !== realPin)
+      throw new Error(`registry failover: expected ${realPin}, got ${t2.peerFingerprint}`);
+    await testRegister(t2);
+    console.log("OK: registry failover picked the correct candidate");
+
+    // Fail closed on malformed JSON and on an empty result.
+    await expectRejects(
+      connectMirrorFromRegistry(stubUrl, clientTls(certs)),
+      /no mirror candidates discovered/,
+    );
+    console.log("OK: registry malformed JSON fails closed");
+    await expectRejects(
+      connectMirrorFromRegistry(stubUrl, clientTls(certs)),
+      /no mirror candidates discovered/,
+    );
+    console.log("OK: registry empty result fails closed");
+  } finally {
+    await new Promise<void>((resolvePromise) => server.close(() => resolvePromise()));
+  }
+}
+
 async function main() {
   await testRegister();
   await testRegisterTraces();
@@ -274,6 +571,18 @@ async function main() {
   await testExploreSession();
   await testRegisterInlineSpec();
   await testOverTcp();
+  if (process.env.RUNFILES) {
+    // Bazel js_test wrapper: RUNFILES is set. The ModelMirros commit pinned in
+    // MODULE.bazel (9cffb8a) is the newest one that still has a Bazel build,
+    // and that build compiles a TLS stub that exits with "TLS is not available
+    // in the Bazel build (cabal-only)" — server mode is cabal-only upstream.
+    // stdio + TCP above already passed; the TLS/registry scenarios must run
+    // against a cabal-built binary with RUNFILES unset:
+    //   MIRROR_BIN=<...> NPM_CONFIG_CACHE=<writable> npx --yes tsx test/smoke.test.ts
+    console.log("SKIP: TLS/registry smoke underway only outside Bazel (RUNFILES is set; the Bazel-pinned ModelMirros build is a cabal-only TLS stub — run `MIRROR_BIN=<cabal binary> npx tsx test/smoke.test.ts` for the TLS/registry scenarios).");
+  } else {
+    await testOverTls();
+  }
 }
 
 main().catch((err) => {

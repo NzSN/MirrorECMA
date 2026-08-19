@@ -36,7 +36,7 @@ export async function runClientWithTraces(
   tracePaths: string[],
   compute: StateComputer
 ): Promise<void> {
-  const t = resolveTransport(target);
+  const t = await resolveTransport(target);
   t.send(encodeClientMessage({
     proto_step: "register_traces",
     apalacheConfig,
@@ -52,7 +52,7 @@ export async function runClient(
   compute: StateComputer,
   opts: RunOptions = {}
 ): Promise<void> {
-  const t = resolveTransport(target);
+  const t = await resolveTransport(target);
   t.send(encodeClientMessage({
     proto_step: "register",
     apalacheConfig,
@@ -78,7 +78,7 @@ export async function runClientGenTraces(
   config: TraceGenerationConfig,
   opts: RunOptions = {}
 ): Promise<GenTracesResult> {
-  const t = resolveTransport(target);
+  const t = await resolveTransport(target);
   t.send(encodeClientMessage({
     proto_step: "register_trace_gen",
     apalacheConfig,
@@ -97,7 +97,7 @@ export async function runClientExplore(
   maxSteps: number,
   compute: StateComputer
 ): Promise<void> {
-  const t = resolveTransport(target);
+  const t = await resolveTransport(target);
   t.send(encodeClientMessage({
     proto_step: "register_explore",
     spec,
@@ -125,7 +125,7 @@ export class ExploreSession {
     invariants: string[],
     exports: string[]
   ): Promise<ExploreSession> {
-    const t = resolveTransport(target);
+    const t = await resolveTransport(target);
     const it = t[Symbol.asyncIterator]();
     t.send(encodeClientMessage({
       proto_step: "register_explore_session",
@@ -215,8 +215,13 @@ export function startExploreSession(
   return ExploreSession.open(target, spec, invariants, exports);
 }
 
-function resolveTransport(target: string | Transport): Transport {
-  return typeof target === "string" ? spawnMirror(target) : target;
+type MaybeReadyTransport = Transport & { ready?: Promise<void> };
+
+async function resolveTransport(target: string | Transport): Promise<Transport> {
+  const t = typeof target === "string" ? spawnMirror(target) : target;
+  const maybeReady = t as MaybeReadyTransport;
+  if (maybeReady.ready) await maybeReady.ready;
+  return t;
 }
 
 async function mainLoop(t: Transport, compute: StateComputer): Promise<void> {

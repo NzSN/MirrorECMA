@@ -68,4 +68,20 @@ export {
   getParamInt,
 } from "./protocol.js";
 
-export { spawnMirror, connectMirror, type Transport, type ConnectTransport } from "./transport.js";
+export {
+  spawnMirror,
+  connectMirror,
+  connectTlsMirror,
+  type Transport,
+  type ConnectTransport,
+  type TlsOptions,
+  type TlsConnectTransport,
+} from "./transport.js";
+
+export {
+  discoverMirrors,
+  connectMirrorFromRegistry,
+  type MirrorServiceInfo,
+  type RegistryOptions,
+  type RegistryConnectOptions,
+} from "./registry.js";
