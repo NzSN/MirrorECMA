@@ -32,10 +32,35 @@ export interface ApalacheSpec {
 export type TransitionStatus = "ENABLED" | "DISABLED" | "UNKNOWN";
 export type InvariantStatus = "SATISFIED" | "VIOLATED" | "UNKNOWN";
 
+/** Result of a spec validation, shared by the synchronous
+ *  `register_validate` reply and the async validate job outcome — the
+ *  mirror proves them congruent (client guide C20). */
+export type ValidateResult = "valid" | { invalid: string };
+
+/** Async job lifecycle phases (server modes only). `pending`/`running`
+ *  are non-terminal; `done`/`failed`/`cancelled` are terminal and
+ *  absorbing; `unknown` is answered exactly for never-submitted or
+ *  evicted job ids (client guide C21). */
+export type JobPhase =
+  | "pending"
+  | "running"
+  | "done"
+  | "failed"
+  | "cancelled"
+  | "unknown";
+
+export type JobKind = "validate" | "gen_traces";
+
 export type ClientMessage =
   | Register
   | RegisterTraces
   | RegisterTraceGen
+  | RegisterValidate
+  | RegisterValidateAsync
+  | RegisterTraceGenAsync
+  | QueryJob
+  | AwaitJob
+  | CancelJob
   | RegisterExplore
   | RegisterExploreSession
   | ExploreAssumeTransition
@@ -57,6 +82,9 @@ export type MirrorMessage =
   | GenTracesDone
   | ProtocolError
   | RegisterError
+  | JobAccepted
+  | JobStatus
+  | JobResult
   | ExplorerReady
   | ExploreTransitionStatus
   | ExploreStepDone
@@ -98,8 +126,46 @@ export interface RegisterTraceGen {
   proto_step: "register_trace_gen";
   apalacheConfig: ApalacheConfig;
   traceConfig: TraceGenerationConfig;
-  destPath: string;
+  destPath: string | null;
   spec?: ApalacheSpec;
+}
+
+export interface RegisterValidate {
+  proto_step: "register_validate";
+  apalacheConfig: ApalacheConfig;
+  bound: number;
+  spec?: ApalacheSpec;
+}
+
+export interface RegisterValidateAsync {
+  proto_step: "register_validate_async";
+  apalacheConfig: ApalacheConfig;
+  bound: number;
+  spec?: ApalacheSpec;
+}
+
+export interface RegisterTraceGenAsync {
+  proto_step: "register_trace_gen_async";
+  apalacheConfig: ApalacheConfig;
+  traceConfig: TraceGenerationConfig;
+  destPath?: string | null;
+  spec?: ApalacheSpec;
+}
+
+export interface QueryJob {
+  proto_step: "query_job";
+  jobId: string;
+}
+
+export interface AwaitJob {
+  proto_step: "await_job";
+  jobId: string;
+  timeoutSecs?: number;
+}
+
+export interface CancelJob {
+  proto_step: "cancel_job";
+  jobId: string;
 }
 
 export interface RegisterExplore {
@@ -156,7 +222,7 @@ export interface ReportState {
 
 export interface SpecValidated {
   proto_step: "spec_validated";
-  result: "valid" | { invalid: string };
+  result: ValidateResult;
 }
 
 export interface InitialState {
@@ -216,6 +282,34 @@ export interface ProtocolError {
 export interface RegisterError {
   proto_step: "register_error";
   error: string;
+}
+
+// ---- Async job replies (server modes only) ----
+
+export interface JobAccepted {
+  proto_step: "job_accepted";
+  jobId: string;
+  kind: JobKind;
+}
+
+export interface JobStatus {
+  proto_step: "job_status";
+  jobId: string;
+  phase: JobPhase;
+}
+
+/** Terminal job outcome. `{validate}` is congruent with the synchronous
+ *  `register_validate` reply (client guide C20); `{error}` is an infra
+ *  failure (apalache died), NOT a spec verdict — see guide section 9. */
+export type JobOutcome =
+  | { validate: ValidateResult }
+  | { genTraces: { itfTracePaths: string[]; itfTraces: unknown[] } }
+  | { error: string };
+
+export interface JobResult {
+  proto_step: "job_result";
+  jobId: string;
+  outcome: JobOutcome;
 }
 
 export interface ExplorerReady {
@@ -309,6 +403,9 @@ export function decodeMirrorMessage(line: string): MirrorMessage {
     case "gen_traces_done":
     case "protocol_error":
     case "register_error":
+    case "job_accepted":
+    case "job_status":
+    case "job_result":
     case "explorer_ready":
     case "explore_transition_status":
     case "explore_step_done":
@@ -361,7 +458,19 @@ function walkMessage(obj: Record<string, unknown>): MirrorMessage {
   switch (step) {
     case "spec_validated": {
       const result = obj.result;
-      if (typeof result === "string") return { proto_step: "spec_validated", result: result as "valid" };
+      if (result === "valid")
+        return { proto_step: "spec_validated", result: "valid" };
+      if (typeof result === "string")
+        return { proto_step: "spec_validated", result: { invalid: result } };
+      if (
+        result !== null &&
+        typeof result === "object" &&
+        typeof (result as Record<string, unknown>).invalid === "string"
+      )
+        return {
+          proto_step: "spec_validated",
+          result: { invalid: (result as Record<string, unknown>).invalid as string },
+        };
       return { proto_step: "spec_validated", result: { invalid: JSON.stringify(result) } };
     }
     case "initial_state":
@@ -398,6 +507,24 @@ function walkMessage(obj: Record<string, unknown>): MirrorMessage {
       return { proto_step: "protocol_error", error: obj.error as string };
     case "register_error":
       return { proto_step: "register_error", error: obj.error as string };
+    case "job_accepted":
+      return {
+        proto_step: "job_accepted",
+        jobId: obj.jobId as string,
+        kind: obj.kind as JobKind,
+      };
+    case "job_status":
+      return {
+        proto_step: "job_status",
+        jobId: obj.jobId as string,
+        phase: obj.phase as JobPhase,
+      };
+    case "job_result":
+      return {
+        proto_step: "job_result",
+        jobId: obj.jobId as string,
+        outcome: decodeJobOutcome(obj.outcome),
+      };
     case "explorer_ready":
       return {
         proto_step: "explorer_ready",
@@ -425,6 +552,28 @@ function walkMessage(obj: Record<string, unknown>): MirrorMessage {
     default:
       return { proto_step: "protocol_error", error: `unknown proto_step: ${step}` };
   }
+}
+
+function decodeJobOutcome(raw: unknown): JobOutcome {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  if ("validate" in o) {
+    const v = o.validate;
+    if (v === "valid") return { validate: "valid" };
+    if (typeof v === "string") return { validate: { invalid: v } };
+    if (v !== null && typeof v === "object" && typeof (v as Record<string, unknown>).invalid === "string")
+      return { validate: { invalid: (v as Record<string, unknown>).invalid as string } };
+    return { validate: { invalid: JSON.stringify(v) } };
+  }
+  if ("genTraces" in o) {
+    const g = (o.genTraces ?? {}) as Record<string, unknown>;
+    return {
+      genTraces: {
+        itfTracePaths: (g.itfTracePaths as string[]) ?? [],
+        itfTraces: (g.itfTraces as unknown[]) ?? [],
+      },
+    };
+  }
+  return { error: typeof o.error === "string" ? o.error : JSON.stringify(raw) };
 }
 
 function decodeHints(raw: unknown): DiffHint[] | undefined {

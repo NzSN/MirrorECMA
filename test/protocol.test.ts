@@ -3,6 +3,7 @@ import {
   type State,
   type ClientMessage,
   type MirrorMessage,
+  type ApalacheConfig,
   type StepMismatch,
   type DiffHint,
   encodeClientMessage,
@@ -114,7 +115,7 @@ describe("decodeMirrorMessage", () => {
     const msg = decodeMirrorMessage(line);
     expect(msg).toEqual({
       proto_step: "spec_validated",
-      result: { invalid: JSON.stringify({ invalid: "bad spec" }) },
+      result: { invalid: "bad spec" },
     });
   });
 
@@ -674,5 +675,131 @@ describe("value encoding round-trip via initial_state", () => {
     };
     const encoded = encodeState(state);
     expect(encoded.u).toEqual({ "#unserializable": "Nat" });
+  });
+});
+
+describe("validate + async job messages (golden wire shapes)", () => {
+  const cfg: ApalacheConfig = { specPath: "s.tla", invariant: "Inv", lengthBound: 3 };
+
+  it("encodes register_validate", () => {
+    const msg: ClientMessage = {
+      proto_step: "register_validate",
+      apalacheConfig: cfg,
+      bound: 5,
+    };
+    expect(JSON.parse(encodeClientMessage(msg))).toEqual({
+      proto_step: "register_validate",
+      apalacheConfig: { specPath: "s.tla", invariant: "Inv", lengthBound: 3 },
+      bound: 5,
+    });
+  });
+
+  it("encodes register_validate_async", () => {
+    const msg: ClientMessage = {
+      proto_step: "register_validate_async",
+      apalacheConfig: cfg,
+      bound: 5,
+    };
+    expect(JSON.parse(encodeClientMessage(msg))).toEqual({
+      proto_step: "register_validate_async",
+      apalacheConfig: { specPath: "s.tla", invariant: "Inv", lengthBound: 3 },
+      bound: 5,
+    });
+  });
+
+  it("encodes register_trace_gen_async with explicit null destPath", () => {
+    const msg: ClientMessage = {
+      proto_step: "register_trace_gen_async",
+      apalacheConfig: cfg,
+      traceConfig: { numTraces: 2 },
+      destPath: null,
+    };
+    expect(JSON.parse(encodeClientMessage(msg))).toEqual({
+      proto_step: "register_trace_gen_async",
+      apalacheConfig: { specPath: "s.tla", invariant: "Inv", lengthBound: 3 },
+      traceConfig: { numTraces: 2 },
+      destPath: null,
+    });
+  });
+
+  it("omits destPath and spec when undefined (absent ≡ null)", () => {
+    const msg: ClientMessage = {
+      proto_step: "register_trace_gen_async",
+      apalacheConfig: cfg,
+      traceConfig: { numTraces: 2 },
+    };
+    const parsed = JSON.parse(encodeClientMessage(msg));
+    expect("destPath" in parsed).toBe(false);
+    expect("spec" in parsed).toBe(false);
+  });
+
+  it("encodes query_job / await_job / cancel_job", () => {
+    expect(
+      JSON.parse(encodeClientMessage({ proto_step: "query_job", jobId: "job-7f3a" })),
+    ).toEqual({ proto_step: "query_job", jobId: "job-7f3a" });
+    expect(
+      JSON.parse(encodeClientMessage({ proto_step: "await_job", jobId: "job-7f3a" })),
+    ).toEqual({ proto_step: "await_job", jobId: "job-7f3a" });
+    expect(
+      JSON.parse(
+        encodeClientMessage({ proto_step: "await_job", jobId: "job-7f3a", timeoutSecs: 30 }),
+      ),
+    ).toEqual({ proto_step: "await_job", jobId: "job-7f3a", timeoutSecs: 30 });
+    expect(
+      JSON.parse(encodeClientMessage({ proto_step: "cancel_job", jobId: "job-7f3a" })),
+    ).toEqual({ proto_step: "cancel_job", jobId: "job-7f3a" });
+  });
+
+  it("decodes job_accepted (both kinds)", () => {
+    expect(
+      decodeMirrorMessage('{"jobId":"job-7f3a","kind":"validate","proto_step":"job_accepted"}'),
+    ).toEqual({ proto_step: "job_accepted", jobId: "job-7f3a", kind: "validate" });
+    expect(
+      decodeMirrorMessage('{"jobId":"job-9","kind":"gen_traces","proto_step":"job_accepted"}'),
+    ).toEqual({ proto_step: "job_accepted", jobId: "job-9", kind: "gen_traces" });
+  });
+
+  it("decodes job_status across all six phases", () => {
+    for (const phase of ["pending", "running", "done", "failed", "cancelled", "unknown"] as const) {
+      expect(
+        decodeMirrorMessage(
+          JSON.stringify({ proto_step: "job_status", jobId: "job-7f3a", phase }),
+        ),
+      ).toEqual({ proto_step: "job_status", jobId: "job-7f3a", phase });
+    }
+  });
+
+  it("decodes all three job_result outcome variants", () => {
+    expect(
+      decodeMirrorMessage('{"jobId":"job-7f3a","outcome":{"validate":"valid"},"proto_step":"job_result"}'),
+    ).toEqual({ proto_step: "job_result", jobId: "job-7f3a", outcome: { validate: "valid" } });
+    expect(
+      decodeMirrorMessage(
+        '{"jobId":"job-9","outcome":{"genTraces":{"itfTracePaths":["out/itf/t1.itf.json"],"itfTraces":[]}},"proto_step":"job_result"}',
+      ),
+    ).toEqual({
+      proto_step: "job_result",
+      jobId: "job-9",
+      outcome: { genTraces: { itfTracePaths: ["out/itf/t1.itf.json"], itfTraces: [] } },
+    });
+    expect(
+      decodeMirrorMessage('{"jobId":"job-9","outcome":{"error":"worker died"},"proto_step":"job_result"}'),
+    ).toEqual({ proto_step: "job_result", jobId: "job-9", outcome: { error: "worker died" } });
+  });
+
+  it("decodes an invalid-validate job outcome", () => {
+    expect(
+      decodeMirrorMessage(
+        JSON.stringify({
+          proto_step: "job_result",
+          jobId: "job-1",
+          outcome: { validate: { invalid: "Invariant violated" } },
+        }),
+      ),
+    ).toEqual({
+      proto_step: "job_result",
+      jobId: "job-1",
+      outcome: { validate: { invalid: "Invariant violated" } },
+    });
   });
 });

@@ -18,14 +18,28 @@ export {
 export { specFromFiles } from "./spec.js";
 
 export {
+  type ClientMessage,
   type MirrorMessage,
   type Value,
   type ApalacheSpec,
   type TransitionStatus,
   type InvariantStatus,
+  type ValidateResult,
+  type JobPhase,
+  type JobKind,
+  type JobOutcome,
   type Register,
   type RegisterTraces,
   type RegisterTraceGen,
+  type RegisterValidate,
+  type RegisterValidateAsync,
+  type RegisterTraceGenAsync,
+  type QueryJob,
+  type AwaitJob,
+  type CancelJob,
+  type JobAccepted,
+  type JobStatus,
+  type JobResult,
   type RegisterExplore,
   type RegisterExploreSession,
   type ExploreAssumeTransition,
@@ -67,6 +81,22 @@ export {
   getParam,
   getParamInt,
 } from "./protocol.js";
+
+export {
+  Connection,
+  JobHandle,
+  runClientValidate,
+  RegisterFailedError,
+  JobQueueFullError,
+  JobEvictedError,
+  AsyncOnStdioError,
+  ProtocolFailureError,
+  ConnectionClosedError,
+  type AwaitResult,
+  type ConnectionOptions,
+  type ValidateOptions,
+  type SubmitTraceGenOptions,
+} from "./connection.js";
 
 export {
   spawnMirror,

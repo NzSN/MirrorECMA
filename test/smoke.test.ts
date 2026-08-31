@@ -7,7 +7,11 @@ import {
   specFromFile,
   specFromFiles,
   presetClient,
+  Connection,
+  runClientValidate,
+  JobQueueFullError,
   type ApalacheConfig,
+  type ApalacheSpec,
   type TraceGenerationConfig,
   type StateComputer,
   type State,
@@ -278,6 +282,226 @@ async function testOverTcp() {
     await testExploreSession(tcpTarget(port));
     await testRegisterInlineSpec(tcpTarget(port));
     console.log("OK: all TCP smoke tests passed");
+  } finally {
+    child.kill();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Async jobs + synchronous validate (P2; client guide section 6, C16-C23)
+// ---------------------------------------------------------------------------
+
+// Self-contained inline spec for the validate/async scenarios: no server
+// filesystem dependency (C13). InvOk holds for every reachable state,
+// InvBad is violated in the initial state.
+const ASYNC_CLOCK_SRC = `---- MODULE AsyncClock ----
+EXTENDS Integers
+VARIABLE
+  \\* @type: Int;
+  h
+
+Init == h = 1
+
+Next == h' = h + 1
+
+\\* @type: () => Bool;
+InvOk == h >= 1
+
+\\* @type: () => Bool;
+InvBad == h < 1
+====
+`;
+const asyncClockSpec: ApalacheSpec = { sources: [ASYNC_CLOCK_SRC] };
+
+function asyncClockConfig(invariant: string): ApalacheConfig {
+  return {
+    // With inline sources the specPath is the module's basename inside
+    // the mirror's materialized temp dir (guide section 5).
+    specPath: "AsyncClock.tla",
+    invariant,
+    lengthBound: 5,
+  };
+}
+
+// Slow validate job: apalache checks Counter out to bound 100 — long
+// enough that an immediate cancel always wins the race. Counter declares
+// CONSTANTS, so constInit is required (C15).
+function slowValidateConfig(): { cfg: ApalacheConfig; bound: number } {
+  return {
+    cfg: {
+      specPath: SPEC,
+      invariant: "TraceComplete",
+      lengthBound: 10,
+      constInit: "CInit",
+    },
+    bound: 100,
+  };
+}
+
+async function waitForTcpDaemon(port: number): Promise<void> {
+  for (let i = 0; i < 50; i++) {
+    try {
+      const probe = connectMirror("127.0.0.1", port);
+      await probe.ready;
+      await probe.close();
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+  throw new Error("mirror daemon did not start listening");
+}
+
+async function testValidateAndAsyncTcp() {
+  const port = 20000 + Math.floor(Math.random() * 9000);
+  const child: ChildProcess = spawn(BIN, ["--serve", String(port), "--jobs", "2"], {
+    stdio: ["ignore", "inherit", "inherit"],
+  });
+  try {
+    await waitForTcpDaemon(port);
+    console.log("Running validate + async job smoke tests (TCP, --jobs 2)");
+
+    // 1. Synchronous validate, valid + invalid (C16).
+    const valid = await runClientValidate(tcpTarget(port), asyncClockConfig("InvOk"), 5, {
+      spec: asyncClockSpec,
+    });
+    if (valid !== "valid") throw new Error(`expected valid, got ${JSON.stringify(valid)}`);
+    const invalid = await runClientValidate(tcpTarget(port), asyncClockConfig("InvBad"), 5, {
+      spec: asyncClockSpec,
+    });
+    if (typeof invalid === "string") throw new Error("expected an invalid validate result");
+    console.log("OK: sync validate (valid + invalid)");
+
+    // 2. Async validate: submit + await; the outcome payload must equal
+    //    the synchronous reply for the same config (C20 congruence).
+    const connA = await Connection.open(tcpTarget(port));
+    const handle = await connA.submitValidateAsync(asyncClockConfig("InvOk"), 5, {
+      spec: asyncClockSpec,
+    });
+    if (handle.kind !== "validate") throw new Error(`unexpected job kind ${handle.kind}`);
+    const awaited = await handle.await(60);
+    if (!awaited.done) throw new Error("validate job did not terminate within 60s");
+    if (!("validate" in awaited.result.outcome))
+      throw new Error(`expected a validate outcome: ${JSON.stringify(awaited.result.outcome)}`);
+    if (awaited.result.outcome.validate !== valid)
+      throw new Error(
+        `C20 mismatch: sync ${JSON.stringify(valid)} != async ${JSON.stringify(awaited.result.outcome.validate)}`,
+      );
+    console.log("OK: async validate awaits and matches the sync reply (C20)");
+
+    // 3. Cross-connection: submit on A, await on B (C17).
+    const connB = await Connection.open(tcpTarget(port));
+    const handleX = await connA.submitValidateAsync(asyncClockConfig("InvOk"), 5, {
+      spec: asyncClockSpec,
+    });
+    const awaitedX = await connB.awaitJob(handleX.jobId, 60);
+    if (!awaitedX.done || !("validate" in awaitedX.result.outcome))
+      throw new Error("cross-connection await did not return the job outcome");
+    if (awaitedX.result.outcome.validate !== "valid")
+      throw new Error("cross-connection await returned the wrong outcome");
+    console.log("OK: submit on one connection, await on another (C17)");
+
+    // Liveness probe on an idle connection (C7 MAY).
+    if (!(await connB.ping())) throw new Error("ping failed against a live server");
+
+    // 4. trace_gen_async with destPath omitted: the outcome carries
+    //    server-temp paths plus inline trace contents. (numTraces > 1
+    //    needs a view on the apalache side, like the sync gen test.)
+    const genHandle = await connA.submitTraceGenAsync(apalacheConfig, {
+      numTraces: 2,
+      view: "View",
+    });
+    const genDone = await connB.awaitJob(genHandle.jobId, 120);
+    if (!genDone.done) throw new Error("trace gen job did not terminate within 120s");
+    if (!("genTraces" in genDone.result.outcome))
+      throw new Error(`expected a genTraces outcome: ${JSON.stringify(genDone.result.outcome)}`);
+    const gt = genDone.result.outcome.genTraces;
+    // numTraces maps to apalache's max-error, not an exact trace count
+    // (the sync gen test asks for 100 and gets 38); assert the sync
+    // test's discipline instead: paths ≡ inline traces, non-empty.
+    if (gt.itfTracePaths.length === 0 || gt.itfTracePaths.length !== gt.itfTraces.length)
+      throw new Error(
+        `paths/inline-traces mismatch: ${gt.itfTracePaths.length} + ${gt.itfTraces.length}`,
+      );
+    for (const tr of gt.itfTraces) {
+      const states = (tr as { states?: unknown[] }).states;
+      if (!Array.isArray(states) || states.length === 0)
+        throw new Error("inline trace has no states");
+    }
+    console.log("OK: trace gen async returns inline traces");
+
+    // 5. Cancel (C19): cooperative cancellation kills the apalache
+    //    child; the reply is the post-cancel job_status and a later
+    //    await yields the terminal cancelled outcome.
+    const slow = slowValidateConfig();
+    const slowHandle = await connA.submitValidateAsync(slow.cfg, slow.bound);
+    const cancelReply = await slowHandle.cancel();
+    if (cancelReply.proto_step !== "job_status" || cancelReply.phase !== "cancelled")
+      throw new Error(`unexpected cancel reply: ${JSON.stringify(cancelReply)}`);
+    const afterCancel = await slowHandle.await(30);
+    if (!afterCancel.done) throw new Error("cancelled job never went terminal");
+    const cancelOutcome = afterCancel.result.outcome;
+    if (!("error" in cancelOutcome) || !/cancelled/.test(cancelOutcome.error))
+      throw new Error(`expected a cancelled outcome: ${JSON.stringify(cancelOutcome)}`);
+    console.log("OK: cancel_job cancels and the outcome is terminal (C19)");
+
+    // connA is done; close it BEFORE opening connC. The daemon runs
+    // --jobs 2 (two connection workers), so at most two connections may
+    // be open at once — a third queues at the accept backlog and is
+    // never served (pool sizing discipline, C22).
+    await connA.close();
+
+    // 6. C6/C21: closing the submitting connection cancels AND evicts
+    //    its jobs; another connection then observes phase "unknown".
+    const connC = await Connection.open(tcpTarget(port));
+    const doomedCfg = slowValidateConfig();
+    const doomed = await connC.submitValidateAsync(doomedCfg.cfg, doomedCfg.bound);
+    await connC.close();
+    let lastSeen = "";
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const q = await connB.queryJob(doomed.jobId);
+      if (q.proto_step === "job_status") {
+        lastSeen = q.phase;
+        if (q.phase === "unknown") break;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    if (lastSeen !== "unknown")
+      throw new Error(`expected the disconnected job to be evicted to unknown, got ${lastSeen}`);
+    console.log("OK: disconnect cancels and evicts the session's jobs (C6/C21)");
+
+    await connB.close();
+    console.log("OK: all validate + async job smoke tests passed");
+  } finally {
+    child.kill();
+  }
+}
+
+// C22: with --jobs 1 the store holds exactly one live job; a second
+// submit is rejected synchronously with register_error ("job queue full").
+async function testQueueFull() {
+  const port = 20000 + Math.floor(Math.random() * 9000);
+  const child: ChildProcess = spawn(BIN, ["--serve", String(port), "--jobs", "1"], {
+    stdio: ["ignore", "inherit", "inherit"],
+  });
+  try {
+    await waitForTcpDaemon(port);
+    console.log("Running queue-full smoke test (TCP, --jobs 1)");
+    const conn = await Connection.open(tcpTarget(port));
+    const slow = slowValidateConfig();
+    const first = await conn.submitValidateAsync(slow.cfg, slow.bound);
+    let fullErr: unknown = null;
+    try {
+      await conn.submitValidateAsync(asyncClockConfig("InvOk"), 5, { spec: asyncClockSpec });
+    } catch (err) {
+      fullErr = err;
+    }
+    if (!(fullErr instanceof JobQueueFullError))
+      throw new Error(`expected JobQueueFullError, got ${String(fullErr)}`);
+    await first.cancel();
+    await conn.close();
+    console.log("OK: full job queue rejected at submit (C22)");
   } finally {
     child.kill();
   }
@@ -571,6 +795,8 @@ async function main() {
   await testExploreSession();
   await testRegisterInlineSpec();
   await testOverTcp();
+  await testValidateAndAsyncTcp();
+  await testQueueFull();
   if (process.env.RUNFILES) {
     // Bazel js_test wrapper: RUNFILES is set. The ModelMirros commit pinned in
     // MODULE.bazel (9cffb8a) is the newest one that still has a Bazel build,

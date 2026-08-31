@@ -10,6 +10,11 @@ export interface Transport {
   send(line: string): void;
   [Symbol.asyncIterator](): AsyncIterator<string>;
   close(): Promise<number>;
+  /** Session model of this transport: stdio mirrors are sync-only;
+   *  network mirrors (--serve/--server) also accept async job messages.
+   *  Set by the transport constructors; used by Connection to reject
+   *  async operations on stdio before any bytes are sent. */
+  readonly mode?: "stdio" | "network";
 }
 
 export interface TlsOptions {
@@ -70,6 +75,8 @@ export function spawnMirror(binPath: string): Transport {
   rl.on("close", it.finish);
 
   return {
+    mode: "stdio" as const,
+
     send(line: string) {
       stdin.write(line + "\n");
     },
@@ -77,7 +84,13 @@ export function spawnMirror(binPath: string): Transport {
     async close(): Promise<number> {
       stdin.end();
       return new Promise((resolve) => {
-        child.on("close", (code) => resolve(code ?? 0));
+        // A wedged mirror must not pin the client's event loop: if it
+        // does not exit promptly after stdin closes, terminate it.
+        const killer = setTimeout(() => child.kill("SIGTERM"), 2_000);
+        child.on("close", (code) => {
+          clearTimeout(killer);
+          resolve(code ?? 0);
+        });
       });
     },
 
@@ -115,6 +128,8 @@ export function connectMirror(host: string, port: number): ConnectTransport {
   sock.on("close", it.finish);
 
   return {
+    mode: "network" as const,
+
     ready,
 
     send(line: string) {
@@ -258,6 +273,8 @@ export async function connectTlsMirror(
   sock.on("close", it.finish);
 
   return {
+    mode: "network" as const,
+
     peerFingerprint,
     send(line: string) {
       sock.write(line + "\n");
