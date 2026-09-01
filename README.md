@@ -52,13 +52,17 @@ spec-generated protocol traces against the real mirror implementation.
 npm install
 npm run build        # → dist/
 npm run check        # type-check only
+MIRRORS_FIXTURES=/path/to/Mirrors/test/fixtures npm test
 MIRROR_BIN=/path/to/ModelMirrors \
   SPEC=/path/to/authoritative/Counter.tla npm run smoke
 ```
 
 `SPEC` is optional; the smoke suite defaults to its checked-in
-`specs/Counter.tla`. The register scenario generates traces from that model
-and replays every state through the JavaScript implementation.
+`specs/Counter.tla`. The smoke suite generates traces from that model, replays
+every state through the JavaScript implementation, and then verifies that an
+extra observable state key is rejected with terminal `step_mismatch` over
+stdio, TCP, and mTLS. `MIRRORS_FIXTURES` selects the canonical wire corpus;
+the sibling `../Mirrors/test/fixtures` checkout is the default.
 
 ## Quick Start
 

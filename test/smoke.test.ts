@@ -101,11 +101,34 @@ class CounterComputer {
   }
 }
 
+class IncorrectCounterComputer extends CounterComputer {
+  override compute(action: string, params: State, prevState: State): State {
+    return {
+      ...super.compute(action, params, prevState),
+      unexpected: { tag: "bool", val: true },
+    };
+  }
+}
+
 async function testRegister(target: string | Transport = BIN) {
   const computer = new CounterComputer();
   console.log(`Running smoke test (register) with spec: ${SPEC}`);
   await runClient(target, apalacheConfig, traceConfig, computer.compute.bind(computer));
   console.log("OK: register smoke test passed");
+}
+
+async function testRegisterMismatch(target: string | Transport = BIN) {
+  const computer = new IncorrectCounterComputer();
+  let mismatch = false;
+  try {
+    await runClient(target, apalacheConfig, traceConfig, computer.compute.bind(computer));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/step mismatch/.test(message) || !/unexpected/.test(message)) throw error;
+    mismatch = true;
+  }
+  if (!mismatch) throw new Error("incorrect Counter state unexpectedly passed replay");
+  console.log("OK: extra observable state key produces terminal step_mismatch");
 }
 
 async function testRegisterTraces(target: string | Transport = BIN) {
@@ -276,6 +299,7 @@ async function testOverTcp() {
 
     console.log("Running smoke tests over TCP");
     await testRegister(tcpTarget(port));
+    await testRegisterMismatch(tcpTarget(port));
     await testRegisterTraces(tcpTarget(port));
     await testRegisterGenTraces(tcpTarget(port));
     await testExplore(tcpTarget(port));
@@ -400,6 +424,28 @@ async function testValidateAndAsyncTcp() {
     if (awaitedX.result.outcome.validate !== "valid")
       throw new Error("cross-connection await returned the wrong outcome");
     console.log("OK: submit on one connection, await on another (C17)");
+
+    // C23: results are correlated by job id, not submission/completion
+    // order. Submit valid then invalid and deliberately await in reverse.
+    const orderedValid = await connA.submitValidateAsync(asyncClockConfig("InvOk"), 5, {
+      spec: asyncClockSpec,
+    });
+    const orderedInvalid = await connA.submitValidateAsync(asyncClockConfig("InvBad"), 5, {
+      spec: asyncClockSpec,
+    });
+    const invalidFirst = await connB.awaitJob(orderedInvalid.jobId, 60);
+    if (
+      !invalidFirst.done ||
+      !("validate" in invalidFirst.result.outcome) ||
+      typeof invalidFirst.result.outcome.validate === "string"
+    ) throw new Error("reverse-order invalid job did not retain its own outcome");
+    const validSecond = await connB.awaitJob(orderedValid.jobId, 60);
+    if (
+      !validSecond.done ||
+      !("validate" in validSecond.result.outcome) ||
+      validSecond.result.outcome.validate !== "valid"
+    ) throw new Error("reverse-order valid job did not retain its own outcome");
+    console.log("OK: async results remain correlated under reverse awaits (C23)");
 
     // Liveness probe on an idle connection (C7 MAY).
     if (!(await connB.ping())) throw new Error("ping failed against a live server");
@@ -639,6 +685,7 @@ async function testOverTls() {
 
     console.log("Running smoke tests over TLS (mTLS)");
     await testRegister(await tlsTarget(port, certs));
+    await testRegisterMismatch(await tlsTarget(port, certs));
     await testRegisterTraces(await tlsTarget(port, certs));
     await testRegisterGenTraces(await tlsTarget(port, certs));
     await testExplore(await tlsTarget(port, certs));
@@ -715,6 +762,7 @@ async function testNegativeTls(port: number, certs: TestCerts) {
   console.log("Running negative mTLS tests");
   await assertWrongCaClientRejected(port, certs);
   await assertCnOnlyServerRejected(certs);
+  await assertTls12OnlyServerRejected(certs);
 
   await expectRejects(
     connectTlsMirror("127.0.0.1", port, { ...clientTls(certs), pin: "0".repeat(64) }),
@@ -764,6 +812,35 @@ async function assertCnOnlyServerRejected(certs: TestCerts): Promise<void> {
     }
     if (!sawSanRejection) throw new Error("CN-only server did not reach SAN verification");
     console.log("OK: CN-only server certificate rejected (SAN required)");
+  } finally {
+    child.kill();
+  }
+}
+
+async function assertTls12OnlyServerRejected(certs: TestCerts): Promise<void> {
+  const port = 30000 + Math.floor(Math.random() * 20000);
+  const child = spawn("openssl", [
+    "s_server", "-Verify", "1", "-verify_return_error", "-tls1_2", "-quiet",
+    "-accept", String(port),
+    "-cert", certs.serverCrt, "-key", certs.serverKey,
+    "-CAfile", certs.caCrt, "-naccept", "1",
+  ], { stdio: ["ignore", "inherit", "inherit"] });
+  try {
+    let rejected = false;
+    for (let i = 0; i < 50 && !rejected; i++) {
+      try {
+        const t = await connectTlsMirror("127.0.0.1", port, clientTls(certs));
+        await t.close();
+        throw new Error("TLS 1.2-only server was accepted");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/TLS 1\.2-only server was accepted/.test(message)) throw error;
+        if (/ECONNREFUSED/.test(message)) await new Promise((r) => setTimeout(r, 100));
+        else rejected = true;
+      }
+    }
+    if (!rejected) throw new Error("TLS 1.2-only peer did not become ready");
+    console.log("OK: TLS 1.2-only server rejected (TLS 1.3 required)");
   } finally {
     child.kill();
   }
@@ -839,6 +916,7 @@ async function testRegistryStub(port: number, certs: TestCerts) {
 
 async function main() {
   await testRegister();
+  await testRegisterMismatch();
   await testRegisterTraces();
   await testRegisterGenTraces();
   await testExplore();

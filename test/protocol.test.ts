@@ -110,6 +110,18 @@ describe("decodeMirrorMessage", () => {
     expect(msg).toEqual({ proto_step: "spec_validated", result: "valid" });
   });
 
+  it("ignores additive unknown fields while dispatching on proto_step (C3)", () => {
+    const line = JSON.stringify({
+      proto_step: "spec_validated",
+      result: "valid",
+      futureField: { nested: true },
+    });
+    expect(decodeMirrorMessage(line)).toEqual({
+      proto_step: "spec_validated",
+      result: "valid",
+    });
+  });
+
   it("decodes spec_validated (invalid)", () => {
     const line = JSON.stringify({ proto_step: "spec_validated", result: { invalid: "bad spec" } });
     const msg = decodeMirrorMessage(line);
