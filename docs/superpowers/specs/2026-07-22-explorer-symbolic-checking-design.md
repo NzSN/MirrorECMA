@@ -8,7 +8,7 @@
 ModelMirros gained two explorer-based flows on its `interactive` branch (HEAD `1b65121`):
 
 1. **`register_explore`** — mirror-driven symbolic exploration. Instead of replaying a precomputed concrete trace, the mirror starts a live apalache explorer server and computes each successor state symbolically (via `Apalache.Rpc.Client` over JSON-RPC). The client receives the same `initial_state` / `next_step` / `step_ok` message stream as the `register` flow and is conformance-checked against the symbolic states.
-2. **`register_explore_session`** — client-driven interactive symbolic checking. The mirror opens an explorer session, replies `explorer_ready`, then strictly alternates: each client explorer command (`assumeTransition`, `nextStep`, `queryState`, `checkInvariant`, `assumeState`, `rollback`) is proxied to the apalache server and its result returned. `explore_done` ends the session. A failed command yields `protocol_error` but the session **survives** — the mirror's session loop continues.
+2. **`register_explore_session`** — client-driven interactive symbolic checking. The mirror opens an explorer session, replies `explorer_ready`, then strictly alternates: each client explorer command (`assumeTransition`, `nextStep`, `queryState`, `checkInvariant`, `assumeState`, `rollback`) is proxied to the apalache server and its result returned. `explore_done` ends the session. At the time of this design the mirror continued after a failed command; the current client conformance contract is stricter and closes/poisons the connection on `protocol_error`.
 
 MirrorECMA implements only the three trace flows (`register`, `register_traces`, `register_trace_gen`). This change ports both explorer flows to the TypeScript client.
 
@@ -35,7 +35,7 @@ A small stateful wrapper around the transport:
 
 - `startExploreSession(binPath, spec, invariants, exports)` sends `register_explore_session` and waits for `explorer_ready` (throws on `register_error`/`protocol_error`); exposes `.ready = {initTransitions, nextTransitions, stateInvariants}`.
 - One async method per command, each sending one message and awaiting its typed reply: `assumeTransition(tid)`, `nextStep()`, `queryState()`, `checkInvariant(iid)`, `assumeState(eqs)`, `rollback(snap)`, `done()`.
-- A `protocol_error` reply throws, but the transport stays open — callers may keep issuing commands (mirrors the Haskell semantics).
+- A `protocol_error`, malformed reply, or impossible reply throws and closes/poisons the transport; later calls report a closed session.
 - `done()` waits for `explore_session_done`, then closes the transport.
 
 ### `invariants` and `exports`

@@ -12,4 +12,5 @@ module.exports = {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   testMatch: ["<rootDir>/test/**/*.test.ts"],
+  testPathIgnorePatterns: ["<rootDir>/test/smoke\\.test\\.ts$"],
 };

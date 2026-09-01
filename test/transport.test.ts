@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
-import { normalizeFingerprint, sha256Hex } from "../src/transport.js";
+import {
+  MAX_PROTOCOL_LINE_BYTES,
+  normalizeFingerprint,
+  sha256Hex,
+  validateProtocolLine,
+} from "../src/transport.js";
 
 const HEX64 = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
 
@@ -61,5 +66,19 @@ describe("sha256Hex", () => {
     expect(sha256Hex(new Uint8Array(0))).toBe(
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     );
+  });
+});
+
+describe("protocol line validation", () => {
+  it("accepts the largest framed payload and measures UTF-8 bytes", () => {
+    expect(() => validateProtocolLine("a".repeat(MAX_PROTOCOL_LINE_BYTES))).not.toThrow();
+    expect(() => validateProtocolLine("é".repeat(Math.floor(MAX_PROTOCOL_LINE_BYTES / 2)))).not.toThrow();
+  });
+
+  it("rejects empty, embedded-newline, and oversized payloads", () => {
+    expect(() => validateProtocolLine("")).toThrow(/must not be empty/);
+    expect(() => validateProtocolLine("{}\n{}" )).toThrow(/embedded newline/);
+    expect(() => validateProtocolLine("a".repeat(MAX_PROTOCOL_LINE_BYTES + 1))).toThrow(/maximum/);
+    expect(() => validateProtocolLine("é".repeat(Math.floor(MAX_PROTOCOL_LINE_BYTES / 2) + 1))).toThrow(/maximum/);
   });
 });

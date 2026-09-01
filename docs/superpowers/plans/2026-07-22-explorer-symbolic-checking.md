@@ -344,7 +344,7 @@ In `js_test(name = "smoke", ...)` `data`, add `"specs/HourClock.tla"` alongside 
 
 - [ ] **Step 1: Document the explorer APIs**
 
-Short section after the trace-flow docs: `runClientExplore` (mirror-driven symbolic checking, same `StateComputer` contract as `runClient`) and `startExploreSession` (client-driven; example command sequence; note that a `protocol_error` rejects the command but keeps the session open). Mention `specFromFile` and that `invariants` are state-invariant operator names from the spec.
+Short section after the trace-flow docs: `runClientExplore` (mirror-driven symbolic checking, same `StateComputer` contract as `runClient`) and `startExploreSession` (client-driven; example command sequence; note that a `protocol_error` rejects the command and the current conformance contract closes/poisons the connection). Mention `specFromFile` and that `invariants` are state-invariant operator names from the spec.
 
 ---
 

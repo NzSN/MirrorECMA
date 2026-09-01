@@ -12,7 +12,7 @@
 // resolution fails loudly (ambiguity) instead of silently shipping the wrong
 // module to the mirror.
 
-import { readFile, access } from "node:fs/promises";
+import { readFile, access, realpath } from "node:fs/promises";
 import { dirname, resolve as resolvePath } from "node:path";
 import type { ApalacheSpec } from "./protocol.js";
 
@@ -28,17 +28,67 @@ const BUILTINS = new Set([
   "Apalache",
 ]);
 
-const EXTENDS_RE = /^\s*EXTENDS\s+(.+)$/m;
-const INSTANCE_RE = /^\s*INSTANCE\s+(.+)$/m;
+/** Tokenize the small part of TLA+ needed for dependency discovery. Strings,
+ * line comments, and nested block comments are skipped, while identifiers and
+ * commas are retained. This recognizes continued EXTENDS clauses and INSTANCE
+ * expressions in forms such as `LOCAL INSTANCE M` and `Op == INSTANCE M`. */
+function dependencyTokens(source: string): string[] {
+  const out: string[] = [];
+  let i = 0;
+  let blockDepth = 0;
+  while (i < source.length) {
+    if (blockDepth > 0) {
+      if (source.startsWith("(*", i)) { blockDepth++; i += 2; continue; }
+      if (source.startsWith("*)", i)) { blockDepth--; i += 2; continue; }
+      i++;
+      continue;
+    }
+    if (source.startsWith("\\*", i)) {
+      i = source.indexOf("\n", i + 2);
+      if (i < 0) break;
+      continue;
+    }
+    if (source.startsWith("(*", i)) { blockDepth = 1; i += 2; continue; }
+    if (source[i] === '"') {
+      i++;
+      while (i < source.length) {
+        if (source[i] === "\\") { i += 2; continue; }
+        if (source[i] === '"') { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    if (source[i] === ",") { out.push(","); i++; continue; }
+    if (/[A-Za-z_]/.test(source[i]!)) {
+      const start = i++;
+      while (i < source.length && /[A-Za-z0-9_]/.test(source[i]!)) i++;
+      out.push(source.slice(start, i));
+      continue;
+    }
+    i++;
+  }
+  return out;
+}
 
-function moduleRefs(source: string, re: RegExp): string[] {
-  const m = source.match(re);
-  if (!m) return [];
-  // "A, B, C" or "A WITH x <- y" (INSTANCE) — keep only module name tokens.
-  return m[1]!
-    .split(",")
-    .map((part) => part.trim().split(/\s+/)[0]!)
-    .filter((name) => name.length > 0 && !BUILTINS.has(name));
+function moduleRefs(source: string): string[] {
+  const tokens = dependencyTokens(source);
+  const refs: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i] === "EXTENDS") {
+      let j = i + 1;
+      if (tokens[j] === undefined || tokens[j] === ",") continue;
+      refs.push(tokens[j]!);
+      j++;
+      while (tokens[j] === "," && tokens[j + 1] !== undefined && tokens[j + 1] !== ",") {
+        refs.push(tokens[j + 1]!);
+        j += 2;
+      }
+      i = j - 1;
+    } else if (tokens[i] === "INSTANCE" && tokens[i + 1] !== undefined) {
+      refs.push(tokens[++i]!);
+    }
+  }
+  return refs.filter((name) => !BUILTINS.has(name));
 }
 
 async function existingPaths(candidates: string[]): Promise<string[]> {
@@ -46,7 +96,7 @@ async function existingPaths(candidates: string[]): Promise<string[]> {
   for (const p of candidates) {
     try {
       await access(p);
-      found.push(p);
+      found.push(await realpath(p));
     } catch {
       // not here; try next candidate
     }
@@ -76,13 +126,13 @@ export async function specFromFiles(
   const deps: string[] = [];
 
   async function visit(path: string, isRoot: boolean): Promise<void> {
-    const abs = resolvePath(path);
+    const abs = await realpath(resolvePath(path));
     if (visited.has(abs)) return;
     visited.add(abs);
 
     const text = await readFile(abs, "utf8");
     const dir = dirname(abs);
-    const refs = [...moduleRefs(text, EXTENDS_RE), ...moduleRefs(text, INSTANCE_RE)];
+    const refs = moduleRefs(text);
 
     for (const name of refs) {
       const candidates = [

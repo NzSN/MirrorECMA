@@ -52,7 +52,13 @@ spec-generated protocol traces against the real mirror implementation.
 npm install
 npm run build        # → dist/
 npm run check        # type-check only
+MIRROR_BIN=/path/to/ModelMirrors \
+  SPEC=/path/to/authoritative/Counter.tla npm run smoke
 ```
+
+`SPEC` is optional; the smoke suite defaults to its checked-in
+`specs/Counter.tla`. The register scenario generates traces from that model
+and replays every state through the JavaScript implementation.
 
 ## Quick Start
 
@@ -165,9 +171,10 @@ await session.rollback(0);           // → snapshot id
 await session.done();                // ends the session and closes the mirror
 ```
 
-Commands and replies strictly alternate. A rejected command throws
-(`protocol_error`) but the **session stays open** — you may keep issuing
-commands. `invariantId` indexes into the `invariants` list passed at open.
+Commands and replies strictly alternate. A `protocol_error`, malformed reply,
+or impossible reply closes and poisons the session. The failing call throws;
+later calls report that the session is closed. `invariantId` indexes into the
+`invariants` list passed at open.
 
 ### `specFromFile(path)` → `ApalacheSpec`
 
@@ -210,7 +217,7 @@ so the client never needs the mirror's filesystem.
 All client entry points accept either a binary path (spawns the mirror over
 stdio, as before) or a `Transport`. `connectMirror` provides a TCP transport;
 run the mirror as a daemon with `--serve <port>` (one protocol session per
-connection, sequential accept loop):
+connection, bounded concurrent worker pool):
 
 ```ts
 // mirror side:  ModelMirrors --serve 8823
@@ -252,6 +259,9 @@ Certificate prerequisites (the same files/paths the Haskell client takes):
   CA. On POSIX the key must be mode `0600` (not accessible by group/other);
   `connectTlsMirror` rejects otherwise.
 - TLS is pinned to **1.3 only**; no older versions are negotiated.
+- Server identity is checked against SAN only. DNS names use DNS SAN + SNI;
+  IP literals use IP SAN and are not sent as SNI. A CN-only certificate is
+  rejected.
 
 Fingerprint pinning (optional, defense in depth): pass `pin` to
 `connectTlsMirror` — lowercase hex SHA-256 over the **raw DER** encoding of
@@ -325,6 +335,10 @@ Client and mirror exchange newline-delimited JSON, one message per line,
 tagged by `proto_step`. The same framing runs over stdio (spawned child) or
 TCP (`--serve <port>` daemon + `connectMirror`).
 
+Outbound lines must be non-empty, contain no embedded LF, and be at most
+65,535 UTF-8 bytes before the terminating LF. All transports enforce these
+rules before writing.
+
 ### Message catalog
 
 **Client → Mirror:**
@@ -364,7 +378,7 @@ TCP (`--serve <port>` daemon + `connectMirror`).
 | `explore_rollback_done` | `snapshotId` | Reverted |
 | `explore_session_done` | — | Session closed cleanly |
 | `register_error` | `error` | Registration failed (bad spec/sources); run ends |
-| `protocol_error` | `error` | Protocol violation; in a session, the session **survives** |
+| `protocol_error` | `error` | Protocol violation; the affected connection is closed/poisoned |
 
 `spec` fields have the shape `{ sources: [root, ...deps] }` (TLA+ source
 text, root module first — apalache resolves `EXTENDS` across them).
@@ -416,7 +430,7 @@ strictly alternate until done:
 | Mode | Client side | Mirror side | Notes |
 |---|---|---|---|
 | stdio | `spawnMirror(binPath)` (implicit when passing a path string) | default (no args) | Local child process |
-| TCP | `connectMirror(host, port)` | `ModelMirrors --serve <port>` | One session per connection, sequential accept loop; plain TCP, no TLS |
+| TCP | `connectMirror(host, port)` | `ModelMirrors --serve <port>` | One session per connection; bounded concurrent worker pool; plain TCP |
 | Server (mTLS) | `connectTlsMirror(host, port, tls)` / `connectMirrorFromRegistry(url, tls)` | `ModelMirrors --server <port> --tls --cert ... --key ... --ca ... [--registry <url>]` | mTLS, TLS 1.3 only; optional Consul discovery (`--registry`) + fingerprint pinning |
 
 The message layer is model-checked: `ModelMirros/specs/MirrorProtocol.tla`
@@ -432,7 +446,7 @@ State maps use the Apalache ITF value encoding:
 | Int | `{"#bigint": "42"}` |
 | Bool | `true` / `false` |
 | Str | `"hello"` |
-| Set | `[{"#bigint": "1"}, {"#bigint": "2"}]` |
+| Set | `{"#set": [{"#bigint": "1"}, {"#bigint": "2"}]}` |
 | Tuple | `{"#tup": [...]}` |
 | Record | `{"field": value, ...}` |
 

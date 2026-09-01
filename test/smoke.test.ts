@@ -520,6 +520,8 @@ interface TestCerts {
   caCrt: string;
   serverCrt: string;
   serverKey: string;
+  cnOnlyServerCrt: string;
+  cnOnlyServerKey: string;
   clientCrt: string;
   clientKey: string;
   rogueCaCrt: string;
@@ -549,6 +551,16 @@ async function generateTestCerts(): Promise<TestCerts> {
     "-nodes", "-subj", "/CN=127.0.0.1"]);
   await run(["x509", "-req", "-in", "server.csr", "-CA", "ca.crt", "-CAkey", "ca.key",
     "-CAcreateserial", "-out", "server.crt", "-days", "30", "-extfile", "server.ext"]);
+  // CN-only server certificate: trusted chain, matching CN, deliberately no
+  // SAN. A conforming client must reject it (guide C25).
+  await writeFile(p("cn-server.ext"),
+    "basicConstraints=CA:FALSE\n" +
+    "keyUsage=digitalSignature,keyEncipherment\n" +
+    "extendedKeyUsage=serverAuth\n");
+  await run(["req", "-newkey", "rsa:2048", "-keyout", "cn-server.key", "-out", "cn-server.csr",
+    "-nodes", "-subj", "/CN=localhost"]);
+  await run(["x509", "-req", "-in", "cn-server.csr", "-CA", "ca.crt", "-CAkey", "ca.key",
+    "-CAcreateserial", "-out", "cn-server.crt", "-days", "30", "-extfile", "cn-server.ext"]);
   // Client certificate with clientAuth EKU, signed by the CA.
   await writeFile(p("client.ext"),
     "basicConstraints=CA:FALSE\n" +
@@ -571,7 +583,7 @@ async function generateTestCerts(): Promise<TestCerts> {
     "-CAcreateserial", "-out", "rogue-client.crt", "-days", "30", "-extfile", "rogue-client.ext"]);
 
   // All private keys must be 0600 (the client and server both enforce this).
-  for (const f of ["ca.key", "server.key", "client.key", "rogue-ca.key", "rogue-client.key"]) {
+  for (const f of ["ca.key", "server.key", "cn-server.key", "client.key", "rogue-ca.key", "rogue-client.key"]) {
     await chmod(p(f), 0o600);
   }
 
@@ -580,6 +592,8 @@ async function generateTestCerts(): Promise<TestCerts> {
     caCrt: p("ca.crt"),
     serverCrt: p("server.crt"),
     serverKey: p("server.key"),
+    cnOnlyServerCrt: p("cn-server.crt"),
+    cnOnlyServerKey: p("cn-server.key"),
     clientCrt: p("client.crt"),
     clientKey: p("client.key"),
     rogueCaCrt: p("rogue-ca.crt"),
@@ -700,6 +714,7 @@ async function assertWrongCaClientRejected(port: number, certs: TestCerts): Prom
 async function testNegativeTls(port: number, certs: TestCerts) {
   console.log("Running negative mTLS tests");
   await assertWrongCaClientRejected(port, certs);
+  await assertCnOnlyServerRejected(certs);
 
   await expectRejects(
     connectTlsMirror("127.0.0.1", port, { ...clientTls(certs), pin: "0".repeat(64) }),
@@ -716,6 +731,41 @@ async function testNegativeTls(port: number, certs: TestCerts) {
       /chmod 0600/,
     );
     console.log("OK: client key mode 0644 rejected");
+  }
+}
+
+async function assertCnOnlyServerRejected(certs: TestCerts): Promise<void> {
+  const port = 30000 + Math.floor(Math.random() * 20000);
+  // The mirror server validates its own certificate and refuses to start with
+  // a CN-only leaf. Use a minimal TLS peer so this test reaches the client's
+  // identity verifier instead of stopping at server configuration validation.
+  const child = spawn("openssl", [
+    "s_server", "-Verify", "1", "-verify_return_error", "-tls1_3", "-quiet",
+    "-accept", String(port),
+    "-cert", certs.cnOnlyServerCrt, "-key", certs.cnOnlyServerKey,
+    "-CAfile", certs.caCrt, "-naccept", "1",
+  ], { stdio: ["ignore", "inherit", "inherit"] });
+  try {
+    let sawSanRejection = false;
+    for (let i = 0; i < 50 && !sawSanRejection; i++) {
+      try {
+        const t = await connectTlsMirror("127.0.0.1", port, {
+          ...clientTls(certs),
+          servername: "localhost",
+        });
+        await t.close();
+        throw new Error("CN-only certificate was accepted");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (/certificate SAN/.test(message)) sawSanRejection = true;
+        else if (/CN-only certificate was accepted/.test(message)) throw err;
+        else await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+    if (!sawSanRejection) throw new Error("CN-only server did not reach SAN verification");
+    console.log("OK: CN-only server certificate rejected (SAN required)");
+  } finally {
+    child.kill();
   }
 }
 

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, X509Certificate } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { Readable, Writable } from "node:stream";
@@ -36,6 +36,23 @@ export interface TlsOptions {
 export interface TlsConnectTransport extends Transport {
   /** Peer leaf certificate SHA-256 (lowercase hex), known once connect returns. */
   readonly peerFingerprint: string;
+}
+
+/** Maximum UTF-8 JSON payload size. The trailing LF makes the complete
+ * JSONL record at most 64 KiB, matching the client guide's safe ceiling. */
+export const MAX_PROTOCOL_LINE_BYTES = 65_535;
+
+/** Validate one outbound protocol payload before any transport bytes flow. */
+export function validateProtocolLine(line: string): void {
+  if (line.length === 0) throw new Error("protocol line must not be empty");
+  if (line.includes("\n"))
+    throw new Error("protocol line contains an embedded newline");
+  const bytes = Buffer.byteLength(line, "utf8");
+  if (bytes > MAX_PROTOCOL_LINE_BYTES) {
+    throw new Error(
+      `protocol line is ${bytes} UTF-8 bytes; maximum is ${MAX_PROTOCOL_LINE_BYTES}`,
+    );
+  }
 }
 
 function lineIterator() {
@@ -78,6 +95,7 @@ export function spawnMirror(binPath: string): Transport {
     mode: "stdio" as const,
 
     send(line: string) {
+      validateProtocolLine(line);
       stdin.write(line + "\n");
     },
 
@@ -133,6 +151,7 @@ export function connectMirror(host: string, port: number): ConnectTransport {
     ready,
 
     send(line: string) {
+      validateProtocolLine(line);
       sock.write(line + "\n");
     },
 
@@ -241,17 +260,34 @@ export async function connectTlsMirror(
     readFile(opts.keyPath),
   ]);
   const expectedPin = opts.pin ? normalizeFingerprint(opts.pin) : undefined;
+  const verifyName = opts.servername ?? host;
 
   const sock = tls.connect({
     host,
     port,
-    servername: opts.servername ?? host,
+    servername: net.isIP(verifyName) ? undefined : verifyName,
     ca,
     cert,
     key,
     minVersion: "TLSv1.3",
     maxVersion: "TLSv1.3",
     rejectUnauthorized: true,
+    checkServerIdentity: (_hostname, cert) => {
+      try {
+        const x509 = new X509Certificate(cert.raw);
+        const matched = net.isIP(verifyName)
+          ? x509.checkIP(verifyName)
+          : x509.checkHost(verifyName, { subject: "never" });
+        if (matched !== undefined) return undefined;
+        return new Error(
+          `server identity ${verifyName} is not present in the certificate SAN`,
+        );
+      } catch (err) {
+        return err instanceof Error
+          ? err
+          : new Error(`cannot verify server SAN for ${verifyName}`);
+      }
+    },
   });
 
   await awaitSecureConnect(sock, opts.handshakeTimeoutMs ?? 10_000);
@@ -277,6 +313,7 @@ export async function connectTlsMirror(
 
     peerFingerprint,
     send(line: string) {
+      validateProtocolLine(line);
       sock.write(line + "\n");
     },
     async close(): Promise<number> {

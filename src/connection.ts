@@ -255,9 +255,9 @@ export class Connection {
         case "register_error":
           throw new RegisterFailedError(reply.error);
         case "protocol_error":
-          throw new ProtocolFailureError(reply.error);
+          return this.poisonAndThrow(reply.error);
         default:
-          throw new ProtocolFailureError(
+          return this.poisonAndThrow(
             `expected spec_validated, got ${reply.proto_step}`,
           );
       }
@@ -309,8 +309,9 @@ export class Connection {
       if (reply.proto_step === "job_status" || reply.proto_step === "job_result") {
         return reply;
       }
-      this.failOnErrorReply(reply);
-      throw new ProtocolFailureError(
+      if (reply.proto_step === "register_error") throw new RegisterFailedError(reply.error);
+      return this.poisonAndThrow(
+        reply.proto_step === "protocol_error" ? reply.error :
         `expected job_status or job_result, got ${reply.proto_step}`,
       );
     });
@@ -336,8 +337,9 @@ export class Connection {
       const reply = await this.roundTrip(encodeClientMessage(msg));
       if (reply.proto_step === "job_result") return { done: true, result: reply };
       if (reply.proto_step === "job_status") return { done: false, status: reply };
-      this.failOnErrorReply(reply);
-      throw new ProtocolFailureError(
+      if (reply.proto_step === "register_error") throw new RegisterFailedError(reply.error);
+      return this.poisonAndThrow(
+        reply.proto_step === "protocol_error" ? reply.error :
         `expected job_result or job_status, got ${reply.proto_step}`,
       );
     });
@@ -355,8 +357,9 @@ export class Connection {
       if (reply.proto_step === "job_result" || reply.proto_step === "job_status") {
         return reply;
       }
-      this.failOnErrorReply(reply);
-      throw new ProtocolFailureError(
+      if (reply.proto_step === "register_error") throw new RegisterFailedError(reply.error);
+      return this.poisonAndThrow(
+        reply.proto_step === "protocol_error" ? reply.error :
         `expected job_result or job_status, got ${reply.proto_step}`,
       );
     });
@@ -395,15 +398,22 @@ export class Connection {
   }
 
   private async roundTrip(line: string): Promise<MirrorMessage> {
-    this.t.send(line);
-    const { value, done } = await this.it.next();
-    if (done) {
-      throw new ProtocolFailureError("mirror closed the connection mid-request");
+    try {
+      this.t.send(line);
+      const { value, done } = await this.it.next();
+      if (done) {
+        return this.poisonAndThrow("mirror closed the connection mid-request");
+      }
+      return decodeMirrorMessage(value);
+    } catch (err) {
+      if (this.closed) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      return this.poisonAndThrow(`failed protocol exchange: ${message}`);
     }
-    return decodeMirrorMessage(value);
   }
 
   private assertFlowOpen(): void {
+    if (this.closed) throw new ConnectionClosedError("connection is closed");
     if (this.flowConsumed) {
       throw new ConnectionClosedError(
         "session flow already terminated on this connection; open a new one",
@@ -421,9 +431,10 @@ export class Connection {
     }
   }
 
-  private failOnErrorReply(reply: MirrorMessage): void {
-    if (reply.proto_step === "register_error") throw new RegisterFailedError(reply.error);
-    if (reply.proto_step === "protocol_error") throw new ProtocolFailureError(reply.error);
+  private async poisonAndThrow(message: string): Promise<never> {
+    this.flowConsumed = true;
+    try { await this.close(); } catch { this.closed = true; }
+    throw new ProtocolFailureError(message);
   }
 
   private submit(msg: ClientMessage): Promise<JobHandle> {
@@ -437,13 +448,12 @@ export class Connection {
         if (QUEUE_FULL_RE.test(reply.error)) throw new JobQueueFullError(reply.error);
         throw new RegisterFailedError(reply.error);
       }
-      // Haskell divergence: async-in-stdio / out-of-phase job messages
-      // are answered protocol_error there (register_error on the Lean
-      // mirror). Both mean the submit failed.
+      // A protocol_error identifies a client/session bug. Unlike a
+      // register_error, it poisons this physical connection (guide §9).
       if (reply.proto_step === "protocol_error") {
-        throw new RegisterFailedError(reply.error);
+        return this.poisonAndThrow(reply.error);
       }
-      throw new ProtocolFailureError(`expected job_accepted, got ${reply.proto_step}`);
+      return this.poisonAndThrow(`expected job_accepted, got ${reply.proto_step}`);
     });
   }
 }

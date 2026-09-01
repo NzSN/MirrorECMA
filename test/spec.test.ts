@@ -49,6 +49,44 @@ describe("specFromFiles", () => {
     expect(spec.sources).toEqual([root, inst]);
   });
 
+  it("resolves continued EXTENDS and INSTANCE expressions anywhere", async () => {
+    const a = "---- MODULE A ----\n====\n";
+    const b = "---- MODULE B ----\n====\n";
+    const c = "---- MODULE C ----\n====\n";
+    const d = "---- MODULE D ----\n====\n";
+    const root = [
+      "---- MODULE R ----",
+      "EXTENDS",
+      "  A,",
+      "  B",
+      "Op == INSTANCE C WITH x <- 1",
+      "LOCAL INSTANCE D",
+      "====",
+      "",
+    ].join("\n");
+    const dir = await makeSpecDir({ "R.tla": root, "A.tla": a, "B.tla": b, "C.tla": c, "D.tla": d });
+    const spec = await specFromFiles(join(dir, "R.tla"));
+    expect(spec.sources[0]).toBe(root);
+    expect(new Set(spec.sources)).toEqual(new Set([root, a, b, c, d]));
+  });
+
+  it("ignores keywords in strings and nested comments", async () => {
+    const root = [
+      "---- MODULE R ----",
+      "Text == \"EXTENDS Fake1 INSTANCE Fake2\"",
+      "(* outer",
+      "   EXTENDS Fake3",
+      "   (* INSTANCE Fake4 *)",
+      "*)",
+      "\\* INSTANCE Fake5",
+      "EXTENDS Integers",
+      "====",
+      "",
+    ].join("\n");
+    const dir = await makeSpecDir({ "R.tla": root });
+    expect((await specFromFiles(join(dir, "R.tla"))).sources).toEqual([root]);
+  });
+
   it("throws naming the missing module and importer", async () => {
     const dir = await makeSpecDir({ "Root.tla": ROOT, "Mid.tla": MID });
     await expect(specFromFiles(join(dir, "Root.tla"))).rejects.toThrow(

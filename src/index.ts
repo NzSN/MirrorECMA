@@ -102,6 +102,8 @@ export {
   spawnMirror,
   connectMirror,
   connectTlsMirror,
+  MAX_PROTOCOL_LINE_BYTES,
+  validateProtocolLine,
   type Transport,
   type ConnectTransport,
   type TlsOptions,

@@ -10,6 +10,7 @@ import {
   connectMirror,
   JobEvictedError,
   JobQueueFullError,
+  ProtocolFailureError,
   RegisterFailedError,
   runClientValidate,
   type ApalacheConfig,
@@ -252,15 +253,16 @@ describe("Connection async job interface", () => {
     await fake.close();
   });
 
-  it("protocol_error at submit is a submit failure (Haskell divergence)", async () => {
+  it("protocol_error at submit poisons the connection", async () => {
     const fake = await startFakeMirror((req, reply) => {
       if (req.proto_step === "register_validate_async")
         reply({ proto_step: "protocol_error", error: "async not in stdio session" });
     });
     const conn = await openConn(fake.port);
     await expect(conn.submitValidateAsync(CFG, 5)).rejects.toBeInstanceOf(
-      RegisterFailedError,
+      ProtocolFailureError,
     );
+    await expect(conn.queryJob("job-1")).rejects.toBeInstanceOf(ConnectionClosedError);
     await conn.close();
     await fake.close();
   });
