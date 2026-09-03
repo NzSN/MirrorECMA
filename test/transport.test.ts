@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import { PassThrough } from "node:stream";
 import {
   MAX_PROTOCOL_LINE_BYTES,
   normalizeFingerprint,
+  protocolLineIterator,
   sha256Hex,
   validateProtocolLine,
 } from "../src/transport.js";
@@ -81,4 +83,148 @@ describe("protocol line validation", () => {
     expect(() => validateProtocolLine("a".repeat(MAX_PROTOCOL_LINE_BYTES + 1))).toThrow(/maximum/);
     expect(() => validateProtocolLine("é".repeat(Math.floor(MAX_PROTOCOL_LINE_BYTES / 2) + 1))).toThrow(/maximum/);
   });
+});
+
+describe("inbound protocol framing", () => {
+  function framedStream() {
+    const input = new PassThrough();
+    let closeCalls = 0;
+    const close = async () => { closeCalls += 1; return 0; };
+    const iterator = protocolLineIterator(input, close);
+    return { input, closeCalls: () => closeCalls, iterator };
+  }
+
+  it("accepts exactly 65,535 payload bytes before LF", async () => {
+    const { input, closeCalls, iterator } = framedStream();
+    const payload = "a".repeat(MAX_PROTOCOL_LINE_BYTES);
+    input.end(Buffer.from(`${payload}\n`));
+
+    await expect(iterator.next()).resolves.toEqual({ value: payload, done: false });
+    await expect(iterator.next()).resolves.toEqual({ value: "", done: true });
+    expect(closeCalls()).toBe(0);
+  });
+
+  it("rejects 65,536 payload bytes before decoding or parsing", async () => {
+    const { input, closeCalls, iterator } = framedStream();
+    const next = iterator.next();
+    input.write(Buffer.alloc(MAX_PROTOCOL_LINE_BYTES + 1, 0x61));
+
+    await expect(next).rejects.toThrow(/exceeds 65535 UTF-8 bytes/);
+    await Promise.resolve();
+    expect(closeCalls()).toBe(1);
+  });
+
+  it("counts UTF-8 bytes and preserves characters split across chunks", async () => {
+    const { input, closeCalls, iterator } = framedStream();
+    const payload = `${"é".repeat(32_767)}a`;
+    const encoded = Buffer.from(`${payload}\n`);
+    // Split between the two bytes of the first non-ASCII code point.
+    input.write(encoded.subarray(0, 1));
+    input.end(encoded.subarray(1));
+
+    await expect(iterator.next()).resolves.toEqual({ value: payload, done: false });
+    await expect(iterator.next()).resolves.toEqual({ value: "", done: true });
+    expect(Buffer.byteLength(payload, "utf8")).toBe(MAX_PROTOCOL_LINE_BYTES);
+    expect(closeCalls()).toBe(0);
+  });
+
+  it("rejects a multibyte payload whose byte length exceeds the limit", async () => {
+    const { input, closeCalls, iterator } = framedStream();
+    const next = iterator.next();
+    input.write(Buffer.from("é".repeat(32_768)));
+
+    await expect(next).rejects.toThrow(/exceeds 65535 UTF-8 bytes/);
+    await Promise.resolve();
+    expect(closeCalls()).toBe(1);
+  });
+
+  it("uses fatal UTF-8 decoding", async () => {
+    const { input, closeCalls, iterator } = framedStream();
+    const next = iterator.next();
+    input.end(Buffer.from([0xc3, 0x28, 0x0a]));
+
+    await expect(next).rejects.toThrow(/not valid UTF-8/);
+    await Promise.resolve();
+    expect(closeCalls()).toBe(1);
+  });
+
+  it("preserves legacy delivery of a final unterminated line at EOF", async () => {
+    const { input, closeCalls, iterator } = framedStream();
+    input.end(Buffer.from("{\"proto_step\":\"all_steps_done\"}"));
+
+    await expect(iterator.next()).resolves.toEqual({
+      value: "{\"proto_step\":\"all_steps_done\"}",
+      done: false,
+    });
+    await expect(iterator.next()).resolves.toEqual({ value: "", done: true });
+    expect(closeCalls()).toBe(0);
+  });
+
+  it("normalizes CRLF without charging the CR against the payload bound", async () => {
+    const { input, iterator } = framedStream();
+    const payload = "a".repeat(MAX_PROTOCOL_LINE_BYTES);
+    input.end(Buffer.from(`${payload}\r\n`));
+
+    await expect(iterator.next()).resolves.toEqual({ value: payload, done: false });
+  });
+
+  it("delivers no records when a later record in the same chunk is oversized", async () => {
+    const { input, closeCalls, iterator } = framedStream();
+    const matched = "{\"proto_step\":\"spec_validated\",\"result\":\"valid\"}";
+    const initial = "{\"proto_step\":\"initial_state\",\"action\":\"Initialize\"}";
+    input.write(Buffer.concat([
+      Buffer.from(`${matched}\n${initial}\n`),
+      Buffer.alloc(MAX_PROTOCOL_LINE_BYTES + 1, 0x61),
+      Buffer.from("\n"),
+    ]));
+
+    await expect(iterator.next()).rejects.toThrow(/protocol framing error/);
+    await expect(iterator.next()).rejects.toThrow(/protocol framing error/);
+    await Promise.resolve();
+    expect(closeCalls()).toBe(1);
+  });
+
+  it("discards previously buffered records when framing later fails", async () => {
+    const { input, closeCalls, iterator } = framedStream();
+    input.write(Buffer.from("{\"proto_step\":\"spec_validated\"}\n"));
+    input.write(Buffer.alloc(MAX_PROTOCOL_LINE_BYTES + 1, 0x61));
+
+    await expect(iterator.next()).rejects.toThrow(/protocol framing error/);
+    await Promise.resolve();
+    expect(closeCalls()).toBe(1);
+  });
+
+  it("preserves valid sequential records received in separate chunks", async () => {
+    const { input, closeCalls, iterator } = framedStream();
+    const matched = "{\"proto_step\":\"spec_validated\",\"result\":\"valid\"}";
+    const initial = "{\"proto_step\":\"initial_state\",\"action\":\"Initialize\"}";
+
+    input.write(Buffer.from(`${matched}\n`));
+    await expect(iterator.next()).resolves.toEqual({ value: matched, done: false });
+    input.write(Buffer.from(`${initial}\n`));
+    await expect(iterator.next()).resolves.toEqual({ value: initial, done: false });
+
+    const failed = iterator.next();
+    input.write(Buffer.alloc(MAX_PROTOCOL_LINE_BYTES + 1, 0x61));
+    await expect(failed).rejects.toThrow(/protocol framing error/);
+    await Promise.resolve();
+    expect(closeCalls()).toBe(1);
+  });
+
+  it.each(["stdio", "TCP", "TLS"])(
+    "closes exactly once after a fatal %s framing error",
+    async () => {
+      // All three production constructors delegate to protocolLineIterator;
+      // use an in-memory byte stream to keep this boundary test deterministic.
+      const { input, closeCalls, iterator } = framedStream();
+      const next = iterator.next();
+      input.write(Buffer.alloc(MAX_PROTOCOL_LINE_BYTES + 1, 0x61));
+      input.write(Buffer.from("more attacker data\n"));
+      input.end();
+
+      await expect(next).rejects.toThrow(/protocol framing error/);
+      await Promise.resolve();
+      expect(closeCalls()).toBe(1);
+    },
+  );
 });
