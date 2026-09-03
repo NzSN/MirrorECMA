@@ -10,12 +10,31 @@ import {
   InvariantStatus,
   encodeClientMessage,
   encodeState,
-  decodeMirrorMessage,
-  prettifyState,
-  renderDiffHints,
 } from "./protocol.js";
 import type { Transport } from "./transport.js";
 import { readFile } from "node:fs/promises";
+import { receiveReplayMessage, runLegacyReplay } from "./replay.js";
+
+export {
+  runClientNegotiated,
+  runClientWithTracesNegotiated,
+} from "./negotiated.js";
+export type {
+  AdapterFactory,
+  CompiledAdapterKey,
+  CompiledAdapterRegistration,
+  CompiledAdapterSelection,
+  LocalBinding,
+  NegotiatedRunOptions,
+  NegotiatedRunnerErrorCode,
+} from "./negotiated.js";
+export {
+  CompiledAdapterRegistry,
+  MIRRORECMA_TARGET_PROFILE,
+  ModelInterfaceRegistrationError,
+  NegotiatedRunnerError,
+  STATE_COMPUTER_CONTRACT_VERSION,
+} from "./negotiated.js";
 
 export type { State, StateComputer, ApalacheConfig, ApalacheSpec, TraceGenerationConfig, TransitionStatus, InvariantStatus } from "./protocol.js";
 
@@ -42,7 +61,7 @@ export async function runClientWithTraces(
     apalacheConfig,
     itfTracePaths: tracePaths,
   }));
-  await mainLoop(t, compute);
+  await runLegacyReplay(t, compute);
 }
 
 export async function runClient(
@@ -59,7 +78,7 @@ export async function runClient(
     traceConfig: config,
     spec: opts.spec,
   }));
-  await mainLoop(t, compute);
+  await runLegacyReplay(t, compute);
 }
 
 export interface GenTracesResult {
@@ -105,7 +124,7 @@ export async function runClientExplore(
     exports,
     maxSteps,
   }));
-  await mainLoop(t, compute);
+  await runLegacyReplay(t, compute);
 }
 
 export class ExploreSession {
@@ -138,7 +157,7 @@ export class ExploreSession {
         invariants,
         exports,
       }));
-      const msg = await recv(it);
+      const msg = await receiveReplayMessage(it);
       if (msg.proto_step === "register_error") throw new Error(`register failed: ${msg.error}`);
       if (msg.proto_step === "protocol_error") throw new Error(msg.error);
       if (msg.proto_step !== "explorer_ready") {
@@ -209,7 +228,7 @@ export class ExploreSession {
     this.t.send(JSON.stringify({ proto_step: "explore_assume_state", state: encodeState(eqs) }));
     let msg: MirrorMessage;
     try {
-      msg = await recv(this.it);
+      msg = await receiveReplayMessage(this.it);
     } catch (err) {
       await this.abort();
       throw err;
@@ -252,7 +271,7 @@ export class ExploreSession {
     this.t.send(encodeClientMessage(m));
     let msg: MirrorMessage;
     try {
-      msg = await recv(this.it);
+      msg = await receiveReplayMessage(this.it);
     } catch (err) {
       await this.abort();
       throw err;
@@ -283,92 +302,12 @@ async function resolveTransport(target: string | Transport): Promise<Transport> 
   return t;
 }
 
-async function mainLoop(t: Transport, compute: StateComputer): Promise<void> {
-  const it = t[Symbol.asyncIterator]();
-  // C8 hardening: any exit — terminal message, mirror error, decode
-  // failure, or a throwing StateComputer — closes the transport exactly
-  // once, so a client-side failure never wedges the session (parking a
-  // worker on the pool server).
-  let closed = false;
-  const closeOnce = async () => {
-    if (!closed) {
-      closed = true;
-      await t.close();
-    }
-  };
-  try {
-    const msg0 = await recv(it);
-    if (msg0.proto_step === "protocol_error") throw new Error(msg0.error);
-    if (msg0.proto_step === "register_error") throw new Error(`register failed: ${msg0.error}`);
-    if (msg0.proto_step !== "spec_validated") {
-      throw new Error(`expected spec_validated, got ${msg0.proto_step}`);
-    }
-    if (typeof msg0.result !== "string") {
-      throw new Error(`spec invalid: ${msg0.result.invalid}`);
-    }
-
-    let msg = await recv(it);
-    let state: State = {};
-    let lastParam: State = {}
-    let lastAction = "";
-    for (;;) {
-      switch (msg.proto_step) {
-        case "initial_state":
-          lastAction = msg.action;
-          state = compute(msg.action, msg.state, {});
-          t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
-          break;
-        case "step_ok":
-          break;
-        case "all_steps_done":
-          return;
-        case "next_step":
-          lastAction = msg.action;
-          state = compute(msg.action, msg.parameters, state);
-          lastParam = msg.parameters;
-          t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
-          break;
-        case "step_mismatch": {
-          const hintText = msg.hints?.length
-            ? `: ${renderDiffHints(msg.hints)}`
-            : `: expected ${JSON.stringify(prettifyState(msg.expected))}, got ${JSON.stringify(prettifyState(msg.actual))}`;
-          throw new Error(
-              `step mismatch on action "${msg.action ?? lastAction}" with param "${lastParam}"${hintText}`
-          );
-        }
-        case "protocol_error":
-          throw new Error(msg.error);
-        case "register_error":
-          throw new Error(`register failed: ${msg.error}`);
-        default:
-          throw new Error(`unexpected message: ${msg.proto_step}`);
-      }
-      msg = await recv(it);
-    }
-  } finally {
-    await closeOnce();
-  }
-}
-
 export function presetClient(states: State[]): StateComputer {
   let i = 0;
   return () => {
     if (i >= states.length) throw new Error("presetClient exhausted");
     return states[i++]!;
   };
-}
-
-async function recv(it: AsyncIterator<string>): Promise<MirrorMessage> {
-  const { value, done } = await it.next();
-  if (done) throw new Error("transport closed unexpectedly");
-  try {
-    return decodeMirrorMessage(value);
-  } catch (err) {
-    // Truncated snippet for diagnosis; the caller's close path (finally /
-    // abort) tears the session down — a garbled line is unrecoverable.
-    const snippet = value.length > 200 ? `${value.slice(0, 200)}…` : value;
-    throw new Error(`failed to decode mirror message: ${snippet}`, { cause: err });
-  }
 }
 
 async function genTracesLoop(t: Transport): Promise<GenTracesResult> {
@@ -381,7 +320,7 @@ async function genTracesLoop(t: Transport): Promise<GenTracesResult> {
     }
   };
   try {
-    const msg = await recv(it);
+    const msg = await receiveReplayMessage(it);
     if (msg.proto_step === "protocol_error") throw new Error(msg.error);
     if (msg.proto_step === "register_error") throw new Error(`register failed: ${msg.error}`);
     if (msg.proto_step === "gen_traces_done") {
