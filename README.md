@@ -93,6 +93,67 @@ await runClient(
 );
 ```
 
+## Verified generated bindings
+
+`runClientNegotiated` verifies a compiler-generated binding against current
+Mirrors before constructing its local adapter. Generated metadata contains the
+canonical companion contract and semantic digest; Mirrors independently
+resolves that contract from the exact spec, trace evidence, and run profile.
+No generated source crosses the wire.
+
+```ts
+import {
+  CompiledAdapterRegistry,
+  MIRRORECMA_TARGET_PROFILE,
+  STATE_COMPUTER_CONTRACT_VERSION,
+  runClientNegotiated,
+  semanticDigestFromHex,
+} from "mirrorecma";
+import {
+  bindCounter,
+  CounterModelInterface,
+  CounterSemanticDigest,
+} from "./generated/CounterMirror.generated.js";
+
+const registry = new CompiledAdapterRegistry([{
+  key: {
+    semanticDigest: semanticDigestFromHex(CounterSemanticDigest),
+    adapterId: "counter.mutable/v1",
+    targetProfile: MIRRORECMA_TARGET_PROFILE,
+    stateComputerContractVersion: STATE_COMPUTER_CONTRACT_VERSION,
+  },
+  factory: (config) => {
+    const generated = bindCounter(counterPort, config);
+    return {
+      semanticDigest: semanticDigestFromHex(CounterSemanticDigest),
+      computer: generated.computer,
+      assertCompatibleConfig: () => {},
+      coverage: generated.coverage,
+      dispose: () => {},
+    };
+  },
+}]);
+
+await runClientNegotiated(binaryOrTransport, apalacheConfig, traceConfig, {
+  metadata: CounterModelInterface,
+  adapterId: "counter.mutable/v1",
+  targetProfile: MIRRORECMA_TARGET_PROFILE,
+  stateComputerContractVersion: STATE_COMPUTER_CONTRACT_VERSION,
+  registry,
+  policy: "require",
+}, { spec: await specFromFiles("./specs/Counter.tla") });
+```
+
+The registry lookup is exact and pure. Its factory runs only after a validated
+`matched` response, and every created binding is disposed once. Under
+`prefer`, legacy fallback requires an explicit `fallbackFactory`; digest
+mismatch never falls back. Descriptor interpretation remains a separate
+development-mode feature and is not performed by this compiled runner.
+
+Plain TCP has no model-interface authorization by default. For mTLS
+verification, the Mirrors server must explicitly allowlist the client leaf
+certificate fingerprint with `--model-interface-allow-client`.
+
 ## API
 
 ### `runClient(target, apalacheConfig, traceConfig, compute, opts?)`
