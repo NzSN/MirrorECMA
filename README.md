@@ -144,15 +144,62 @@ await runClientNegotiated(binaryOrTransport, apalacheConfig, traceConfig, {
 }, { spec: await specFromFiles("./specs/Counter.tla") });
 ```
 
-The registry lookup is exact and pure. Its factory runs only after a validated
-`matched` response, and every created binding is disposed once. Under
-`prefer`, legacy fallback requires an explicit `fallbackFactory`; digest
-mismatch never falls back. Descriptor interpretation remains a separate
-development-mode feature and is not performed by this compiled runner.
+This is the production-oriented **D3 compiled verification** path. Registry
+lookup is exact and pure. Its factory runs only after a validated `matched`
+response, and every created binding is disposed once.
+
+For development, **D4 dynamic descriptor mode** retrieves an inert semantic
+descriptor and binds it only to explicitly supplied local handlers. It never
+downloads source or executable code, evaluates descriptor content, loads a
+module, or infers handlers:
+
+```ts
+import {
+  DescriptorCache,
+  runClientNegotiated,
+  semanticDigestFromHex,
+} from "mirrorecma";
+import {
+  CounterModelInterface,
+  CounterSemanticDigest,
+} from "./generated/CounterMirror.generated.js";
+
+const cache = new DescriptorCache(); // explicit, bounded, process-local
+await runClientNegotiated(binaryOrTransport, apalacheConfig, traceConfig, {
+  mode: "dynamic",
+  contract: CounterModelInterface.contract,
+  descriptorCache: cache,
+  registry: {
+    semanticDigest: semanticDigestFromHex(CounterSemanticDigest),
+    actions: {
+      Initialize: () => counter.reset(),
+      Tick: (inputs) => counter.tick(inputs.Stride as bigint),
+    },
+    observations: {
+      Count: () => counter.count,
+    },
+  },
+  dispose: () => counter.close(),
+  policy: "require",
+});
+```
+
+The dynamic binder validates the descriptor digest, exact handler/observer ID
+sets, supported types, projections, native values, and lifecycle before or
+during replay. Inputs are deeply readonly records keyed by stable input ID;
+observers return native values (`bigint`, booleans, strings, null, arrays,
+closed objects, map-entry pairs, or `{ tag, value }` variants). A failure
+poisons that session binding.
+
+Both modes default to `require`. Under `prefer`, legacy continuation requires
+an explicit fresh `fallbackFactory`; a digest mismatch never falls back.
+Descriptor cache validators are sent only for a verified entry at the exact
+registry digest, and `not_modified` fails closed without that entry.
 
 Plain TCP has no model-interface authorization by default. For mTLS
 verification, the Mirrors server must explicitly allowlist the client leaf
-certificate fingerprint with `--model-interface-allow-client`.
+certificate fingerprint with `--model-interface-allow-client`. Dynamic
+descriptor delivery additionally requires `--model-interface-descriptor-read`.
 
 ## API
 

@@ -97,9 +97,8 @@ function lineIterator() {
 /**
  * Attach the protocol's bounded byte-level JSONL framing to a readable stream.
  *
- * Like the previous `readline` implementation, a final unterminated payload is
- * delivered at EOF. CRLF (and a trailing CR at EOF) is normalized to the
- * payload without CR.
+ * Every protocol record must be LF-terminated. CRLF is normalized to the
+ * payload without CR, but EOF with pending bytes is a fatal framing error.
  */
 function attachProtocolFraming(
   input: Readable,
@@ -201,14 +200,12 @@ function attachProtocolFraming(
 
   function onEnd(): void {
     if (terminal) return;
-    try {
-      if (pending.length > 0) sink.emit(decodePayload(pending));
-      pending = Buffer.alloc(0);
-      terminal = true;
-      sink.finish();
-    } catch (err) {
-      stop(err instanceof Error ? err : framingError(String(err)));
+    if (pending.length > 0) {
+      stop(framingError("protocol line is not terminated by LF before EOF"));
+      return;
     }
+    terminal = true;
+    sink.finish();
   }
 
   // Preserve the old transport contract for underlying I/O failures: they

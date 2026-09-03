@@ -13,9 +13,18 @@ import {
   runClientNegotiated,
   runClientWithTracesNegotiated,
   type CompiledAdapterSelection,
+  type DynamicHandlerSelection,
   type LocalBinding,
 } from "../src/negotiated.js";
-import { semanticDigestFromHex } from "../src/model-interface.js";
+import {
+  decodeSemanticDescriptor,
+  semanticDescriptorDigest,
+  semanticDigestFromHex,
+  type ContractV1,
+  type SemanticDescriptor,
+} from "../src/model-interface.js";
+import { DescriptorCache } from "../src/descriptor-cache.js";
+import type { NativeModelValue } from "../src/dynamic-binding.js";
 import {
   connectTlsMirror,
   spawnMirror,
@@ -155,6 +164,54 @@ function makeSelection(
   };
 }
 
+interface DynamicArtifacts {
+  readonly contract: ContractV1;
+  readonly descriptor: SemanticDescriptor;
+}
+
+async function loadDynamicArtifacts(): Promise<DynamicArtifacts> {
+  const raw = JSON.parse(await readFile(
+    resolve(MIRRORECMA_ROOT, "test/fixtures/model-interface/counter/Counter.mirror-interface.lock.json"),
+    "utf8",
+  )) as Record<string, any>;
+  const { contract, semanticDigest: _semantic, provenanceDigest: _provenanceDigest, provenance: _provenance, ...rest } = raw;
+  return {
+    contract,
+    descriptor: decodeSemanticDescriptor({
+      ...rest,
+      schema: "mirrors.model-interface-descriptor/v1",
+    }),
+  };
+}
+
+function makeDynamicSelection(
+  probe: Probe,
+  artifacts: DynamicArtifacts,
+  descriptorCache: DescriptorCache,
+  observerOffset = 0n,
+): DynamicHandlerSelection {
+  const sut = new MutableCounter(probe);
+  return {
+    mode: "dynamic",
+    contract: artifacts.contract,
+    descriptorCache,
+    registry: {
+      semanticDigest: semanticDescriptorDigest(artifacts.descriptor),
+      actions: {
+        Initialize: () => sut.reset(),
+        Tick: (inputs) => sut.increment(inputs.Stride as bigint),
+      },
+      observations: {
+        Count: (): NativeModelValue => sut.observe(observerOffset),
+      },
+    },
+    dispose: () => {
+      probe.disposeCalls += 1;
+      probe.events.push("dispose");
+    },
+  };
+}
+
 interface RecordedTransport {
   readonly transport: Transport;
   readonly received: string[];
@@ -189,8 +246,8 @@ function recordTransport(inner: Transport, probe?: Probe): RecordedTransport {
                 modelInterface?: { status?: string };
               };
               if (message.proto_step === "spec_validated" &&
-                  message.modelInterface?.status === "matched") {
-                probe.events.push("wire:matched");
+                  message.modelInterface?.status !== undefined) {
+                probe.events.push(`wire:${message.modelInterface.status}`);
               }
             }
           }
@@ -336,6 +393,7 @@ async function stopServer(child: ChildProcess): Promise<void> {
 async function startTlsServer(
   pki: ModelInterfacePki,
   allowClient: boolean,
+  descriptorRead = false,
 ): Promise<{ readonly port: number; readonly child: ChildProcess }> {
   const port = await freePort();
   const args = [
@@ -347,6 +405,7 @@ async function startTlsServer(
   if (allowClient) {
     args.push("--model-interface-allow-client", pki.clientFingerprint);
   }
+  if (descriptorRead) args.push("--model-interface-descriptor-read");
   const child = spawn(MIRROR_BIN, args, { stdio: ["ignore", "inherit", "inherit"] });
 
   for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -438,6 +497,93 @@ async function testWrongObserver(): Promise<void> {
   console.log("OK: incorrect local observer reached ordinary step_mismatch and disposed once");
 }
 
+function assertDynamicReplay(
+  recording: RecordedTransport,
+  probe: Probe,
+  status: "resolved" | "not_modified",
+): void {
+  const messages = recording.received.map((line) => JSON.parse(line) as {
+    proto_step?: string;
+    modelInterface?: { status?: string };
+  });
+  assert.equal(
+    messages.find((message) => message.proto_step === "spec_validated")?.modelInterface?.status,
+    status,
+  );
+  assert.equal(messages.at(-1)?.proto_step, "all_steps_done");
+  assert.equal(probe.factoryCalls, 0);
+  assert.equal(probe.disposeCalls, 1);
+  assert.equal(probe.events[0], `wire:${status}`);
+  assert.equal(probe.events.at(-1), "dispose");
+  const effects = probe.events.slice(1, -1);
+  assert.ok(effects.length > 0 && effects.length % 2 === 0);
+  for (let index = 0; index < effects.length; index += 2) {
+    assert.ok(
+      effects[index] === "sut:initialize" || effects[index]?.startsWith("sut:tick:"),
+      `expected dynamic action at event ${index}`,
+    );
+    assert.equal(effects[index + 1], "sut:observe");
+  }
+  assertCountOnlyReports(recording);
+}
+
+async function testDynamicStdioAndCache(artifacts: DynamicArtifacts): Promise<void> {
+  const cache = new DescriptorCache();
+  const firstProbe = makeProbe();
+  const first = recordTransport(spawnMirror(MIRROR_BIN), firstProbe);
+  await withTimeout(
+    runClientWithTracesNegotiated(
+      first.transport,
+      config,
+      [COUNTER_TRACE],
+      makeDynamicSelection(firstProbe, artifacts, cache),
+    ),
+    "dynamic stdio Counter resolved",
+  );
+  assertDynamicReplay(first, firstProbe, "resolved");
+  const firstRequest = JSON.parse(first.sent[0]!) as { modelInterface?: Record<string, unknown> };
+  assert.equal(firstRequest.modelInterface?.request, "descriptor");
+  assert.equal(firstRequest.modelInterface?.ifNoneMatch, undefined);
+
+  const secondProbe = makeProbe();
+  const second = recordTransport(spawnMirror(MIRROR_BIN), secondProbe);
+  await withTimeout(
+    runClientWithTracesNegotiated(
+      second.transport,
+      config,
+      [COUNTER_TRACE],
+      makeDynamicSelection(secondProbe, artifacts, cache),
+    ),
+    "dynamic stdio Counter not_modified",
+  );
+  assertDynamicReplay(second, secondProbe, "not_modified");
+  const secondRequest = JSON.parse(second.sent[0]!) as { modelInterface?: Record<string, unknown> };
+  assert.equal(
+    secondRequest.modelInterface?.ifNoneMatch,
+    `sha256:${CounterSemanticDigest}`,
+  );
+  console.log("OK: Counter dynamic descriptor replay resolved then reused verified cache over stdio");
+}
+
+async function testDynamicWrongObserver(artifacts: DynamicArtifacts): Promise<void> {
+  const probe = makeProbe();
+  const recording = recordTransport(spawnMirror(MIRROR_BIN), probe);
+  await expectRejects(
+    runClientWithTracesNegotiated(
+      recording.transport,
+      config,
+      [COUNTER_TRACE],
+      makeDynamicSelection(probe, artifacts, new DescriptorCache(), 1n),
+    ),
+    /step mismatch/,
+  );
+  assert.equal(probe.disposeCalls, 1);
+  assert.ok(probe.sutCalls > 0);
+  assert.ok(protocolSteps(recording.received).includes("step_mismatch"));
+  assert.equal(probe.events.at(-1), "dispose");
+  console.log("OK: incorrect dynamic observer reached ordinary step_mismatch");
+}
+
 async function testAuthorizedTls(pki: ModelInterfacePki): Promise<void> {
   const server = await startTlsServer(pki, true);
   try {
@@ -466,6 +612,65 @@ async function testAuthorizedTls(pki: ModelInterfacePki): Promise<void> {
     await stopServer(server.child);
   }
   console.log("OK: allowlisted mTLS client matched and replayed Counter");
+}
+
+async function testDynamicAuthorizedTls(
+  pki: ModelInterfacePki,
+  artifacts: DynamicArtifacts,
+): Promise<void> {
+  const server = await startTlsServer(pki, true, true);
+  try {
+    const probe = makeProbe();
+    const inner = await connectTlsMirror("127.0.0.1", server.port, modelInterfaceTlsOptions(pki));
+    const recording = recordTransport(inner, probe);
+    await withTimeout(
+      runClientWithTracesNegotiated(
+        recording.transport,
+        config,
+        [COUNTER_TRACE],
+        makeDynamicSelection(probe, artifacts, new DescriptorCache()),
+      ),
+      "authorized descriptor-read mTLS Counter",
+    );
+    assertDynamicReplay(recording, probe, "resolved");
+    assert.equal(recording.closeCalls(), 1);
+  } finally {
+    await stopServer(server.child);
+  }
+  console.log("OK: allowlisted descriptor-read mTLS client replayed dynamic Counter");
+}
+
+async function testDynamicTlsWithoutDescriptorRead(
+  pki: ModelInterfacePki,
+  artifacts: DynamicArtifacts,
+): Promise<void> {
+  const server = await startTlsServer(pki, true, false);
+  try {
+    const probe = makeProbe();
+    const inner = await connectTlsMirror("127.0.0.1", server.port, modelInterfaceTlsOptions(pki));
+    const recording = recordTransport(inner, probe);
+    const error = await expectRejects(
+      withTimeout(
+        runClientWithTracesNegotiated(
+          recording.transport,
+          config,
+          [COUNTER_TRACE],
+          makeDynamicSelection(probe, artifacts, new DescriptorCache()),
+        ),
+        "mTLS Counter without descriptor-read",
+      ),
+      /register failed|descriptor|unavailable|unauthorized/,
+    );
+    assert.ok(error instanceof ModelInterfaceRegistrationError);
+    assert.equal(probe.factoryCalls, 0);
+    assert.equal(probe.sutCalls, 0);
+    assert.equal(probe.disposeCalls, 0);
+    assert.ok(!protocolSteps(recording.received).includes("initial_state"));
+    assert.equal(recording.closeCalls(), 1);
+  } finally {
+    await stopServer(server.child);
+  }
+  console.log("OK: allowlisted mTLS without descriptor-read denied dynamic mode before callbacks");
 }
 
 async function testTlsWithoutAllowlist(pki: ModelInterfacePki): Promise<void> {
@@ -512,10 +717,16 @@ async function main(): Promise<void> {
   await testStdioGeneratedTrace();
   await testWrongDigest();
   await testWrongObserver();
+  const dynamicArtifacts = await loadDynamicArtifacts();
+  assert.equal(semanticDescriptorDigest(dynamicArtifacts.descriptor), CounterSemanticDigest);
+  await testDynamicStdioAndCache(dynamicArtifacts);
+  await testDynamicWrongObserver(dynamicArtifacts);
 
   const pki = await createModelInterfacePki();
   try {
     await testAuthorizedTls(pki);
+    await testDynamicAuthorizedTls(pki, dynamicArtifacts);
+    await testDynamicTlsWithoutDescriptorRead(pki, dynamicArtifacts);
     await testTlsWithoutAllowlist(pki);
   } finally {
     await removeModelInterfacePki(pki);

@@ -148,16 +148,15 @@ describe("inbound protocol framing", () => {
     expect(closeCalls()).toBe(1);
   });
 
-  it("preserves legacy delivery of a final unterminated line at EOF", async () => {
+  it("rejects an unterminated final line at EOF and closes exactly once", async () => {
     const { input, closeCalls, iterator } = framedStream();
+    const next = iterator.next();
     input.end(Buffer.from("{\"proto_step\":\"all_steps_done\"}"));
 
-    await expect(iterator.next()).resolves.toEqual({
-      value: "{\"proto_step\":\"all_steps_done\"}",
-      done: false,
-    });
-    await expect(iterator.next()).resolves.toEqual({ value: "", done: true });
-    expect(closeCalls()).toBe(0);
+    await expect(next).rejects.toThrow(/not terminated by LF before EOF/);
+    await expect(iterator.next()).rejects.toThrow(/not terminated by LF before EOF/);
+    await Promise.resolve();
+    expect(closeCalls()).toBe(1);
   });
 
   it("normalizes CRLF without charging the CR against the payload bound", async () => {

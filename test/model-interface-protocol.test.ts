@@ -5,6 +5,7 @@ import {
   MODEL_INTERFACE_DESCRIPTOR_SCHEMA,
   MODEL_INTERFACE_NEGOTIATION_SCHEMA,
   ModelInterfaceProtocolError,
+  createDescriptorRequest,
   createVerifyRequest,
   decodeContractV1,
   decodeModelInterfaceMirrorMessage,
@@ -218,20 +219,69 @@ describe("D3 verify request", () => {
     expect(() => encodeModelInterfaceRegistration(alreadyExtended, request)).toThrow("already present");
   });
 
-  it("rejects descriptor mode, unknown fields, and noncanonical digests", () => {
+  it("keeps verify strict while the generic codec accepts descriptor mode", () => {
     const request = JSON.parse(encodeModelInterfaceRegistration(
       baseRegister(),
       createVerifyRequest({ semanticDigest: digestHex, contract: counterContract() }),
     )).modelInterface;
-    expect(() => parseModelInterfaceRequest(JSON.stringify({ ...request, request: "descriptor" }))).toThrow(
-      "D3 supports only 'verify'",
+    expect(parseModelInterfaceRequest(JSON.stringify({ ...request, request: "descriptor" }))).toMatchObject(
+      { request: "descriptor", expectedSemanticDigest: digestHex },
     );
     expect(() => parseModelInterfaceRequest(JSON.stringify({ ...request, ifNoneMatch: `sha256:${digestHex}` }))).toThrow(
-      "unknown field 'ifNoneMatch'",
+      "allowed only for descriptor requests",
     );
     expect(() => parseModelInterfaceRequest(JSON.stringify({ ...request, expectedSemanticDigest: digestHex }))).toThrow(
       "sha256:",
     );
+    expect(() => parseModelInterfaceRequest(JSON.stringify({ ...request, typo: true }))).toThrow("unknown field 'typo'");
+    expect(() => parseModelInterfaceRequest(JSON.stringify({
+      ...request,
+      contract: { digest: `sha256:${digestHex}` },
+    }))).toThrow("digest contract references are unsupported");
+  });
+
+  it("creates descriptor requests with optional digest validators", () => {
+    const digest = semanticDigestFromHex(digestHex);
+    const request = createDescriptorRequest(counterContract(), {
+      policy: "prefer",
+      expectedSemanticDigest: digest,
+      ifNoneMatch: digest,
+    });
+    expect(request).toMatchObject({
+      request: "descriptor",
+      policy: "prefer",
+      expectedSemanticDigest: digestHex,
+      ifNoneMatch: digestHex,
+    });
+    const encoded = JSON.parse(encodeModelInterfaceRegistration(baseRegister(), request));
+    expect(encoded.modelInterface).toMatchObject({
+      request: "descriptor",
+      expectedSemanticDigest: `sha256:${digestHex}`,
+      ifNoneMatch: `sha256:${digestHex}`,
+    });
+    expect(parseModelInterfaceRequest(JSON.stringify({
+      ...encoded.modelInterface,
+      expectedSemanticDigest: null,
+      ifNoneMatch: null,
+    }))).not.toHaveProperty("expectedSemanticDigest");
+
+    const unpinned = createDescriptorRequest(counterContract());
+    expect(unpinned).toMatchObject({ request: "descriptor", policy: "require" });
+    expect(unpinned).not.toHaveProperty("expectedSemanticDigest");
+    expect(unpinned).not.toHaveProperty("ifNoneMatch");
+  });
+
+  it("enforces accepted descriptor schema bounds and uniqueness", () => {
+    const request = JSON.parse(encodeModelInterfaceRegistration(
+      baseRegister(),
+      createVerifyRequest({ semanticDigest: digestHex, contract: counterContract() }),
+    )).modelInterface;
+    expect(() => parseModelInterfaceRequest(JSON.stringify({ ...request, acceptDescriptorSchemas: [] }))).toThrow("at least one");
+    expect(() => parseModelInterfaceRequest(JSON.stringify({ ...request, acceptDescriptorSchemas: ["v1", "v1"] }))).toThrow("duplicate schema");
+    expect(() => parseModelInterfaceRequest(JSON.stringify({
+      ...request,
+      acceptDescriptorSchemas: Array.from({ length: 9 }, (_, index) => `v${index}`),
+    }))).toThrow("at most eight");
   });
 });
 
@@ -291,13 +341,11 @@ describe("first mirror reply decoding", () => {
     expect(decoded.modelInterface).not.toHaveProperty("provenanceDigest");
   });
 
-  it("rejects malformed, unknown, or descriptor-mode replies", () => {
+  it("rejects malformed or unknown reply fields", () => {
     expect(() => decodeModelInterfaceMirrorMessage(matchedReply({ semanticDigest: digestHex }))).toThrow("sha256:");
     expect(() => decodeModelInterfaceMirrorMessage(matchedReply({ descriptorBytes: 1 }))).toThrow("forbidden for matched");
     expect(() => decodeModelInterfaceMirrorMessage(matchedReply({ extra: true }))).toThrow("unknown field 'extra'");
-    expect(() => decodeModelInterfaceMirrorMessage(matchedReply({ status: "resolved" }))).toThrow(
-      "not valid for a D3 verify reply",
-    );
+    expect(() => decodeModelInterfaceMirrorMessage(matchedReply({ status: "resolved" }))).toThrow("required for resolved");
     expect(() => decodeModelInterfaceMirrorMessage(JSON.stringify({
       ...JSON.parse(matchedReply()),
       result: { invalid: "bad spec" },
@@ -340,7 +388,7 @@ describe("first mirror reply decoding", () => {
     expect(() => decodeModelInterfaceMirrorMessage(JSON.stringify({
       ...failure,
       modelInterface: { ...failure.modelInterface, status: "matched", expectedSemanticDigest: `sha256:${digestHex}` },
-    }))).toThrow("not valid for a D3 verify failure");
+    }))).toThrow("invalid on register_error");
   });
 
   it("rejects the extension on an unrelated protocol message", () => {

@@ -24,7 +24,9 @@ export type {
   CompiledAdapterKey,
   CompiledAdapterRegistration,
   CompiledAdapterSelection,
+  DynamicHandlerSelection,
   LocalBinding,
+  NegotiatedAdapterSelection,
   NegotiatedRunOptions,
   NegotiatedRunnerErrorCode,
 } from "./negotiated.js";
