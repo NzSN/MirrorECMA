@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "baseUrl": ".",
+    "paths": {
+      "mirrorecma": ["src/index.ts"]
+    },
+    "noEmit": true,
+    "isolatedModules": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "test/model-interface-counter.smoke.ts",
+    "test/support/model-interface-pki.ts",
+    "test/fixtures/model-interface/counter/generated/**/*.ts"
+  ]
+}

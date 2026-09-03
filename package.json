@@ -12,8 +12,10 @@
     "prepare": "tsc",
     "build": "tsc",
     "check": "tsc --noEmit",
+    "check:model-interface": "tsc -p tsconfig.model-interface.json --noEmit",
     "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
-    "smoke": "node --loader ts-node/esm test/smoke.test.ts"
+    "smoke": "node --loader ts-node/esm test/smoke.test.ts",
+    "smoke:model-interface": "node --loader ts-node/esm test/model-interface-counter.smoke.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": []

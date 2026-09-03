@@ -1,0 +1,46 @@
+{
+  "schema": "mirrors.model-interface/v1",
+  "interfaceVersion": "1.0.0",
+  "model": {
+    "module": "Counter",
+    "source": "specs/Counter.tla"
+  },
+  "wire": {
+    "actionVariable": "action_taken",
+    "parameterVariable": "parameters"
+  },
+  "initializers": [
+    {
+      "id": "Initialize",
+      "wireAction": "init",
+      "wireAliases": [],
+      "inputs": []
+    }
+  ],
+  "actions": [
+    {
+      "id": "Tick",
+      "wireAction": "tick",
+      "wireAliases": [],
+      "inputs": [
+        {
+          "id": "Stride",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              { "field": "parameters" },
+              { "field": "stride" }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "id": "Count",
+      "wireName": "count",
+      "provenance": "implementation"
+    }
+  ]
+}
