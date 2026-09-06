@@ -1,11 +1,113 @@
 # MirrorECMA
 
-TypeScript client for the [ModelMirros](https://github.com/NzSN/ModelMirrors) protocol — model-based testing of state machines against TLA+ specs: replay model-generated traces or drive interactive symbolic exploration, over stdio or TCP.
+TypeScript client for [Mirrors](https://github.com/NzSN/Mirrors), the Lean 4
+conformance checker compatible with the ModelMirrors JSONL protocol. Connect a
+real implementation to a generated typed interface, replay TLA+ model traces,
+and let Mirrors compare the implementation's observations with the model.
+
+## Quick Start
+
+The [runnable Counter tutorial](examples/generated-counter/README.md) starts
+with an ordinary implementation. It uses `bigint` and has no protocol dependency:
+
+```ts
+export class Counter {
+  count = 0n;
+
+  reset(): void {
+    this.count = 0n;
+  }
+
+  increment(stride: bigint): void {
+    this.count += stride;
+  }
+}
+```
+
+The [TLA+ model](examples/generated-counter/specs/Counter.tla) describes the
+expected transitions. Its
+[companion contract](test/fixtures/model-interface/counter/Counter.mirror-interface.json)
+maps initialization to `init`, an increment to `tick`, and the observation to
+`count`. Mirrors generates the typed port and binding from that contract and
+structural type evidence. The checked-in
+[generated source](test/fixtures/model-interface/counter/generated/CounterMirror.generated.ts)
+includes:
+
+```ts
+export interface TickInput {
+  readonly stride: bigint;
+}
+
+export interface CounterObservation {
+  readonly count: bigint;
+}
+
+export interface CounterPort {
+  initialize(): void;
+  tick(input: TickInput): void;
+  observe(): CounterObservation;
+}
+```
+
+The handwritten [adapter](examples/generated-counter/adapter.ts) maps that port
+to the real [Counter](examples/generated-counter/counter.ts):
+
+```ts
+const port: CounterPort = {
+  initialize: () => counter.reset(),
+  tick: ({ stride }) => counter.increment(stride),
+  observe: () => ({ count: counter.count }),
+};
+```
+
+The compiled registry factory creates `counter` and this port only after Mirrors
+confirms the generated interface. The generated binding handles input decoding,
+action dispatch, observation encoding, and lifecycle checks. The adapter reads
+the implementation's actual count after each operation.
+
+With Node.js, pnpm, and the
+[Mirrors build prerequisites](https://github.com/NzSN/Mirrors#requirements)
+installed, run these commands from the **MirrorECMA root**. Set `MIRRORS_ROOT`
+to the absolute path of your Mirrors checkout; the example defaults to the
+sibling `../Mirrors` layout when the variable is omitted.
+
+```bash
+pnpm install
+export MIRRORS_ROOT=/absolute/path/to/Mirrors
+(cd "$MIRRORS_ROOT" && lake build mirror model_interface_gen)
+pnpm run check:examples
+pnpm run smoke:generated-counter
+pnpm run example:counter
+```
+
+The smoke gate checks model provenance, generated artifacts, action coverage,
+and both implementations. The example then replays the checked-in trace over
+local stdio, without invoking Apalache. Set `MIRROR_BIN` to an absolute executable
+path to override `$MIRRORS_ROOT/.lake/build/bin/mirror`.
+
+Run the same adapter against `BrokenCounter`, whose increment adds
+`stride - 1n`:
+
+```bash
+pnpm run example:counter:broken
+```
+
+This command intentionally exits nonzero: Mirrors detects a `tick` mismatch on
+`count`. The observer still reports the real value. Follow the
+[full tutorial](examples/generated-counter/README.md) for expected diagnostics,
+read-only artifact checks, regeneration, and fresh Apalache traces. Passing
+establishes agreement on the observations and traces exercised; action counts
+show which handlers ran.
+
+Advanced paths remain available below: [compiled and dynamic bindings](#verified-generated-bindings),
+[low-level customization](#low-level-customization),
+[symbolic exploration](#architecture), [transports](#transports), and
+[async server jobs through `Connection`](src/connection.ts).
 
 ## Architecture
 
 The **TLA+ spec is the test oracle**; your TypeScript state machine is the
-system under test (SUT). The mirror (ModelMirros) sits between the model
+system under test (SUT). The Mirrors server sits between the model
 checker and your code: it obtains expected states from the model via
 apalache-mc and conformance-checks every state the SUT reports
 (variable-by-variable equality, `diffState`).
@@ -49,12 +151,12 @@ spec-generated protocol traces against the real mirror implementation.
 ## Install & Build
 
 ```bash
-npm install
-npm run build        # → dist/
-npm run check        # type-check only
-MIRRORS_FIXTURES=/path/to/Mirrors/test/fixtures npm test
-MIRROR_BIN=/path/to/ModelMirrors \
-  SPEC=/path/to/authoritative/Counter.tla npm run smoke
+pnpm install
+pnpm run build        # → dist/
+pnpm run check        # type-check only
+MIRRORS_FIXTURES=/path/to/Mirrors/test/fixtures pnpm test
+MIRROR_BIN=/path/to/Mirrors/.lake/build/bin/mirror \
+  SPEC=/path/to/authoritative/Counter.tla pnpm run smoke
 ```
 
 `SPEC` is optional; the smoke suite defaults to its checked-in
@@ -64,35 +166,6 @@ extra observable state key is rejected with terminal `step_mismatch` over
 stdio, TCP, and mTLS. `MIRRORS_FIXTURES` selects the canonical wire corpus;
 the sibling `../Mirrors/test/fixtures` checkout is the default.
 
-## Quick Start
-
-```ts
-import { runClient, getParamInt } from "mirrorecma";
-
-const v = (n: number) => ({ tag: "int", val: BigInt(n) } as const);
-
-await runClient(
-  "/path/to/ModelMirros",          // binary path, or connectMirror(host, port)
-  {                                 // ApalacheConfig
-    specPath: "specs/Counter.tla",
-    invariant: "TraceComplete",
-    lengthBound: 5,
-    constInit: "CInit",
-    paramVars: "parameters",
-  },
-  { numTraces: 1 },                 // TraceGenerationConfig
-  (action, params, prev) => {
-    if (action === "init")
-      return { count: v(0), step_count: v(0) };
-    const stride = getParamInt(params, "parameters", "stride");
-    return {
-      count: v(Number(prev.count.val) + stride),
-      step_count: v(Number(prev.step_count.val) + 1),
-    };
-  }
-);
-```
-
 ## Verified generated bindings
 
 `runClientNegotiated` verifies a compiler-generated binding against current
@@ -101,52 +174,13 @@ canonical companion contract and semantic digest; Mirrors independently
 resolves that contract from the exact spec, trace evidence, and run profile.
 No generated source crosses the wire.
 
-```ts
-import {
-  CompiledAdapterRegistry,
-  MIRRORECMA_TARGET_PROFILE,
-  STATE_COMPUTER_CONTRACT_VERSION,
-  runClientNegotiated,
-  semanticDigestFromHex,
-} from "mirrorecma";
-import {
-  bindCounter,
-  CounterModelInterface,
-  CounterSemanticDigest,
-} from "./generated/CounterMirror.generated.js";
-
-const registry = new CompiledAdapterRegistry([{
-  key: {
-    semanticDigest: semanticDigestFromHex(CounterSemanticDigest),
-    adapterId: "counter.mutable/v1",
-    targetProfile: MIRRORECMA_TARGET_PROFILE,
-    stateComputerContractVersion: STATE_COMPUTER_CONTRACT_VERSION,
-  },
-  factory: (config) => {
-    const generated = bindCounter(counterPort, config);
-    return {
-      semanticDigest: semanticDigestFromHex(CounterSemanticDigest),
-      computer: generated.computer,
-      assertCompatibleConfig: () => {},
-      coverage: generated.coverage,
-      dispose: () => {},
-    };
-  },
-}]);
-
-await runClientNegotiated(binaryOrTransport, apalacheConfig, traceConfig, {
-  metadata: CounterModelInterface,
-  adapterId: "counter.mutable/v1",
-  targetProfile: MIRRORECMA_TARGET_PROFILE,
-  stateComputerContractVersion: STATE_COMPUTER_CONTRACT_VERSION,
-  registry,
-  policy: "require",
-}, { spec: await specFromFiles("./specs/Counter.tla") });
-```
-
-This is the production-oriented **D3 compiled verification** path. Registry
-lookup is exact and pure. Its factory runs only after a validated `matched`
-response, and every created binding is disposed once.
+The [complete Counter adapter](examples/generated-counter/adapter.ts) is the
+production-oriented **D3 compiled verification** path. `createCounterRun()`
+registers a factory using the generated metadata/digest pair, an exact adapter
+ID, and the exported target-profile and StateComputer-contract versions. It
+uses `policy: "require"`. Registry lookup is exact and pure; its factory creates
+the Counter, port, and binding only after a validated `matched` response.
+The negotiated runner disposes every created binding once.
 
 For development, **D4 dynamic descriptor mode** retrieves an inert semantic
 descriptor and binds it only to explicitly supplied local handlers. It never
@@ -200,6 +234,41 @@ Plain TCP has no model-interface authorization by default. For mTLS
 verification, the Mirrors server must explicitly allowlist the client leaf
 certificate fingerprint with `--model-interface-allow-client`. Dynamic
 descriptor delivery additionally requires `--model-interface-descriptor-read`.
+
+## Low-level customization
+
+Implement `StateComputer` directly when the callback itself is your state
+machine, or when you need to own dispatch and state encoding. For an existing
+application, start with the [generated adapter](#quick-start) so that operations
+reach the implementation and observations report its actual state.
+
+This lower-level example uses the separate root `specs/Counter.tla` model:
+
+```ts
+import { runClient, getParam } from "mirrorecma";
+
+await runClient(
+  "/path/to/Mirrors/.lake/build/bin/mirror",
+  {
+    specPath: "specs/Counter.tla",
+    invariant: "TraceComplete",
+    lengthBound: 6,
+    constInit: "CInit",
+    paramVars: "parameters",
+  },
+  { numTraces: 1, view: "View" },
+  (action, params, prev) => {
+    if (action === "init") return { count: { tag: "int", val: 0n } };
+    if (action !== "tick") throw new Error(`Unknown action: ${action}`);
+    const stride = getParam(params, "parameters")?.stride;
+    const count = prev.count;
+    if (stride?.tag !== "int" || count?.tag !== "int") {
+      throw new Error("Counter requires integer stride and count");
+    }
+    return { count: { tag: "int", val: count.val + stride.val } };
+  },
+);
+```
 
 ## API
 

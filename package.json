@@ -13,6 +13,12 @@
     "build": "tsc",
     "check": "tsc --noEmit",
     "check:model-interface": "tsc -p tsconfig.model-interface.json --noEmit",
+    "check:examples": "tsc -p tsconfig.examples.json --noEmit",
+    "build:examples": "tsc -p tsconfig.examples.json",
+    "example:counter": "pnpm run build:examples && node dist-test/examples/generated-counter/run.js",
+    "example:counter:broken": "pnpm run build:examples && node dist-test/examples/generated-counter/run.js --broken",
+    "example:counter:live": "pnpm run build:examples && node dist-test/examples/generated-counter/run.js --live",
+    "smoke:generated-counter": "pnpm run build:examples && node dist-test/test/generated-counter.smoke.js",
     "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
     "smoke": "node --loader ts-node/esm test/smoke.test.ts",
     "smoke:model-interface": "node --loader ts-node/esm test/model-interface-counter.smoke.ts"

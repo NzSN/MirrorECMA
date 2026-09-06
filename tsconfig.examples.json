@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist-test",
+    "declaration": false,
+    "baseUrl": ".",
+    "paths": {
+      "mirrorecma": ["src/index.ts"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "examples/generated-counter/**/*.ts",
+    "test/generated-counter.smoke.ts",
+    "test/fixtures/model-interface/counter/generated/**/*.ts"
+  ]
+}
