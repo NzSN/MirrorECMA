@@ -5,6 +5,11 @@ conformance checker compatible with the ModelMirrors JSONL protocol. Connect a
 real implementation to a generated typed interface, replay TLA+ model traces,
 and let Mirrors compare the implementation's observations with the model.
 
+The [shared sandbox orchestration design](https://github.com/NzSN/MirrorECMA/blob/main/docs/shared-orchestration-design.md)
+specifies how client-guide section 13 will land: a native facade over MirrorGate,
+additive async replay, and shared lifecycle/isolation gates. It is a proposed
+design, not current sandbox support.
+
 ## Quick Start
 
 The [runnable Counter tutorial](examples/generated-counter/README.md) starts
