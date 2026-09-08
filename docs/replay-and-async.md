@@ -89,23 +89,39 @@ ITF `{"#bigint":"9007199254740993"}` values, preserving every digit through
 to JavaScript `number`. Other failures keep their own codes and exception
 identity; cleanup does not replace an earlier failure with a mismatch.
 
+## Compiled execution reports
+
+The negotiated `WithReport` functions support both report contracts. A selection
+without a top-level `execution` field uses the `ReplayReport` progress snapshot
+described above, including deferred dynamic scopes. A compiled selection with
+`execution: "sync"` or `execution: "async"` returns `CompiledReplayReport`:
+`status: "completed"`, `acceptedTraces`, `acceptedSteps`, `actionCoverage`, and
+`diagnostics`. This path uses `deadlines.registrationMs`, `deadlines.stepMs`, and
+`deadlines.receiveMs`, including bounded factory and cleanup waits.
+
+`ReplayMismatchError` identifies both paths. Progress failures use
+`code: "step_mismatch"` and one-based `traceIndex` with `stateIndex`; compiled
+failures use `code: "replay_mismatch"` and zero-based `traceIndex` with `stepIndex`.
+`replayReportFromError` retrieves progress snapshots; `replayCleanupFailure`
+retrieves secondary cleanup evidence from compiled execution failures.
+
 ## Asynchronous operation ordering
 
 The synchronous `StateComputer` type remains unchanged. Ordinary trace runners
 accept `ReplayComputer`, whose fourth argument carries local replay context:
 
 ```ts
-import type { State, ReplayContext } from "mirrorecma";
+import type { State, ReplayCallbackContext } from "mirrorecma";
 
 type ReplayComputer = (
   action: string,
   params: State,
   previousState: State,
-  context: ReplayContext,
+  context: ReplayCallbackContext,
 ) => State | Promise<State>;
 ```
 
-`AsyncStateComputer` requires a `Promise<State>`. Existing three-argument
+`AsyncReplayComputer` requires a `Promise<State>`. Existing three-argument
 synchronous callbacks remain assignable. The trace runner awaits one computer
 invocation before sending its state or receiving the next stimulus. An
 asynchronous generated/dynamic binding performs input validation, awaits one
@@ -129,8 +145,8 @@ The ordinary legacy and negotiated trace runners accept these optional fields:
 | `receiveTimeoutMs` | Budget for one inbound message wait, including the registration reply; expiry produces `receive_timeout`. |
 
 Omitted deadlines leave that operation without a timer. Values must be finite,
-positive, and at most 2,147,483,647 milliseconds. `ReplayContext` carries a
-terminal `signal`, `traceIndex`, and `stateIndex`; generated async ports and
+positive, and at most 2,147,483,647 milliseconds. `ReplayCallbackContext` carries a
+terminal `signal`, `traceIndex`, and `stateIndex`; callback computers and
 async dynamic handlers receive it. Forward the signal to application I/O and
 check it at meaningful commit boundaries.
 
@@ -172,21 +188,26 @@ import type { ReplayContext } from "mirrorecma";
 
 interface TickInput { readonly stride: bigint }
 interface CounterObservation { readonly count: bigint }
-interface CounterPort {
-  initialize(context: ReplayContext): void | Promise<void>;
-  tick(input: TickInput, context: ReplayContext): void | Promise<void>;
-  observe(context: ReplayContext): CounterObservation | Promise<CounterObservation>;
+interface CounterAsyncPort {
+  initialize(context: ReplayContext): Promise<void>;
+  tick(input: TickInput, context: ReplayContext): Promise<void>;
+  observe(context: ReplayContext): Promise<CounterObservation>;
 }
 ```
 
-Its binding exposes `AsyncStateComputer` and an idempotent `dispose()` that
-poisons further binding use. Application resources still belong to the local
-factory's cleanup. Register it with `MIRRORECMA_ASYNC_TARGET_PROFILE` and
+The `bindCounterAsync` binding exposes `AsyncStateComputer`, which receives
+`{ action, payload, previous }` and a `ReplayContext` containing `signal` and
+an absolute monotonic `deadline`. Cancellation poisons the binding; the
+application factory owns resource disposal. Register it through
+`AsyncCompiledAdapterRegistry` with `execution: "async"`, using `MIRRORECMA_ASYNC_TARGET_PROFILE` and
 `ASYNC_STATE_COMPUTER_CONTRACT_VERSION`, whose exact values are
 `mirrorecma-async-v1` and `mirrors.async-state-computer/v1`. The synchronous key
 uses `MIRRORECMA_TARGET_PROFILE` and `STATE_COMPUTER_CONTRACT_VERSION`. The
 [async Counter acceptance executable](../test/async-generated-counter.smoke.ts)
-shows the complete registry factory and generated binding composition.
+shows an explicit adapter from the generated input/context API to the callback
+runner, retaining progress reports. The
+[sandbox Counter](../examples/sandbox-counter/README.md) uses the compiled
+execution API directly.
 
 The semantic lock, descriptor schema, canonical digest, negotiation bytes, and
 ITF state encoding are shared with the synchronous target. Target profile and

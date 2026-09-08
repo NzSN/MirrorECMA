@@ -5,6 +5,91 @@ conformance checker compatible with the ModelMirrors JSONL protocol. Connect a
 real implementation to a generated typed interface, replay TLA+ model traces,
 and let Mirrors compare the implementation's observations with the model.
 
+The experimental [shared sandbox orchestration facade](docs/shared-orchestration-design.md)
+adds strict async replay over the public MirrorGate control and worker SDKs.
+The [acceptance ledger](docs/shared-orchestration-acceptance.md) separates local
+working-tree evidence from hosted CI and released-package support.
+
+## Experimental sandbox orchestration
+
+`evaluateSandboxed` accepts a trusted Gate endpoint, approved submission and
+policy IDs, compiler-owned model metadata, and a private replay request. It
+preflights the complete portable manifest before loading Gate, prepares and
+freezes the artifact, requires an exact Mirrors `verify/require` match, and only
+then authorizes and attaches a managed execution worker. The facade returns a
+fixed public result after Gate cleanup; mismatch state and failure messages are
+released only by the caller's trusted disclosure policy.
+
+The first profile is local Linux/Bubblewrap, owned stdio or attached Unix
+control, and `node-v1` or `rust-v1` workers. MirrorGate is an optional peer, so
+ordinary MirrorECMA imports and existing synchronous clients do not resolve its
+SDK. Calling the sandbox facade requires a compatible installed `mirrorgate`
+package and an operator-approved controller/policy; there is no download or raw
+subprocess fallback.
+
+Use the compiler-owned async Counter module through its mechanical public-port
+adapter:
+
+```ts
+const model = createSandboxCompiledModel({
+  metadata: CounterModelInterface,
+  descriptor: verifiedCounterDescriptor,
+  adapterId: "counter.generated-async-v1",
+  publicManifest: CounterPublicManifest,
+  targetProfile: CounterAsyncTargetProfile,
+  stateComputerContractVersion: CounterAsyncStateComputerContractVersion,
+  bindPublicPort: bindCounterAsyncPublicPort,
+});
+
+const result = await evaluateSandboxed({
+  gate: { kind: "owned", launcher: { command: gateBin }, policyFile },
+  policyId: "counter",
+  submission: { kind: "prebuilt", input: { rootId: "submission", relativePath: "counter" } },
+  runtime: "node-v1",
+  model,
+  replay: { kind: "traces", target: mirrorBin, config, tracePaths },
+});
+```
+
+Run `pnpm run check:sandbox` for the dedicated generated-artifact compilation
+gate. `pnpm run smoke:sandbox` is a required real-backend gate and fails when
+its explicitly prepared Mirrors/Gate/runtime inputs are absent. The runnable
+[sandbox Counter example](examples/sandbox-counter/README.md) lists its inputs.
+
+The manual
+[required-backend workflow](.github/workflows/shared-orchestration.yml) runs on
+a prepared self-hosted Linux runner labeled `mirrorgate-bubblewrap`. Dispatchers
+must provide full matching MirrorGate, Mirrors, and MirrorCPP commit SHAs. The
+runner repository variables must point to an executable pinned Apalache binary,
+the exact Node 24.15.0 runtime tree, and a prepared MirrorCPP dependency cache:
+`SHARED_ORCHESTRATION_APALACHE_MC`,
+`SHARED_ORCHESTRATION_NODE_RUNTIME_ROOT`, and
+`SHARED_ORCHESTRATION_MIRRORCPP_DEPENDENCY_CACHE`. Missing tools, an unavailable
+Bubblewrap backend, a dirty or mismatched checkout, a missing matrix row, or a
+missing evidence manifest fails the job; there is no skip path.
+
+The same entry point can be run on an equivalently prepared machine with all
+four expected revisions and checkout paths explicit:
+
+```bash
+MIRRORECMA_ROOT="$PWD" \
+MIRRORGATE_ROOT=/checkouts/MirrorGate \
+MIRRORS_ROOT=/checkouts/Mirrors \
+MIRRORCPP_ROOT=/checkouts/MirrorCPP \
+MIRRORECMA_EXPECTED_REV=<40-hex-sha> \
+MIRRORGATE_EXPECTED_REV=<40-hex-sha> \
+MIRRORS_EXPECTED_REV=<40-hex-sha> \
+MIRRORCPP_EXPECTED_REV=<40-hex-sha> \
+APALACHE_MC=/opt/apalache/bin/apalache-mc \
+MIRRORGATE_NODE_RUNTIME_ROOT=/opt/node-v24.15.0-linux-x64 \
+MIRRORCPP_DEPENDENCY_CACHE=/opt/mirrorcpp-deps \
+bash tools/ci/shared-orchestration.sh
+```
+
+Ordinary `pnpm run check` and client tests remain independent of these prepared
+backend prerequisites. A local green run does not create a hosted-CI or release
+support claim; the acceptance ledger records each evidence class separately.
+
 ## Quick Start
 
 The [runnable Counter tutorial](examples/generated-counter/README.md) starts
@@ -159,6 +244,7 @@ spec-generated protocol traces against the real mirror implementation.
 pnpm install --frozen-lockfile
 pnpm run build        # → dist/
 pnpm run check        # type-check only
+pnpm run check:sandbox # async generated binding + sandbox facade/example
 MIRRORS_FIXTURES=/path/to/Mirrors/test/fixtures pnpm test
 MIRROR_BIN=/path/to/Mirrors/.lake/build/bin/mirror \
   SPEC=/path/to/authoritative/Counter.tla pnpm run smoke
@@ -192,7 +278,7 @@ live commands and the broader cross-client matrix.
 ## Reports and asynchronous implementations
 
 The existing replay entry points retain `Promise<void>` results. Their additive
-`WithReport` variants return an immutable, JSON-safe `ReplayReport`; failures
+`WithReport` variants without an explicit execution selection return an immutable, JSON-safe `ReplayReport`; failures
 throw and expose partial progress through `replayReportFromError(error)`.
 `ReplayMismatchError` includes the action, inputs, trace/state position,
 expected/actual values, and ordered diff hints. Reports encode arbitrary-size
@@ -204,7 +290,7 @@ asynchronous port, select `mirrorecma-async-v1` and the separate local contract
 `mirrors.async-state-computer/v1`; the synchronous target stays compatible.
 Dynamic handlers opt in with a factory scope whose `execution` is `"async"`.
 Both paths await an operation and its observations before reporting state.
-`ReplayContext.signal`, `actionTimeoutMs`, and `receiveTimeoutMs` provide
+`ReplayCallbackContext.signal`, `actionTimeoutMs`, and `receiveTimeoutMs` provide
 cooperative cancellation and per-operation limits. Application I/O must honor
 the signal; a timeout cannot undo a completed mutation or stop code that ignores
 it. Read the [API guide and cancellation limits](docs/replay-and-async.md) before
@@ -567,7 +653,7 @@ The ordinary trace runners accept the additive `ReplayComputer` type:
 
 ```ts
 type ReplayComputer = (
-  action: string, params: State, prevState: State, context: ReplayContext,
+  action: string, params: State, prevState: State, context: ReplayCallbackContext,
 ) => State | Promise<State>;
 ```
 

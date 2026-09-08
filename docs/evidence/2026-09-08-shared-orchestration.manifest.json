@@ -1,0 +1,57 @@
+{
+  "schema": "mirrors.shared-orchestration-reproducibility/v1",
+  "summary": {
+    "schema": "mirrorgate.control-acceptance-summary/v1",
+    "status": "green",
+    "rows": 42,
+    "backend": "linux-bubblewrap-v1",
+    "gateRevision": "051ac0c17d19f41960d41cd3830a9556e3670e77",
+    "mirrorcppRevision": "43ccf38d2f3ecd8867f1d0411d2cc90b12d0e0b9",
+    "mirrorecmaRevision": "1dd6b69f885c39f93d96cab6e32a80061237d02b",
+    "mirrorsRevision": "acc3d9d176a6c6951b46332b5d7923227e318cd7"
+  },
+  "repositories": {
+    "MirrorGate": {
+      "head": "051ac0c17d19f41960d41cd3830a9556e3670e77",
+      "workspaceSha256": "11eee3d73c03efb7b776e4f13be8015d518fde4bc2eeaa17f89d881a3ea3a64b",
+      "statusPorcelainV1Z": " M .github/workflows/ci.yml\u0000 M .gitignore\u0000 M README.md\u0000 M conformance/helpers.mjs\u0000 M docs/README.md\u0000 M docs/compatibility.md\u0000 M docs/orchestration-control-v1.md\u0000 M integrations/mirrorecma/README.md\u0000 M integrations/mirrorecma/smoke.mjs\u0000 M package.json\u0000 M scripts/test.sh\u0000 M sdk/node/index.mjs\u0000 M supervisor/mirrorgate/artifacts.py\u0000 M supervisor/mirrorgate/cli.py\u0000 M supervisor/mirrorgate/policy.py\u0000 M supervisor/mirrorgate/sandbox.py\u0000 M tests/integration/native-values.test.mjs\u0000?? conformance/control-v1/\u0000?? docs/control-policy-v1.md\u0000?? docs/orchestration-control-usage.md\u0000?? docs/orchestration-control-v1-tasks.md\u0000?? integrations/mirrorcpp/\u0000?? package-lock.json\u0000?? protocol/control-v1/\u0000?? scripts/test-control-cpp.sh\u0000?? sdk/compatibility.json\u0000?? sdk/cpp/\u0000?? sdk/node/README.md\u0000?? sdk/node/control.d.mts\u0000?? sdk/node/control.mjs\u0000?? sdk/node/managed-worker.mjs\u0000?? sdk/node/public-model.mjs\u0000?? sdk/node/worker.d.mts\u0000?? supervisor/mirrorgate/control_policy.py\u0000?? supervisor/mirrorgate/control_protocol.py\u0000?? supervisor/mirrorgate/control_server.py\u0000?? supervisor/mirrorgate/orchestration.py\u0000?? supervisor/mirrorgate/preparation.py\u0000?? supervisor/mirrorgate/worker_broker.py\u0000?? tests/control_policy_fixture.py\u0000?? tests/cpp/\u0000?? tests/fixtures/\u0000?? tests/node/control-integration.test.mjs\u0000?? tests/node/control.test.mjs\u0000?? tests/node/managed-worker.test.mjs\u0000?? tests/node/package.test.mjs\u0000?? tests/test_control_acceptance.py\u0000?? tests/test_control_backend.py\u0000?? tests/test_control_protocol.py\u0000?? tests/test_control_races.py\u0000?? tests/test_control_server.py\u0000?? tests/test_orchestration.py\u0000"
+    },
+    "MirrorCPP": {
+      "head": "43ccf38d2f3ecd8867f1d0411d2cc90b12d0e0b9",
+      "workspaceSha256": "7cffe163eefd2d72d31d396ca92b52d08c5cc3d6b336280d1ae1549a4b5bf6ea",
+      "statusPorcelainV1Z": "?? drafts/\u0000"
+    },
+    "MirrorECMA": {
+      "head": "1dd6b69f885c39f93d96cab6e32a80061237d02b",
+      "workspaceSha256": "b899ad6baff86b324cba7adcee7b855ce1c37cf56360296cdb8f77b9cfa15dd6",
+      "statusPorcelainV1Z": " M .gitignore\u0000 M README.md\u0000 M docs/shared-orchestration-design.md\u0000 M package.json\u0000 M pnpm-lock.yaml\u0000 M pnpm-workspace.yaml\u0000 M src/client.ts\u0000 M src/index.ts\u0000 M src/negotiated.ts\u0000 M src/replay.ts\u0000 M src/transport.ts\u0000?? .github/\u0000?? .npmrc\u0000?? docs/shared-orchestration-acceptance.md\u0000?? examples/sandbox-counter/\u0000?? src/adapter-registry.ts\u0000?? src/async-replay.ts\u0000?? src/negotiation-core.ts\u0000?? src/replay-core.ts\u0000?? src/replay-report.ts\u0000?? src/sandbox-model.ts\u0000?? src/sandbox.ts\u0000?? test/async-replay-report.test.ts\u0000?? test/fixtures/ignore-sigterm-mirror.mjs\u0000?? test/fixtures/model-interface/counter/generated-async/\u0000?? test/generated-async-counter.test.ts\u0000?? test/owned-transport-cleanup.test.ts\u0000?? test/sandbox-counter.smoke.ts\u0000?? test/sandbox-facade.test.ts\u0000?? test/sandbox-failure-paths.test.ts\u0000?? test/sandbox-model.test.ts\u0000?? tmp/\u0000?? tools/\u0000?? tsconfig.sandbox.json\u0000"
+    },
+    "Mirrors": {
+      "head": "acc3d9d176a6c6951b46332b5d7923227e318cd7",
+      "workspaceSha256": "da402cd1af76bbc22077296bdfabc2ef812c79eb880277f5160c6d65c6f02a75",
+      "statusPorcelainV1Z": " M Docs/client-implementation-guide.md\u0000 M Docs/generated-model-interface-spec.md\u0000 M Docs/model-interface-compiler-design.md\u0000 M Shell.lean\u0000 M Shell/ModelInterface/Compiler.lean\u0000 M Shell/ModelInterface/Emit/TypeScript.lean\u0000 M lakefile.lean\u0000 M tools/ModelInterfaceGen.lean\u0000 M tools/ModelInterfaceSpec.lean\u0000?? Docs/NzSN-Formalism.code-workspace\u0000?? Shell/ModelInterface/Emit/TypeScriptAsync.lean\u0000?? test/fixtures/model-interface/counter/generated-async/\u0000"
+    }
+  },
+  "gateSdk": {
+    "version": "0.1.0",
+    "archiveSha256": "314f77b75eaefa8d866fb93bd3328d596073bd017b90c8bb1f3e38f4ca214570"
+  },
+  "toolchain": {
+    "node": "v24.15.0",
+    "python": "Python 3.12.3",
+    "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "cxx": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "cmake": "cmake version 3.28.3",
+    "typescript": "Version 5.9.3",
+    "lean": "Lean (version 4.33.0, x86_64-unknown-linux-gnu, commit d8b18978322de05a8f3dba51ef03cf5461676c17, Release)",
+    "apalache": "0.57.0",
+    "bubblewrap": "bubblewrap 0.9.0",
+    "kernel": "Linux 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 GNU/Linux"
+  },
+  "artifacts": {
+    "mirrorsBinarySha256": "d347838babd0ae807388974c8957d6b84a17e9423c41ac9c1917a7506f9c140f",
+    "nodeRuntimeRoot": "/tmp/mirrorgate-tools-sss8bnx9/node-v24.15.0-linux-x64",
+    "nodeRuntimeVersion": "v24.15.0",
+    "nodeRuntimeBinarySha256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c"
+  }
+}

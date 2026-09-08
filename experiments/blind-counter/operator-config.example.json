@@ -1,0 +1,12 @@
+{
+  "schema": "mirrorecma.blind-counter-policy-input/v1",
+  "outputPath": "/private/blind-counter/control-policy.json",
+  "submissionRoot": "/private/blind-counter/submissions",
+  "nodeRuntimeRoot": "/operator/node-24.15.0",
+  "gateRoot": "/operator/MirrorGate",
+  "publicProbePaths": ["/private/blind-counter/public-synthetic-canary"],
+  "privateEnvironmentNames": ["BLIND_COUNTER_PRIVATE_CANARY"],
+  "policyId": "blind.counter.node",
+  "rootId": "submission",
+  "buildPlanId": "blind.counter.build"
+}

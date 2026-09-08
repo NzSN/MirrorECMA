@@ -71,29 +71,43 @@ function isObject(value: unknown): value is object {
 }
 
 export class ReplayMismatchError extends Error {
-  readonly code = "step_mismatch";
+  readonly code: "step_mismatch" | "replay_mismatch";
+  readonly action: string;
   readonly params: State;
   readonly expected: State;
   readonly actual: State;
   readonly hints: DiffHint[];
+  readonly traceIndex: number;
+  readonly stateIndex: number;
+  readonly stepIndex: number;
 
+  constructor(action: string, params: State, expected: State, actual: State,
+    hints: DiffHint[] | undefined, traceIndex: number, stateIndex: number);
+  constructor(message: string, expected: State, actual: State, hints: readonly DiffHint[],
+    traceIndex: number, stepIndex: number, action: string);
   constructor(
-    readonly action: string,
-    params: State,
-    expected: State,
-    actual: State,
-    hints: DiffHint[] | undefined,
-    readonly traceIndex: number,
-    readonly stateIndex: number,
+    text: string, first: State, second: State, third: State | readonly DiffHint[],
+    fourth: DiffHint[] | number | undefined, fifth: number, sixth: number | string,
   ) {
-    const detail = hints?.length ? renderDiffHints(hints)
+    const compiled = typeof sixth === "string";
+    const params = compiled ? {} : first;
+    const expected = compiled ? first : second;
+    const actual = compiled ? second : third as State;
+    const hints = compiled ? third as readonly DiffHint[] : fourth as DiffHint[] | undefined;
+    const detail = hints?.length ? renderDiffHints([...hints])
       : `expected ${JSON.stringify(encodeState(expected))}, got ${JSON.stringify(encodeState(actual))}`;
-    super(`step mismatch on action "${action}" with param ${JSON.stringify(encodeState(params))}: ${detail}`);
+    super(compiled ? text
+      : `step mismatch on action "${text}" with param ${JSON.stringify(encodeState(params))}: ${detail}`);
     this.name = "ReplayMismatchError";
+    this.code = compiled ? "replay_mismatch" : "step_mismatch";
+    this.action = compiled ? sixth : text;
+    this.traceIndex = compiled ? fourth as number : fifth;
+    this.stateIndex = compiled ? fifth : sixth as number;
+    this.stepIndex = this.stateIndex;
     this.params = snapshot(params);
     this.expected = snapshot(expected);
     this.actual = snapshot(actual);
-    this.hints = snapshot(hints ?? []);
+    this.hints = snapshot([...(hints ?? [])]);
   }
 
   get report(): ReplayReport | undefined { return replayReportFromError(this); }
@@ -229,4 +243,75 @@ export class ReplayRecorder {
       ...(failed ? { failure: describeReplayFailure(error) } : {}),
     });
   }
+}
+
+export interface ReplayDiagnosticReference {
+  readonly family: string;
+  readonly reference: string;
+}
+
+export interface CompiledReplayReport {
+  readonly status: "completed";
+  readonly acceptedTraces: number;
+  readonly acceptedSteps: number;
+  readonly actionCoverage: Readonly<Record<string, number>>;
+  readonly diagnostics: readonly ReplayDiagnosticReference[];
+}
+
+
+/** Preserves arbitrary JavaScript rejection values as an actual runner error. */
+export class ReplayThrownValueError extends Error {
+  readonly code = "replay_thrown_value" as const;
+
+  constructor(readonly thrownValue: unknown) {
+    super("replay callback rejected with a non-Error value", { cause: thrownValue });
+    this.name = "ReplayThrownValueError";
+  }
+}
+
+export class ReplayCleanupError extends Error {
+  readonly code = "replay_cleanup_failed" as const;
+  readonly stage = "close" as const;
+
+  constructor(message: string, cause?: unknown) {
+    super(message, cause === undefined ? undefined : { cause });
+    this.name = "ReplayCleanupError";
+  }
+}
+
+const cleanupFailures = new WeakMap<Error, unknown>();
+
+export function normalizeReplayFailure(error: unknown): Error {
+  return error instanceof Error ? error : new ReplayThrownValueError(error);
+}
+
+/** Record cleanup evidence without replacing the primary replay outcome. */
+export function retainReplayCleanupFailure(primary: Error, cleanup: unknown): void {
+  cleanupFailures.set(primary, cleanup);
+}
+
+export function replayCleanupFailure(primary: unknown): unknown | undefined {
+  return primary instanceof Error ? cleanupFailures.get(primary) : undefined;
+}
+
+export function stableCoverage(
+  coverage: Readonly<Record<string, number>> | undefined,
+): Readonly<Record<string, number>> {
+  const result = Object.create(null) as Record<string, number>;
+  for (const key of Object.keys(coverage ?? {}).sort()) result[key] = coverage![key]!;
+  return Object.freeze(result);
+}
+
+export function replayReport(
+  acceptedTraces: number,
+  acceptedSteps: number,
+  coverage?: Readonly<Record<string, number>>,
+): CompiledReplayReport {
+  return Object.freeze({
+    status: "completed" as const,
+    acceptedTraces,
+    acceptedSteps,
+    actionCoverage: stableCoverage(coverage),
+    diagnostics: Object.freeze([]),
+  });
 }

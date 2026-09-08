@@ -12,15 +12,15 @@ import {
   spawnMirror,
   type ApalacheConfig,
   type CompiledAdapterSelection,
-  type LocalBinding,
+  type CallbackLocalBinding,
   type ReplayReport,
   type Transport,
 } from "../src/index.js";
 import {
-  bindCounter,
+  bindCounterAsync as bindCounter,
   CounterSemanticDigest as AsyncCounterSemanticDigest,
-  type CounterBinding,
-  type CounterPort,
+  type CounterAsyncBinding as CounterBinding,
+  type CounterAsyncPort as CounterPort,
 } from "./fixtures/model-interface/counter/generated-async/CounterMirror.generated.js";
 import {
   CounterModelInterface, CounterSemanticDigest,
@@ -67,7 +67,7 @@ async function runCase(broken: boolean): Promise<void> {
   let generated: CounterBinding | undefined;
   const registry = new CompiledAdapterRegistry([{
     key,
-    factory: async (effective): Promise<LocalBinding> => {
+    factory: async (effective): Promise<CallbackLocalBinding> => {
       assert.equal(transport.matched, true, "SUT must only be constructed after a matched reply");
       factoryCalls += 1;
       directory = await mkdtemp(join(tmpdir(), "mirrorecma-async-counter-"));
@@ -88,11 +88,15 @@ async function runCase(broken: boolean): Promise<void> {
       generated = bindCounter(port, effective);
       const binding = generated;
       return {
-        semanticDigest, computer: binding.computer, coverage: binding.coverage,
+        semanticDigest,
+        computer: (action, payload, previous, context) => binding.computer(
+          { action, payload, previous },
+          { signal: context.signal, deadline: performance.now() + 5_000 },
+        ),
+        coverage: binding.coverage,
         assertCompatibleConfig: (candidate) => assert.equal(candidate.paramVars, "parameters"),
         dispose: async () => {
           disposeCalls += 1;
-          binding.dispose();
           await rm(directory!, { recursive: true, force: true });
         },
       };

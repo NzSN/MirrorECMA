@@ -21,10 +21,10 @@ export { specFromFiles } from "./spec.js";
 
 export {
   ReplayControlError,
-  type ReplayContext,
+  type ReplayContext as ReplayCallbackContext,
   type ReplayOptions,
   type ReplayComputer,
-  type AsyncStateComputer,
+  type AsyncStateComputer as AsyncReplayComputer,
 } from "./replay-control.js";
 
 export {
@@ -134,6 +134,7 @@ export {
   NegotiatedRunnerError,
   ModelInterfaceRegistrationError,
   CompiledAdapterRegistry,
+  AsyncCompiledAdapterRegistry,
   runClientNegotiated,
   runClientNegotiatedWithReport,
   runClientWithTracesNegotiated,
@@ -141,8 +142,14 @@ export {
   type NegotiatedRunnerErrorCode,
   type CompiledAdapterKey,
   type LocalBinding,
+  type CallbackLocalBinding,
   type AdapterFactory,
   type CompiledAdapterRegistration,
+  type AsyncAdapterFactory,
+  type AsyncLocalBinding,
+  type AsyncCompiledExecutionSelection,
+  type CompiledExecutionSelection,
+  type NegotiatedReportRunOptions,
   type CompiledAdapterSelection,
   type DynamicHandlerSelection,
   type DynamicHandlerFactorySelection,
@@ -150,6 +157,67 @@ export {
   type NegotiatedAdapterSelection,
   type NegotiatedRunOptions,
 } from "./negotiated.js";
+
+export {
+  DEFAULT_REPLAY_DEADLINES,
+  ReplayCancelledError,
+  ReplayDeadlineError,
+  normalizeReplayDeadlines,
+  type ReplayInput,
+  type ReplayContext,
+  type ReplayDeadlines,
+  type ReplayDeadlineStage,
+  type AsyncStateComputer,
+} from "./async-replay.js";
+
+export {
+  replayCleanupFailure,
+  type CompiledReplayReport,
+  type ReplayDiagnosticReference,
+} from "./replay-report.js";
+
+export {
+  SANDBOX_PUBLIC_MANIFEST_SCHEMA,
+  SANDBOX_ASYNC_TARGET_PROFILE,
+  SANDBOX_ASYNC_COMPUTER_CONTRACT,
+  SandboxModelError,
+  createSandboxPublicManifest,
+  createSandboxCompiledModel,
+  type SandboxPortableType,
+  type SandboxPublicManifest,
+  type SandboxPortOperation,
+  type SandboxPortObservation,
+  type SandboxReplayContext,
+  type SandboxNativePort,
+  type SandboxAsyncBinding,
+  type SandboxAuthoringBundle,
+  type SandboxCompiledModel,
+  type PreparedSandboxModel,
+  type GeneratedSandboxAsyncBinding,
+  type GeneratedSandboxModelInput,
+} from "./sandbox-model.js";
+
+export {
+  evaluateSandboxed,
+  sandboxDiagnosticFailures,
+  SANDBOX_AUTHORING_OUTPUT_BYTES,
+  type SandboxWorkerRuntime,
+  type TrustedGateLauncher,
+  type SandboxGateEndpoint,
+  type SandboxInputRef,
+  type SandboxSubmission,
+  type SandboxReplayRequest,
+  type SandboxTightenedLimits,
+  type SandboxAuthoringExecResult,
+  type SandboxAuthoringSession,
+  type SandboxDisclosurePolicy,
+  type SandboxCleanupStatus,
+  type SandboxFailureFamily,
+  type PublicEvaluationResult,
+  type TrustedSandboxDiagnostic,
+  type SandboxEvaluationPlan,
+  type SandboxEvaluationOptions,
+} from "./sandbox.js";
 
 export {
   type ClientMessage,

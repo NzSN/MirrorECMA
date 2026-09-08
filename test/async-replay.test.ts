@@ -125,3 +125,14 @@ test.each([0, -1, NaN, Infinity, 2_147_483_648])("invalid timeouts fail before r
     expect(t.sent).toHaveLength(0);
   }
 });
+
+test("callback progress reports preserve synchronous compute-to-encode ordering", async () => {
+  const t = new ScriptedTransport([valid, init, done]);
+  await runClientWithTracesWithReport(t, config, [], () => {
+    const state: State = { count: { tag: "int", val: 1n } };
+    queueMicrotask(() => { state.count = { tag: "int", val: 2n }; });
+    return state;
+  });
+  const line = t.sent.find((item) => item.includes("report_state"))!;
+  expect(JSON.parse(line).state.count).toEqual({ "#bigint": "1" });
+});

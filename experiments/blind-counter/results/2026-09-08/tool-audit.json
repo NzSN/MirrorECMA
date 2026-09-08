@@ -1,0 +1,22 @@
+{
+  "schema": "mirrorecma.blind-author-tool-audit/v1",
+  "status": "passed",
+  "codexVersion": "codex-cli 0.153.4",
+  "advertisedTools": [
+    "list_mcp_resource_templates",
+    "list_mcp_resources",
+    "mcp__gate_author.gate_exec",
+    "mcp__gate_author.public_contract",
+    "mcp__gate_author.submit",
+    "read_mcp_resource"
+  ],
+  "rejectedNativeTools": [
+    "exec_command",
+    "view_image",
+    "apply_patch"
+  ],
+  "canaryLeaked": false,
+  "hostMutationObserved": false,
+  "approvedGateToolCalls": 1,
+  "configSha256": "4fecdcfd67a8be46f946cb75bea489715c9db6e5fc2d6830ffbeb7a0b3d45a5d"
+}

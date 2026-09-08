@@ -1,13 +1,12 @@
+import { replayCore } from "./replay-core.js";
 import {
   decodeMirrorMessage,
-  encodeState,
   type MirrorMessage,
-  type State,
 } from "./protocol.js";
 import type { Transport } from "./transport.js";
 import { ReplayControl, type ReplayComputer, type ReplayOptions } from "./replay-control.js";
 import {
-  attachReplayReport, failedReplayReport, ReplayMismatchError, ReplayRecorder,
+  attachReplayReport, failedReplayReport, ReplayRecorder,
   type ReplayReport,
 } from "./replay-report.js";
 
@@ -61,56 +60,21 @@ export async function replayLoop(
   control: ReplayControl = new ReplayControl(),
   recorder: ReplayRecorder = new ReplayRecorder(),
 ): Promise<ReplayReport> {
-  let state: State = {};
-  let lastParam: State = {};
-  let lastAction = "";
   try {
-    for (;;) {
-    const msg = await receiveReplayMessage(it, control);
-    switch (msg.proto_step) {
-      case "initial_state": {
-        recorder.begin(true);
-        lastAction = msg.action;
-        lastParam = structuredClone(msg.state);
-        state = await control.run("action", () => compute(
-          msg.action, msg.state, {}, { signal: control.signal, ...recorder.position },
+    await replayCore(t, it, {
+      start: (action, payload, previous) => {
+        const result = control.startAction(() => compute(
+          action, payload, previous, { signal: control.signal, ...recorder.position },
         ));
-        control.assertActive();
-        t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
-        recorder.reported(msg.action);
-        break;
-      }
-      case "step_ok":
-        recorder.acknowledge();
-        break;
-      case "all_steps_done":
-        return recorder.complete();
-      case "next_step": {
-        recorder.begin(false);
-        lastAction = msg.action;
-        lastParam = structuredClone(msg.parameters);
-        state = await control.run("action", () => compute(
-          msg.action, msg.parameters, state, { signal: control.signal, ...recorder.position },
-        ));
-        control.assertActive();
-        t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
-        recorder.reported(msg.action);
-        break;
-      }
-      case "step_mismatch": {
-        throw new ReplayMismatchError(
-          msg.action ?? lastAction, lastParam, msg.expected, msg.actual, msg.hints,
-          recorder.position.traceIndex, recorder.position.stateIndex,
-        );
-      }
-      case "protocol_error":
-        throw new Error(msg.error);
-      case "register_error":
-        throw new Error(`register failed: ${msg.error}`);
-      default:
-        throw new Error(`unexpected message: ${msg.proto_step}`);
-    }
-    }
+        return result.kind === "ready"
+          ? { kind: "ready", state: result.value }
+          : { kind: "pending", state: result.value };
+      },
+    }, {
+      receive: () => receiveReplayMessage(it, control),
+      progress: { recorder, assertActive: () => control.assertActive() },
+    });
+    return recorder.complete();
   } catch (error) {
     attachReplayReport(error, recorder.report(error));
     throw error;

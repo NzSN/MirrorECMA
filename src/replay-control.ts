@@ -62,10 +62,30 @@ export class ReplayControl {
     if (this.signal.aborted) throw this.signal.reason;
   }
 
-  async run<T>(kind: "action" | "receive", operation: () => T | PromiseLike<T>): Promise<T> {
+  /** Preserve immediate encode/send for synchronous callbacks. */
+  startAction<T>(operation: () => T | Promise<T>):
+    { readonly kind: "ready"; readonly value: T } |
+    { readonly kind: "pending"; readonly value: Promise<T> } {
+    this.assertActive();
+    const started = performance.now();
+    const value = operation();
+    if (isPromiseLike(value)) {
+      const pending = Promise.resolve(value);
+      pending.catch(() => {});
+      return { kind: "pending", value: this.run("action", () => pending, started) };
+    }
+    const timeout = this.options.actionTimeoutMs;
+    if (timeout !== undefined && performance.now() - started >= timeout && !this.signal.aborted) {
+      this.controller.abort(new ReplayControlError("action_timeout", `action timed out after ${timeout} ms`));
+    }
+    this.assertActive();
+    return { kind: "ready", value };
+  }
+
+  async run<T>(kind: "action" | "receive", operation: () => T | PromiseLike<T>,
+    started: number = performance.now()): Promise<T> {
     this.assertActive();
     const timeout = kind === "action" ? this.options.actionTimeoutMs : this.options.receiveTimeoutMs;
-    const started = performance.now();
     const expire = () => this.controller.abort(new ReplayControlError(
       kind === "action" ? "action_timeout" : "receive_timeout",
       `${kind} timed out after ${timeout} ms`,
@@ -76,7 +96,7 @@ export class ReplayControl {
       onAbort = () => reject(this.signal.reason);
       this.signal.addEventListener("abort", onAbort, { once: true });
       if (timeout !== undefined) {
-        timer = setTimeout(expire, timeout);
+        timer = setTimeout(expire, Math.max(0, timeout - (performance.now() - started)));
       }
     });
     try {
@@ -100,4 +120,9 @@ export class ReplayControl {
   dispose(): void {
     this.options.signal?.removeEventListener("abort", this.externalAbort);
   }
+}
+
+function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
+  return value !== null && (typeof value === "object" || typeof value === "function") &&
+    "then" in value && typeof value.then === "function";
 }

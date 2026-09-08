@@ -4,7 +4,7 @@
 // semantic-sha256: 193d6cc187d05c18f02ad483a44f8ad0c1634b02083df241df08b9281b045d1c
 // DO NOT EDIT
 
-import type { ApalacheConfig, State, AsyncStateComputer, ReplayContext, Value } from "mirrorecma";
+import type { ApalacheConfig, AsyncStateComputer, ReplayContext, State, Value } from "mirrorecma";
 
 export type MirrorSet<T> = readonly T[];
 export type MirrorMap<K, V> = readonly (readonly [K, V])[];
@@ -215,10 +215,10 @@ export interface CounterObservation {
   readonly count: bigint;
 }
 
-export interface CounterPort {
-  initialize(context: ReplayContext): void | Promise<void>;
-  tick(input: TickInput, context: ReplayContext): void | Promise<void>;
-  observe(context: ReplayContext): CounterObservation | Promise<CounterObservation>;
+export interface CounterAsyncPort {
+  initialize(context: ReplayContext): Promise<void>;
+  tick(input: TickInput, context: ReplayContext): Promise<void>;
+  observe(context: ReplayContext): Promise<CounterObservation>;
 }
 
 const tick_StrideShape: TypeShape = { kind: "int" };
@@ -239,10 +239,13 @@ function encodeCounterObservation(observation: CounterObservation): State {
 }
 
 export const CounterSemanticDigest = "193d6cc187d05c18f02ad483a44f8ad0c1634b02083df241df08b9281b045d1c" as const;
+export const CounterAsyncTargetProfile = "mirrorecma-async-v1" as const;
+export const CounterAsyncStateComputerContractVersion = "mirrors.async-state-computer/v1" as const;
 export const CounterModelInterface = {
   semanticDigest: CounterSemanticDigest,
   contract: {"actions":[{"id":"Tick","inputs":[{"from":{"path":[{"field":"parameters"},{"field":"stride"}],"root":"stepParameters"},"id":"Stride"}],"wireAction":"tick","wireAliases":[]}],"initializers":[{"id":"Initialize","inputs":[],"wireAction":"init","wireAliases":[]}],"interfaceVersion":"1.0.0","model":{"module":"Counter","source":"specs/Counter.tla"},"observations":[{"id":"Count","provenance":"implementation","wireName":"count"}],"schema":"mirrors.model-interface/v1","wire":{"actionVariable":"action_taken","parameterVariable":"parameters"}},
 } as const;
+export const CounterPublicManifest = {"actions":[{"id":"Tick","inputs":[{"id":"Stride","type":{"kind":"int"}}]}],"initializers":[{"id":"Initialize","inputs":[]}],"interfaceDigest":"193d6cc187d05c18f02ad483a44f8ad0c1634b02083df241df08b9281b045d1c","observations":[{"id":"Count","type":{"kind":"int"}}],"schema":"mirrorgate.port/v1"} as const;
 
 export type CounterBindingErrorCode =
   | "configuration_mismatch"
@@ -251,6 +254,10 @@ export type CounterBindingErrorCode =
   | "input_shape_mismatch"
   | "adapter_failure"
   | "observation_shape_mismatch"
+  | "context_mismatch"
+  | "operation_cancelled"
+  | "deadline_exceeded"
+  | "reentrant_call"
   | "binding_poisoned";
 
 export class CounterBindingError extends Error {
@@ -264,19 +271,68 @@ function bindingError(code: CounterBindingErrorCode, message: string, cause?: un
   return new CounterBindingError(code, message, cause === undefined ? undefined : { cause });
 }
 
-type CounterActionId = "Initialize" | "Tick";
-
-export interface CounterBinding {
-  readonly computer: AsyncStateComputer;
-  coverage(): Readonly<Record<CounterActionId, number>>;
-  assertAllActionsCovered(): void;
-  dispose(): void;
+function contextError(context: ReplayContext): CounterBindingError | undefined {
+  if (typeof context.deadline !== "number" || !Number.isFinite(context.deadline)) {
+    return bindingError("context_mismatch", "replay deadline must be a finite monotonic instant");
+  }
+  if (context.signal.aborted) {
+    return bindingError("operation_cancelled", "replay operation was cancelled", context.signal.reason);
+  }
+  if (performance.now() >= context.deadline) {
+    return bindingError("deadline_exceeded", "replay deadline expired");
+  }
+  return undefined;
 }
 
-export function bindCounter(
-  port: CounterPort,
+function ensureContextActive(context: ReplayContext): void {
+  const error = contextError(context);
+  if (error !== undefined) throw error;
+}
+
+function awaitPortOperation<T>(operation: PromiseLike<T>, context: ReplayContext): Promise<T> {
+  const before = contextError(context);
+  if (before !== undefined) {
+    void Promise.resolve(operation).catch(() => undefined);
+    return Promise.reject(before);
+  }
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (callback: () => void): void => {
+      if (settled) return;
+      settled = true;
+      context.signal.removeEventListener("abort", onAbort);
+      if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
+      callback();
+    };
+    const onAbort = (): void => finish(() => reject(
+      bindingError("operation_cancelled", "replay operation was cancelled", context.signal.reason),
+    ));
+    context.signal.addEventListener("abort", onAbort, { once: true });
+    const armDeadline = (): void => {
+      const remaining = context.deadline - performance.now();
+      if (remaining <= 0) {
+        finish(() => reject(bindingError("deadline_exceeded", "replay deadline expired")));
+      } else {
+        deadlineTimer = setTimeout(armDeadline, Math.min(Math.max(1, Math.ceil(remaining)), 2_147_483_647));
+      }
+    };
+    armDeadline();
+    void Promise.resolve(operation).then(
+      (value) => finish(() => {
+        const after = contextError(context);
+        if (after === undefined) resolve(value); else reject(after);
+      }),
+      (error: unknown) => finish(() => reject(error)),
+    );
+  });
+}
+
+type CounterActionId = "Initialize" | "Tick";
+
+export function assertCounterCompatibleConfig(
   config: Pick<ApalacheConfig, "paramVars">,
-): CounterBinding {
+): void {
   const expectedParamVar = "parameters";
   const actualParamVar = config.paramVars ?? "";
   if (actualParamVar !== expectedParamVar) {
@@ -285,40 +341,52 @@ export function bindCounter(
       "expected paramVars=" + expectedParamVar + ", got " + actualParamVar,
     );
   }
+}
+
+export interface CounterAsyncBinding {
+  readonly computer: AsyncStateComputer;
+  assertCompatibleConfig(config: Pick<ApalacheConfig, "paramVars">): void;
+  coverage(): Readonly<Record<CounterActionId, number>>;
+  assertAllActionsCovered(): void;
+}
+
+export function bindCounterAsync(
+  port: CounterAsyncPort,
+  config: Pick<ApalacheConfig, "paramVars">,
+): CounterAsyncBinding {
+  assertCounterCompatibleConfig(config);
 
   let lifecycle: "fresh" | "initialized" | "poisoned" = "fresh";
-  let running = false;
-  const isPoisoned = () => lifecycle === "poisoned";
+  let busy = false;
   const counts: Record<CounterActionId, number> = {
     "Initialize": 0,
     "Tick": 0,
   };
-
-  const computer: AsyncStateComputer = async (action, payload, _previousState, context) => {
+  const ensureBindingActive = (): void => {
     if (lifecycle === "poisoned") {
       throw bindingError("binding_poisoned", "binding is poisoned");
     }
-    if (running) {
+  };
+
+  const computer: AsyncStateComputer = async ({ action, payload, previous: _previous }, context) => {
+    ensureBindingActive();
+    if (busy) {
       lifecycle = "poisoned";
-      throw bindingError("binding_poisoned", "reentrant binding invocation");
+      throw bindingError("reentrant_call", "binding permits one callback at a time");
     }
-    running = true;
-    const onAbort = () => { lifecycle = "poisoned"; };
-    context.signal.addEventListener("abort", onAbort, { once: true });
-    const ensureActive = () => {
-      context.signal.throwIfAborted();
-      if (isPoisoned()) throw bindingError("binding_poisoned", "binding is poisoned");
-    };
+    busy = true;
     let actionId: CounterActionId;
     let stage: "dispatch" | "input" | "adapter" | "observation" = "dispatch";
     try {
-      ensureActive();
+      ensureContextActive(context);
       switch (action) {
       case "init":
       {
         stage = "adapter";
-        await port.initialize(context);
-        ensureActive();
+        ensureContextActive(context);
+        await awaitPortOperation(port.initialize(context), context);
+        ensureContextActive(context);
+        ensureBindingActive();
         lifecycle = "initialized";
         actionId = "Initialize";
         break;
@@ -329,8 +397,10 @@ export function bindCounter(
         stage = "input";
         const input = decodeTickInput(payload);
         stage = "adapter";
-        await port.tick(input, context);
-        ensureActive();
+        ensureContextActive(context);
+        await awaitPortOperation(port.tick(input, context), context);
+        ensureContextActive(context);
+        ensureBindingActive();
         lifecycle = "initialized";
         actionId = "Tick";
         break;
@@ -338,11 +408,13 @@ export function bindCounter(
         default: throw bindingError("unknown_action", "unknown action " + action);
       }
       stage = "observation";
-      ensureActive();
-      const observation = await port.observe(context);
-      ensureActive();
+      ensureContextActive(context);
+      const observation = await awaitPortOperation(port.observe(context), context);
+      ensureContextActive(context);
+      ensureBindingActive();
       const state = encodeCounterObservation(observation);
-      ensureActive();
+      ensureContextActive(context);
+      ensureBindingActive();
       counts[actionId] += 1;
       return state;
     } catch (error) {
@@ -355,14 +427,13 @@ export function bindCounter(
           : "adapter_failure";
       throw bindingError(code, "binding failed for action " + action, error);
     } finally {
-      running = false;
-      context.signal.removeEventListener("abort", onAbort);
+      busy = false;
     }
   };
 
   return {
     computer,
-    dispose: () => { lifecycle = "poisoned"; },
+    assertCompatibleConfig: assertCounterCompatibleConfig,
     coverage: () => Object.freeze({ ...counts }),
     assertAllActionsCovered: () => {
       const unseen = (Object.keys(counts) as Array<keyof typeof counts>)
@@ -370,4 +441,34 @@ export function bindCounter(
       if (unseen.length > 0) throw new Error("uncovered actions: " + unseen.join(", "));
     },
   };
+}
+
+export interface AsyncPublicPort {
+  invoke(operationId: string, inputs: Readonly<Record<string, unknown>>, context: ReplayContext): Promise<void>;
+  observe(context: ReplayContext): Promise<Readonly<Record<string, unknown>>>;
+}
+
+export function bindCounterAsyncPublicPort(
+  publicPort: AsyncPublicPort,
+  config: Pick<ApalacheConfig, "paramVars">,
+): CounterAsyncBinding {
+  const port: CounterAsyncPort = {
+    initialize: (context) => {
+      return publicPort.invoke("Initialize", Object.freeze(Object.create(null) as Record<string, unknown>), context);
+    },
+    tick: (input, context) => {
+      const values = Object.create(null) as Record<string, unknown>;
+      values["Stride"] = input.stride;
+      return publicPort.invoke("Tick", Object.freeze(values), context);
+    },
+    observe: async (context) => {
+      const values = ownRecord(await publicPort.observe(context));
+      if (values === null) throw new Error("public observation must be a record");
+      exactKeys(values, ["Count"], "CounterPublicObservation");
+      return {
+        count: values["Count"] as bigint,
+      };
+    },
+  };
+  return bindCounterAsync(port, config);
 }

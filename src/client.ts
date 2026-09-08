@@ -19,12 +19,18 @@ import type { ReplayReport } from "./replay-report.js";
 
 export {
   runClientNegotiated,
-  runClientWithTracesNegotiated,
   runClientNegotiatedWithReport,
+  runClientWithTracesNegotiated,
   runClientWithTracesNegotiatedWithReport,
 } from "./negotiated.js";
 export type {
   AdapterFactory,
+  AsyncAdapterFactory,
+  AsyncCompiledAdapterRegistration,
+  AsyncCompiledExecutionSelection,
+  AsyncNegotiationAuthority,
+  AsyncNegotiationWitness,
+  AsyncLocalBinding,
   CompiledAdapterKey,
   CompiledAdapterRegistration,
   CompiledAdapterSelection,
@@ -34,16 +40,20 @@ export type {
   LocalBinding,
   NegotiatedAdapterSelection,
   NegotiatedRunOptions,
+  NegotiatedReportRunOptions,
   NegotiatedRunnerErrorCode,
+  CompiledExecutionSelection,
+  SyncCompiledExecutionSelection,
 } from "./negotiated.js";
 export {
+  ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
+  AsyncCompiledAdapterRegistry,
   CompiledAdapterRegistry,
+  MIRRORECMA_ASYNC_TARGET_PROFILE,
   MIRRORECMA_TARGET_PROFILE,
   ModelInterfaceRegistrationError,
   NegotiatedRunnerError,
   STATE_COMPUTER_CONTRACT_VERSION,
-  ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
-  MIRRORECMA_ASYNC_TARGET_PROFILE,
 } from "./negotiated.js";
 
 export type { State, StateComputer, ApalacheConfig, ApalacheSpec, TraceGenerationConfig, TransitionStatus, InvariantStatus } from "./protocol.js";

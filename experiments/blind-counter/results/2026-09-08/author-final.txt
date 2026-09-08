@@ -1,0 +1,6 @@
+Implemented and submitted:
+
+- `adapter.mjs`: isolated bigint counter with `Initialize`, `Tick`, and `observe`.
+- `build.mjs`: public contract checks covering reset, increments, negatives, large bigints, return values, API shape, and adapter isolation.
+
+All public checks passed.

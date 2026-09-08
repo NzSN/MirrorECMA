@@ -1,14 +1,18 @@
 import {
-  bindCounter, type CounterBinding, type CounterPort,
+  bindCounterAsync as bindCounter, type CounterAsyncBinding as CounterBinding, type CounterAsyncPort as CounterPort,
 } from "./fixtures/model-interface/counter/generated-async/CounterMirror.generated.js";
-import type { ReplayContext } from "../src/replay-control.js";
+import type { ReplayContext } from "../src/async-replay.js";
 import type { State } from "../src/protocol.js";
 
 const config = { paramVars: "parameters" };
 const tickInput: State = { parameters: { tag: "record", val: { stride: { tag: "int", val: 2n } } } };
 
-function context(controller = new AbortController(), stateIndex = 0): ReplayContext {
-  return { signal: controller.signal, traceIndex: 1, stateIndex };
+function context(controller = new AbortController(), _stateIndex = 0): ReplayContext {
+  return { signal: controller.signal, deadline: performance.now() + 10_000 };
+}
+
+function compute(binding: CounterBinding, action: string, payload: State, previous: State, ctx: ReplayContext) {
+  return binding.computer({ action, payload, previous }, ctx);
 }
 
 function deferred<T>() {
@@ -30,14 +34,14 @@ test("generated async binding awaits initialization and tick before observing ty
   let count = -1n;
   const binding = bindCounter(port({
     initialize: async (ctx) => {
-      expect(ctx.stateIndex).toBe(0);
+      expect(ctx.deadline).toBeGreaterThan(performance.now());
       initStarted.resolve();
       await initComplete.promise;
       count = 0n;
       events.push("initialized");
     },
     tick: async ({ stride }, ctx) => {
-      expect(ctx.stateIndex).toBe(1);
+      expect(ctx.deadline).toBeGreaterThan(performance.now());
       tickStarted.resolve();
       await tickComplete.promise;
       count += stride;
@@ -45,13 +49,13 @@ test("generated async binding awaits initialization and tick before observing ty
     },
     observe: async () => { events.push("observed"); return { count }; },
   }), config);
-  const init = binding.computer("init", {}, {}, context());
+  const init = compute(binding, "init", {}, {}, context());
   await initStarted.promise;
   expect(events).toEqual([]);
   initComplete.resolve();
   const initial = await init;
   expect(initial).toEqual({ count: { tag: "int", val: 0n } });
-  const tick = binding.computer("tick", tickInput, initial, context(undefined, 1));
+  const tick = compute(binding, "tick", tickInput, initial, context(undefined, 1));
   await tickStarted.promise;
   expect(events).toEqual(["initialized", "observed"]);
   tickComplete.resolve();
@@ -65,11 +69,11 @@ test.each(["initialize", "tick", "observe"] as const)("rejected %s poisons futur
   const failure = new Error(`${method} failed`);
   const sut = port();
   const binding = bindCounter(sut, config);
-  if (method === "tick") await binding.computer("init", {}, {}, context());
+  if (method === "tick") await compute(binding, "init", {}, {}, context());
   sut[method] = async () => { throw failure; };
-  await expect(binding.computer(method === "tick" ? "tick" : "init", tickInput, {}, context()))
+  await expect(compute(binding, method === "tick" ? "tick" : "init", tickInput, {}, context()))
     .rejects.toMatchObject({ code: method === "observe" ? "observation_shape_mismatch" : "adapter_failure", cause: failure });
-  await expect(binding.computer("init", {}, {}, context())).rejects.toMatchObject({ code: "binding_poisoned" });
+  await expect(compute(binding, "init", {}, {}, context())).rejects.toMatchObject({ code: "binding_poisoned" });
   expect(binding.coverage()).toEqual({ Initialize: method === "tick" ? 1 : 0, Tick: 0 });
 });
 
@@ -82,22 +86,22 @@ test("cancellation while awaiting an action prevents late observation", async ()
     initialize: async () => { started.resolve(); await completed.promise; },
     observe: async () => { observed += 1; return { count: 0n }; },
   }), config);
-  const running = binding.computer("init", {}, {}, context(controller));
+  const running = compute(binding, "init", {}, {}, context(controller));
   await started.promise;
   const reason = new Error("cancelled");
   controller.abort(reason);
   completed.resolve();
-  await expect(running).rejects.toMatchObject({ code: "adapter_failure", cause: reason });
+  await expect(running).rejects.toMatchObject({ code: "operation_cancelled", cause: reason });
   expect(observed).toBe(0);
   expect(binding.coverage()).toEqual({ Initialize: 0, Tick: 0 });
-  await expect(binding.computer("init", {}, {}, context())).rejects.toMatchObject({ code: "binding_poisoned" });
+  await expect(compute(binding, "init", {}, {}, context())).rejects.toMatchObject({ code: "binding_poisoned" });
 });
 
 test.each(["initialize", "observe"] as const)("swallowed reentrancy in %s cannot restore the outer invocation", async (method) => {
   let binding!: CounterBinding;
   let observations = 0;
   const reenter = async () => {
-    await expect(binding.computer("init", {}, {}, context())).rejects.toMatchObject({ code: "binding_poisoned" });
+    await expect(compute(binding, "init", {}, {}, context())).rejects.toMatchObject({ code: "reentrant_call" });
   };
   binding = bindCounter(port({
     initialize: async () => { if (method === "initialize") await reenter(); },
@@ -107,7 +111,7 @@ test.each(["initialize", "observe"] as const)("swallowed reentrancy in %s cannot
       return { count: 0n };
     },
   }), config);
-  await expect(binding.computer("init", {}, {}, context())).rejects.toMatchObject({ code: "binding_poisoned" });
+  await expect(compute(binding, "init", {}, {}, context())).rejects.toMatchObject({ code: "binding_poisoned" });
   expect(observations).toBe(method === "observe" ? 1 : 0);
   expect(binding.coverage()).toEqual({ Initialize: 0, Tick: 0 });
 });
@@ -117,17 +121,18 @@ test("swallowed reentrancy in an observation getter cannot return a successful s
   let nested: Promise<State> | undefined;
   binding = bindCounter(port({ observe: async () => ({
     get count() {
-      nested = binding.computer("init", {}, {}, context());
+      nested = compute(binding, "init", {}, {}, context());
       void nested.catch(() => {});
       return 0n;
     },
   }) }), config);
-  await expect(binding.computer("init", {}, {}, context())).rejects.toMatchObject({ code: "binding_poisoned" });
-  await expect(nested).rejects.toMatchObject({ code: "binding_poisoned" });
+  await expect(compute(binding, "init", {}, {}, context())).rejects.toMatchObject({ code: "binding_poisoned" });
+  await expect(nested).rejects.toMatchObject({ code: "reentrant_call" });
   expect(binding.coverage()).toEqual({ Initialize: 0, Tick: 0 });
 });
 
-test.each(["action", "observation"] as const)("disposal during %s blocks inflight continuation and future work", async (stage) => {
+test.each(["action", "observation"] as const)("cancelling an owned scope during %s blocks continuation and future work", async (stage) => {
+  const controller = new AbortController();
   const started = deferred<void>();
   const completed = deferred<void>();
   let observations = 0;
@@ -140,13 +145,13 @@ test.each(["action", "observation"] as const)("disposal during %s blocks infligh
       return { count: 0n };
     },
   }), config);
-  const running = binding.computer("init", {}, {}, context());
+  const running = compute(binding, "init", {}, {}, context(controller));
   await started.promise;
-  binding.dispose();
-  binding.dispose();
+  controller.abort();
+  controller.abort();
   completed.resolve();
-  await expect(running).rejects.toMatchObject({ code: "binding_poisoned" });
-  await expect(binding.computer("init", {}, {}, context())).rejects.toMatchObject({ code: "binding_poisoned" });
+  await expect(running).rejects.toMatchObject({ code: "operation_cancelled" });
+  await expect(compute(binding, "init", {}, {}, context())).rejects.toMatchObject({ code: "binding_poisoned" });
   expect(observations).toBe(stage === "action" ? 0 : 1);
   expect(binding.coverage()).toEqual({ Initialize: 0, Tick: 0 });
 });
