@@ -17,10 +17,18 @@ import { receiveReplayMessage, runLegacyReplay } from "./replay.js";
 
 export {
   runClientNegotiated,
+  runClientNegotiatedWithReport,
   runClientWithTracesNegotiated,
+  runClientWithTracesNegotiatedWithReport,
 } from "./negotiated.js";
 export type {
   AdapterFactory,
+  AsyncAdapterFactory,
+  AsyncCompiledAdapterRegistration,
+  AsyncCompiledExecutionSelection,
+  AsyncNegotiationAuthority,
+  AsyncNegotiationWitness,
+  AsyncLocalBinding,
   CompiledAdapterKey,
   CompiledAdapterRegistration,
   CompiledAdapterSelection,
@@ -28,10 +36,16 @@ export type {
   LocalBinding,
   NegotiatedAdapterSelection,
   NegotiatedRunOptions,
+  NegotiatedReportRunOptions,
   NegotiatedRunnerErrorCode,
+  CompiledExecutionSelection,
+  SyncCompiledExecutionSelection,
 } from "./negotiated.js";
 export {
+  ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
+  AsyncCompiledAdapterRegistry,
   CompiledAdapterRegistry,
+  MIRRORECMA_ASYNC_TARGET_PROFILE,
   MIRRORECMA_TARGET_PROFILE,
   ModelInterfaceRegistrationError,
   NegotiatedRunnerError,

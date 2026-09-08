@@ -1,7 +1,11 @@
 # Landing Shared Sandbox Orchestration in MirrorECMA
 
-Status: **proposed implementation design; no support claim or shipped interface**.
+Status: **experimental implementation landed; released support remains gated by acceptance evidence**.
 Baseline: MirrorECMA `89fbd14`, MirrorGate `a377341`, Mirrors `acc3d9d`.
+The baseline below records the pre-implementation audit. Current local, hosted,
+and release evidence is tracked separately in
+[the acceptance ledger](shared-orchestration-acceptance.md); this design alone
+is not a support claim.
 This document implements
 [client guide §13](https://github.com/NzSN/Mirrors/blob/main/Docs/client-implementation-guide.md#13-shared-sandbox-orchestration-design-profile)
 through the proposed
@@ -38,7 +42,7 @@ Windows/macOS isolation, and aggregate cgroup quotas are outside this first
 profile. Existing ordinary client modes remain available with their current
 behavior. Unsupported requested capabilities fail before preparation or launch.
 
-## 2. Verified starting point and missing prerequisites
+## 2. Historical starting point and landing prerequisites
 
 The existing
 [negotiated runner](https://github.com/NzSN/MirrorECMA/blob/89fbd14d6da84c8b755a08abcaf65b6f4ec67192/src/negotiated.ts#L492)

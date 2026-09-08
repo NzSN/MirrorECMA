@@ -1,6 +1,7 @@
 dist/
 node_modules/
 dist-test/
+dist-sandbox/
 _apalache-out/
 package-lock.json
 /.agent-shell/

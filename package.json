@@ -14,7 +14,11 @@
     "check": "tsc --noEmit",
     "check:model-interface": "tsc -p tsconfig.model-interface.json --noEmit",
     "check:examples": "tsc -p tsconfig.examples.json --noEmit",
+    "check:sandbox": "tsc -p tsconfig.sandbox.json --noEmit",
     "build:examples": "tsc -p tsconfig.examples.json",
+    "build:sandbox": "tsc -p tsconfig.sandbox.json",
+    "example:sandbox-counter": "pnpm run build:sandbox && node dist-sandbox/examples/sandbox-counter/run.js",
+    "smoke:sandbox": "pnpm run build:sandbox && node dist-sandbox/test/sandbox-counter.smoke.js",
     "example:counter": "pnpm run build:examples && node dist-test/examples/generated-counter/run.js",
     "example:counter:broken": "pnpm run build:examples && node dist-test/examples/generated-counter/run.js --broken",
     "example:counter:live": "pnpm run build:examples && node dist-test/examples/generated-counter/run.js --live",
@@ -23,8 +27,13 @@
     "smoke": "node --loader ts-node/esm test/smoke.test.ts",
     "smoke:model-interface": "node --loader ts-node/esm test/model-interface-counter.smoke.ts"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": []
+  "peerDependencies": {
+    "mirrorgate": "0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "mirrorgate": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

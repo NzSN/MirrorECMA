@@ -10,9 +10,7 @@ import {
 import {
   createDescriptorRequest,
   createVerifyRequest,
-  decodeModelInterfaceMirrorMessage,
   encodeModelInterfaceRegistration,
-  ModelInterfaceProtocolError,
   semanticDigestFromHex,
   type ContractV1,
   type GeneratedModelInterface,
@@ -28,144 +26,76 @@ import {
   type DynamicHandlerRegistry,
 } from "./dynamic-binding.js";
 import {
-  replayLoop,
-  receiveLine,
-  requireValidRegistration,
-} from "./replay.js";
+  replayCore,
+  asynchronousReplayExecution,
+  synchronousReplayExecution,
+  receiveReplayMessage,
+} from "./replay-core.js";
+import {
+  AsyncCompiledAdapterRegistry,
+  CompiledAdapterRegistry,
+  NegotiatedRunnerError,
+  runnerError,
+  type AdapterFactory,
+  type AsyncAdapterFactory,
+  type AsyncCompiledAdapterRegistration,
+  type AsyncLocalBinding,
+  type CompiledAdapterKey,
+  type CompiledAdapterRegistration,
+  type LocalBinding,
+  type NegotiatedRunnerErrorCode,
+} from "./adapter-registry.js";
+import {
+  ModelInterfaceRegistrationError,
+  createAsyncNegotiationAuthority,
+  receiveNegotiatedFirstReply,
+} from "./negotiation-core.js";
+import {
+  awaitReplayOperation,
+  normalizeReplayDeadlines,
+  ReplayCancelledError,
+  ReplayDeadlineError,
+  throwIfReplayCancelled,
+  type ReplayDeadlines,
+} from "./async-replay.js";
+import {
+  normalizeReplayFailure,
+  ReplayCleanupError,
+  replayReport,
+  retainReplayCleanupFailure,
+  type ReplayReport,
+} from "./replay-report.js";
 
 export const MIRRORECMA_TARGET_PROFILE = "mirrorecma-v1" as const;
 export const STATE_COMPUTER_CONTRACT_VERSION = "mirrors.state-computer/v1" as const;
 
-export type NegotiatedRunnerErrorCode =
-  | "negotiation_missing"
-  | "descriptor_schema_unsupported"
-  | "descriptor_digest_invalid"
-  | "descriptor_missing"
-  | "not_modified_without_cache"
-  | "negotiation_status_unexpected"
-  | "adapter_not_registered"
-  | "adapter_ambiguous"
-  | "target_profile_mismatch"
-  | "state_computer_contract_mismatch"
-  | "interface_digest_mismatch"
-  | "binding_digest_mismatch"
-  | "binding_config_mismatch"
-  | "adapter_factory_failed"
-  | "adapter_dispose_failed"
-  | "legacy_fallback_unavailable";
+export const MIRRORECMA_ASYNC_TARGET_PROFILE = "mirrorecma-async-v1" as const;
+export const ASYNC_STATE_COMPUTER_CONTRACT_VERSION =
+  "mirrors.async-state-computer/v1" as const;
 
-/** Stable, machine-readable local runner failure. */
-export class NegotiatedRunnerError extends Error {
-  constructor(
-    readonly code: NegotiatedRunnerErrorCode,
-    message: string,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = "NegotiatedRunnerError";
-  }
-}
-
-/** A server-side structured registration failure, kept separate from local selection errors. */
-export class ModelInterfaceRegistrationError extends Error {
-  constructor(
-    readonly code: string,
-    readonly status: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = "ModelInterfaceRegistrationError";
-  }
-}
-
-function runnerError(
-  code: NegotiatedRunnerErrorCode,
-  message: string,
-  cause?: unknown,
-): NegotiatedRunnerError {
-  return new NegotiatedRunnerError(
-    code,
-    message,
-    cause === undefined ? undefined : { cause },
-  );
-}
-
-export interface CompiledAdapterKey {
-  readonly semanticDigest: SemanticDigest;
-  readonly adapterId: string;
-  readonly targetProfile: string;
-  readonly stateComputerContractVersion: string;
-}
-
-export interface LocalBinding {
-  readonly semanticDigest: SemanticDigest;
-  readonly computer: StateComputer;
-  assertCompatibleConfig(config: ApalacheConfig): void;
-  coverage?(): Readonly<Record<string, number>>;
-  dispose(): void | Promise<void>;
-}
-
-export type AdapterFactory = (
-  config: ApalacheConfig,
-) => LocalBinding | Promise<LocalBinding>;
-
-export interface CompiledAdapterRegistration {
-  readonly key: CompiledAdapterKey;
-  readonly factory: AdapterFactory;
-}
+export {
+  AsyncCompiledAdapterRegistry,
+  CompiledAdapterRegistry,
+  ModelInterfaceRegistrationError,
+  NegotiatedRunnerError,
+};
+export type {
+  AdapterFactory,
+  AsyncAdapterFactory,
+  AsyncCompiledAdapterRegistration,
+  AsyncLocalBinding,
+  CompiledAdapterKey,
+  CompiledAdapterRegistration,
+  LocalBinding,
+  NegotiatedRunnerErrorCode,
+};
+export type {
+  AsyncNegotiationAuthority,
+  AsyncNegotiationWitness,
+} from "./negotiation-core.js";
 
 function sameDigest(a: SemanticDigest, b: SemanticDigest): boolean {
   return a === b;
-}
-
-function exactKey(a: CompiledAdapterKey, b: CompiledAdapterKey): boolean {
-  return sameDigest(a.semanticDigest, b.semanticDigest) &&
-    a.adapterId === b.adapterId &&
-    a.targetProfile === b.targetProfile &&
-    a.stateComputerContractVersion === b.stateComputerContractVersion;
-}
-
-/** Immutable exact-key registry. It never guesses a compatible adapter. */
-export class CompiledAdapterRegistry {
-  private readonly registrations: readonly CompiledAdapterRegistration[];
-
-  constructor(registrations: readonly CompiledAdapterRegistration[]) {
-    this.registrations = Object.freeze(registrations.map((entry) => Object.freeze({
-      key: Object.freeze({ ...entry.key }),
-      factory: entry.factory,
-    })));
-  }
-
-  resolve(key: CompiledAdapterKey): AdapterFactory {
-    const exact = this.registrations.filter((entry) => exactKey(entry.key, key));
-    if (exact.length > 1) {
-      throw runnerError("adapter_ambiguous", `multiple adapters registered for ${key.adapterId}`);
-    }
-    if (exact.length === 1) return exact[0]!.factory;
-
-    const sameIdentity = this.registrations.filter((entry) =>
-      sameDigest(entry.key.semanticDigest, key.semanticDigest) &&
-      entry.key.adapterId === key.adapterId
-    );
-    const sameTarget = sameIdentity.filter((entry) =>
-      entry.key.targetProfile === key.targetProfile
-    );
-    if (sameIdentity.length > 0 && sameTarget.length === 0) {
-      throw runnerError(
-        "target_profile_mismatch",
-        `adapter ${key.adapterId} is not registered for target profile ${key.targetProfile}`,
-      );
-    }
-    if (sameTarget.some((entry) =>
-      entry.key.stateComputerContractVersion !== key.stateComputerContractVersion
-    )) {
-      throw runnerError(
-        "state_computer_contract_mismatch",
-        `adapter ${key.adapterId} is not registered for StateComputer contract ${key.stateComputerContractVersion}`,
-      );
-    }
-    throw runnerError("adapter_not_registered", `adapter ${key.adapterId} is not registered`);
-  }
 }
 
 export interface CompiledAdapterSelection {
@@ -205,6 +135,32 @@ export interface NegotiatedRunOptions {
   readonly spec?: ApalacheSpec;
 }
 
+export type SyncCompiledExecutionSelection = CompiledAdapterSelection & {
+  readonly execution: "sync";
+};
+
+export interface AsyncCompiledExecutionSelection {
+  readonly execution: "async";
+  readonly mode?: "compiled";
+  readonly request?: "verify";
+  readonly metadata: GeneratedModelInterface;
+  readonly adapterId: string;
+  readonly targetProfile: string;
+  readonly stateComputerContractVersion: string;
+  readonly registry: AsyncCompiledAdapterRegistry;
+  /** Async execution currently admits only the strict sandbox-compatible policy. */
+  readonly policy?: "require";
+}
+
+export type CompiledExecutionSelection =
+  | SyncCompiledExecutionSelection
+  | AsyncCompiledExecutionSelection;
+
+export interface NegotiatedReportRunOptions extends NegotiatedRunOptions {
+  readonly signal?: AbortSignal;
+  readonly deadlines?: Partial<ReplayDeadlines>;
+}
+
 type MaybeReadyTransport = Transport & { ready?: Promise<void> };
 
 async function resolveTransport(target: string | Transport): Promise<Transport> {
@@ -233,6 +189,27 @@ function selectedKey(selection: CompiledAdapterSelection): CompiledAdapterKey {
     targetProfile: selection.targetProfile,
     stateComputerContractVersion: selection.stateComputerContractVersion,
   };
+}
+
+function selectedAsyncKey(selection: AsyncCompiledExecutionSelection): CompiledAdapterKey {
+  if (selection.targetProfile !== MIRRORECMA_ASYNC_TARGET_PROFILE) {
+    throw runnerError(
+      "target_profile_mismatch",
+      `async negotiated runner requires target profile ${MIRRORECMA_ASYNC_TARGET_PROFILE}`,
+    );
+  }
+  if (selection.stateComputerContractVersion !== ASYNC_STATE_COMPUTER_CONTRACT_VERSION) {
+    throw runnerError(
+      "state_computer_contract_mismatch",
+      `async negotiated runner requires StateComputer contract ${ASYNC_STATE_COMPUTER_CONTRACT_VERSION}`,
+    );
+  }
+  return Object.freeze({
+    semanticDigest: semanticDigestFromHex(selection.metadata.semanticDigest),
+    adapterId: selection.adapterId,
+    targetProfile: selection.targetProfile,
+    stateComputerContractVersion: selection.stateComputerContractVersion,
+  });
 }
 
 interface PreparedAdapter {
@@ -498,38 +475,7 @@ async function runNegotiatedReplay(
   let binding: LocalBinding | undefined;
   let primaryError: unknown;
   try {
-    let decoded: ReturnType<typeof decodeModelInterfaceMirrorMessage>;
-    try {
-      decoded = decodeModelInterfaceMirrorMessage(await receiveLine(it));
-    } catch (cause) {
-      const code = cause instanceof ModelInterfaceProtocolError &&
-          /digest|semanticDigest/.test(cause.message)
-        ? "descriptor_digest_invalid"
-        : cause instanceof ModelInterfaceProtocolError &&
-            /descriptor.*required for resolved/.test(cause.message)
-          ? "descriptor_missing"
-        : cause instanceof ModelInterfaceProtocolError && /descriptorSchema/.test(cause.message)
-          ? "descriptor_schema_unsupported"
-          : "negotiation_status_unexpected";
-      throw runnerError(code, "invalid model-interface negotiation reply", cause);
-    }
-    if (decoded.message.proto_step === "register_error" &&
-        decoded.modelInterface?.kind === "failure") {
-      const failure = decoded.modelInterface;
-      if (failure.expectedSemanticDigest !== undefined &&
-          !sameDigest(failure.expectedSemanticDigest, expectedDigest(prepared))) {
-        throw runnerError(
-          "negotiation_status_unexpected",
-          "structured register_error expectedSemanticDigest does not match the request",
-        );
-      }
-      throw new ModelInterfaceRegistrationError(
-        failure.code,
-        failure.status,
-        `register failed: ${decoded.message.error}`,
-      );
-    }
-    requireValidRegistration(decoded.message);
+    const decoded = await receiveNegotiatedFirstReply(it, expectedDigest(prepared));
     const extension = decoded.modelInterface;
     if (extension?.kind === "failure") {
       throw runnerError(
@@ -564,7 +510,7 @@ async function runNegotiatedReplay(
         : "dynamic legacy fallback";
     }
     validateBinding(binding, expectedDigest(prepared), label, config);
-    await replayLoop(t, it, binding.computer);
+    await replayCore(t, it, synchronousReplayExecution(binding.computer));
   } catch (error) {
     primaryError = error;
   }
@@ -633,4 +579,376 @@ export async function runClientWithTracesNegotiated(
     throw error;
   }
   await runNegotiatedReplay(t, apalacheConfig, prepared);
+}
+
+interface PreparedAsyncAdapter {
+  readonly key: CompiledAdapterKey;
+  readonly factory: AsyncAdapterFactory;
+}
+
+function prepareAsyncAdapter(
+  selection: AsyncCompiledExecutionSelection,
+): PreparedAsyncAdapter {
+  if (selection.request !== undefined && selection.request !== "verify") {
+    throw runnerError("negotiation_status_unexpected", "compiled selection requires verify mode");
+  }
+  if (selection.policy !== undefined && selection.policy !== "require") {
+    throw runnerError("negotiation_status_unexpected", "async execution requires negotiation policy require");
+  }
+  const key = selectedAsyncKey(selection);
+  return Object.freeze({ key, factory: selection.registry.resolve(key) });
+}
+
+async function closeReportTransport(t: Transport, deadlines: ReplayDeadlines): Promise<void> {
+  try {
+    await awaitReplayOperation(
+      Promise.resolve().then(() => t.close()),
+      undefined,
+      deadlines.receiveMs,
+      "close",
+    );
+  } catch (cause) {
+    if (cause instanceof ReplayDeadlineError) throw cause;
+    throw new ReplayCleanupError("model transport cleanup failed", cause);
+  }
+}
+
+async function resolveReportTransport(
+  target: string | Transport,
+  signal: AbortSignal | undefined,
+  deadlines: ReplayDeadlines,
+): Promise<Transport> {
+  throwIfReplayCancelled(signal);
+  const t = typeof target === "string" ? spawnMirror(target) : target;
+  const ready = (t as MaybeReadyTransport).ready;
+  if (ready !== undefined) {
+    try {
+      await awaitReplayOperation(ready, signal, deadlines.registrationMs, "registration");
+    } catch (error) {
+      const primary = normalizeReplayFailure(error);
+      try {
+        await closeReportTransport(t, deadlines);
+      } catch (cleanup) {
+        retainReplayCleanupFailure(primary, cleanup);
+      }
+      throw primary;
+    }
+  }
+  return t;
+}
+
+function requireAsyncMatchedReply(
+  reply: ModelInterfaceReply | undefined,
+  key: CompiledAdapterKey,
+): void {
+  if (reply === undefined) {
+    throw runnerError("negotiation_missing", "model-interface negotiation reply is missing");
+  }
+  switch (reply.status) {
+    case "matched":
+      if (reply.semanticDigest !== key.semanticDigest) {
+        throw runnerError(
+          "interface_digest_mismatch",
+          "server semantic digest does not match the compiled interface",
+        );
+      }
+      return;
+    case "mismatch":
+      throw runnerError(
+        "interface_digest_mismatch",
+        "model-interface resolution did not match the requested semantic digest",
+      );
+    case "unsupported":
+      throw runnerError("descriptor_schema_unsupported", "model-interface negotiation unsupported");
+    case "unavailable":
+    case "too_large":
+    case "resolved":
+    case "not_modified":
+      throw runnerError(
+        "negotiation_status_unexpected",
+        `model-interface status ${reply.status} is invalid for an async compiled verify request`,
+      );
+  }
+}
+
+async function validateAsyncBinding(
+  binding: AsyncLocalBinding,
+  key: CompiledAdapterKey,
+  config: ApalacheConfig,
+  signal: AbortSignal | undefined,
+  deadlines: ReplayDeadlines,
+): Promise<void> {
+  if (binding.semanticDigest !== key.semanticDigest) {
+    throw runnerError("binding_digest_mismatch", "binding digest does not match async adapter key");
+  }
+  try {
+    await awaitReplayOperation(
+      Promise.resolve(binding.assertCompatibleConfig(config)),
+      signal,
+      deadlines.stepMs,
+      "step",
+    );
+  } catch (cause) {
+    if (cause instanceof ReplayCancelledError || cause instanceof ReplayDeadlineError) throw cause;
+    throw runnerError(
+      "binding_config_mismatch",
+      `binding rejected the effective Apalache configuration for adapter key ${key.adapterId}`,
+      cause,
+    );
+  }
+}
+
+async function runCompiledReportReplay(
+  target: string | Transport,
+  apalacheConfig: ApalacheConfig,
+  registration: string,
+  selection: CompiledExecutionSelection,
+  options: NegotiatedReportRunOptions,
+): Promise<ReplayReport> {
+  const deadlines = normalizeReplayDeadlines(options.deadlines);
+  throwIfReplayCancelled(options.signal);
+  const syncPrepared = selection.execution === "sync"
+    ? prepareAdapter(selection, selection.policy ?? "require")
+    : undefined;
+  const asyncPrepared = selection.execution === "async"
+    ? prepareAsyncAdapter(selection)
+    : undefined;
+  const expected = syncPrepared?.key.semanticDigest ?? asyncPrepared!.key.semanticDigest;
+  const t = await resolveReportTransport(target, options.signal, deadlines);
+  let it: AsyncIterator<string>;
+  try {
+    it = t[Symbol.asyncIterator]();
+  } catch (error) {
+    const primary = normalizeReplayFailure(error);
+    try {
+      await closeReportTransport(t, deadlines);
+    } catch (cleanup) {
+      retainReplayCleanupFailure(primary, cleanup);
+    }
+    throw primary;
+  }
+  let binding: LocalBinding | AsyncLocalBinding | undefined;
+  let hasPrimaryError = false;
+  let primaryError: Error | undefined;
+  let report: ReplayReport | undefined;
+  try {
+    throwIfReplayCancelled(options.signal);
+    t.send(registration);
+    const decoded = await receiveNegotiatedFirstReply(it, expected, {
+      signal: options.signal,
+      deadlines,
+    });
+    const extension = decoded.modelInterface;
+    if (extension?.kind === "failure") {
+      throw runnerError("negotiation_status_unexpected", "spec_validated carried a registration failure");
+    }
+    const receive = () => awaitReplayOperation(
+      receiveReplayMessage(it),
+      options.signal,
+      deadlines.receiveMs,
+      "receive",
+    );
+    if (selection.execution === "sync") {
+      const authorization = authorizeReply(syncPrepared!, extension);
+      let factory: AdapterFactory;
+      let label: string;
+      if (authorization.kind === "compiled") {
+        factory = syncPrepared!.factory;
+        label = `adapter key for ${syncPrepared!.key.adapterId}`;
+      } else if (authorization.kind === "fallback") {
+        factory = syncPrepared!.fallbackFactory!;
+        label = `legacy fallback for ${syncPrepared!.key.adapterId}`;
+      } else {
+        throw new Error("internal synchronous authorization mismatch");
+      }
+      const pendingFactory = Promise.resolve().then(() => {
+        throwIfReplayCancelled(options.signal);
+        return factory(apalacheConfig);
+      });
+      try {
+        binding = await awaitReplayOperation(
+          pendingFactory,
+          options.signal,
+          deadlines.stepMs,
+          "step",
+        );
+      } catch (cause) {
+        pendingFactory.then(
+          (lateBinding) => Promise.resolve().then(() => lateBinding.dispose()),
+          () => {},
+        ).catch(() => {});
+        if (cause instanceof ReplayCancelledError || cause instanceof ReplayDeadlineError) throw cause;
+        throw runnerError("adapter_factory_failed", `adapter factory failed for ${label}`, cause);
+      }
+      validateBinding(binding, expected, label, apalacheConfig);
+      report = await replayCore(t, it, synchronousReplayExecution(binding.computer), {
+        structuredMismatch: true,
+        signal: options.signal,
+        receive,
+      });
+    } else {
+      requireAsyncMatchedReply(extension, asyncPrepared!.key);
+      const factoryController = new AbortController();
+      const factoryDeadline = performance.now() + deadlines.stepMs;
+      const relayFactoryAbort = () => factoryController.abort(options.signal?.reason);
+      options.signal?.addEventListener("abort", relayFactoryAbort, { once: true });
+      if (options.signal?.aborted) relayFactoryAbort();
+      const factoryTimer = setTimeout(
+        () => factoryController.abort(new ReplayDeadlineError("step", deadlines.stepMs)),
+        Math.max(0, Math.ceil(factoryDeadline - performance.now())),
+      );
+      const authority = createAsyncNegotiationAuthority(
+        t,
+        it,
+        apalacheConfig,
+        asyncPrepared!.key,
+        { signal: options.signal, deadlines },
+        Object.freeze({ signal: factoryController.signal, deadline: factoryDeadline }),
+      );
+      const pendingFactory = Promise.resolve().then(() => {
+        throwIfReplayCancelled(factoryController.signal);
+        if (performance.now() >= factoryDeadline) {
+          throw new ReplayDeadlineError("step", deadlines.stepMs);
+        }
+        return asyncPrepared!.factory(apalacheConfig, authority);
+      });
+      try {
+        binding = await awaitReplayOperation(
+          pendingFactory,
+          options.signal,
+          deadlines.stepMs,
+          "step",
+        );
+      } catch (cause) {
+        factoryController.abort(cause);
+        pendingFactory.then(
+          (lateBinding) => Promise.resolve().then(() => lateBinding.dispose()),
+          () => {},
+        ).catch(() => {});
+        if (cause instanceof ReplayCancelledError || cause instanceof ReplayDeadlineError) throw cause;
+        throw runnerError(
+          "adapter_factory_failed",
+          `adapter factory failed for ${asyncPrepared!.key.adapterId}`,
+          cause,
+        );
+      } finally {
+        if (!factoryController.signal.aborted) {
+          factoryController.abort(new Error("async adapter factory scope completed"));
+        }
+        clearTimeout(factoryTimer);
+        options.signal?.removeEventListener("abort", relayFactoryAbort);
+      }
+      await validateAsyncBinding(
+        binding as AsyncLocalBinding,
+        asyncPrepared!.key,
+        apalacheConfig,
+        options.signal,
+        deadlines,
+      );
+      report = await replayCore(
+        t,
+        it,
+        asynchronousReplayExecution(
+          (binding as AsyncLocalBinding).computer,
+          options.signal,
+          deadlines.stepMs,
+        ),
+        { structuredMismatch: true, signal: options.signal, receive },
+      );
+    }
+    const coverageFn = binding.coverage;
+    const coverage = coverageFn === undefined
+      ? undefined
+      : await awaitReplayOperation(
+          Promise.resolve(coverageFn.call(binding)),
+          options.signal,
+          deadlines.stepMs,
+          "step",
+        );
+    report = replayReport(report.acceptedTraces, report.acceptedSteps, coverage);
+  } catch (error) {
+    hasPrimaryError = true;
+    primaryError = normalizeReplayFailure(error);
+  }
+
+  const cleanupErrors: unknown[] = [];
+  // Closing first interrupts a registration/receive wait and transfers owned
+  // model-process termination to the transport while binding cleanup proceeds.
+  const pendingTransportClose = Promise.resolve().then(() => t.close());
+  pendingTransportClose.catch(() => {});
+  if (binding !== undefined) {
+    try {
+      await awaitReplayOperation(
+        Promise.resolve(binding.dispose()),
+        undefined,
+        deadlines.receiveMs,
+        "close",
+      );
+    } catch (cause) {
+      cleanupErrors.push(
+        runnerError("adapter_dispose_failed", "adapter binding disposal failed", cause),
+      );
+    }
+  }
+  try {
+    await awaitReplayOperation(pendingTransportClose, undefined, deadlines.receiveMs, "close");
+  } catch (error) {
+    cleanupErrors.push(error instanceof ReplayDeadlineError
+      ? error
+      : new ReplayCleanupError("model transport cleanup failed", error));
+  }
+  const cleanupError = cleanupErrors.length <= 1
+    ? cleanupErrors[0]
+    : new AggregateError(cleanupErrors, "multiple replay cleanup operations failed");
+  if (hasPrimaryError) {
+    if (cleanupErrors.length > 0) retainReplayCleanupFailure(primaryError!, cleanupError);
+    throw primaryError;
+  }
+  if (cleanupErrors.length > 0) throw cleanupError;
+  return report!;
+}
+
+export async function runClientNegotiatedWithReport(
+  target: string | Transport,
+  apalacheConfig: ApalacheConfig,
+  config: TraceGenerationConfig,
+  selection: CompiledExecutionSelection,
+  options: NegotiatedReportRunOptions = {},
+): Promise<ReplayReport> {
+  const base: Register = {
+    proto_step: "register",
+    apalacheConfig,
+    traceConfig: config,
+    spec: options.spec,
+  };
+  const request = createVerifyRequest(selection.metadata, selection.policy ?? "require");
+  return runCompiledReportReplay(
+    target,
+    apalacheConfig,
+    encodeModelInterfaceRegistration(base, request),
+    selection,
+    options,
+  );
+}
+
+export async function runClientWithTracesNegotiatedWithReport(
+  target: string | Transport,
+  apalacheConfig: ApalacheConfig,
+  tracePaths: readonly string[],
+  selection: CompiledExecutionSelection,
+  options: Omit<NegotiatedReportRunOptions, "spec"> = {},
+): Promise<ReplayReport> {
+  const base: RegisterTraces = {
+    proto_step: "register_traces",
+    apalacheConfig,
+    itfTracePaths: [...tracePaths],
+  };
+  const request = createVerifyRequest(selection.metadata, selection.policy ?? "require");
+  return runCompiledReportReplay(
+    target,
+    apalacheConfig,
+    encodeModelInterfaceRegistration(base, request),
+    selection,
+    options,
+  );
 }

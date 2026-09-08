@@ -249,18 +249,38 @@ export function spawnMirror(binPath: string): Transport {
   const child = spawn(binPath, [], { stdio: ["pipe", "pipe", "inherit"] });
   const stdin = child.stdin as Writable;
   const stdout = child.stdout as Readable;
+  // Spawn and late pipe failures must surface through framing/exit rather than
+  // becoming unhandled EventEmitter errors during bounded teardown.
+  child.on("error", () => {});
+  stdin.on("error", () => {});
 
   const exited = new Promise<number>((resolve) => {
     child.once("close", (code) => resolve(code ?? 0));
   });
+  const waitForExit = async (timeoutMs: number): Promise<number | undefined> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        exited,
+        new Promise<undefined>((resolve) => {
+          timer = setTimeout(() => resolve(undefined), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  };
   const close = onceCloser(async () => {
     stdin.end();
-    // A wedged mirror must not pin the client's event loop: if it
-    // does not exit promptly after stdin closes, terminate it.
-    const killer = setTimeout(() => child.kill("SIGTERM"), 2_000);
-    const code = await exited;
-    clearTimeout(killer);
-    return code;
+    const graceful = await waitForExit(2_000);
+    if (graceful !== undefined) return graceful;
+    child.kill("SIGTERM");
+    const terminated = await waitForExit(2_000);
+    if (terminated !== undefined) return terminated;
+    child.kill("SIGKILL");
+    const killed = await waitForExit(2_000);
+    if (killed !== undefined) return killed;
+    throw new Error("owned mirror process cleanup was not confirmed after SIGKILL");
   });
   const it = protocolLineIterator(stdout, close);
 
