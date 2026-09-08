@@ -7,7 +7,9 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "prepare": "tsc",
     "build": "tsc",
@@ -21,10 +23,13 @@
     "smoke:generated-counter": "pnpm run build:examples && node dist-test/test/generated-counter.smoke.js",
     "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
     "smoke": "node --loader ts-node/esm test/smoke.test.ts",
-    "smoke:model-interface": "node --loader ts-node/esm test/model-interface-counter.smoke.ts"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": []
+    "smoke:model-interface": "node --loader ts-node/esm test/model-interface-counter.smoke.ts",
+    "example:queue": "pnpm run build:examples && node dist-test/examples/work-queue/run.js",
+    "example:queue:broken": "pnpm run build:examples && node dist-test/examples/work-queue/run.js --broken",
+    "example:queue:live": "pnpm run build:examples && node dist-test/examples/work-queue/run.js --live",
+    "smoke:work-queue": "pnpm run build:examples && node dist-test/test/work-queue.smoke.js",
+    "smoke:async-generated-counter": "pnpm run build:examples && node dist-test/test/async-generated-counter.smoke.js",
+    "ci": "bash scripts/ci/check.sh"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
@@ -34,5 +39,6 @@
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.5"
-  }
+  },
+  "packageManager": "pnpm@11.22.0"
 }

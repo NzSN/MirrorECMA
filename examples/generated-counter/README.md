@@ -93,7 +93,7 @@ Run all commands from the **MirrorECMA repository root**, including commands
 later in this tutorial. Set the absolute path to your Mirrors checkout:
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 export MIRRORS_ROOT=/absolute/path/to/Mirrors
 (cd "$MIRRORS_ROOT" && lake build mirror model_interface_gen)
 pnpm run check:examples
@@ -213,10 +213,12 @@ stride is 2, the model expects 2, and the implementation reports 1. The current
 client diagnostic is:
 
 ```text
-step mismatch on action "tick" with param "[object Object]": at count: expected 2, got 1
+step mismatch on action "tick" with param {"parameters":{"stride":{"#bigint":"2"}}}: at count: expected 2, got 1
 ```
 
-The failed comparison is the protocol's terminal `step_mismatch`. The runner
+The failed comparison is the protocol's terminal `step_mismatch`, represented
+locally by `ReplayMismatchError`. Its structured fields and JSON-safe partial
+run report are described in the [replay guide](../../docs/replay-and-async.md). The runner
 preserves the mismatch and does not replace it with a coverage error. A missing
 binary or file also fails the command, but does not demonstrate bug detection.
 
@@ -284,6 +286,11 @@ mapping. Update the adapter only after generating the corresponding port, and
 construct each SUT inside the matched registry factory. The
 [compiler design](https://github.com/NzSN/Mirrors/blob/main/Docs/model-interface-compiler-design.md)
 describes supported evidence and publication rules.
+
+Next, follow the [asynchronous work queue](../work-queue/README.md) for multiple
+actions, failures, retries, reset, and sequence coverage. The
+[replay guide](../../docs/replay-and-async.md) covers report APIs, the separate
+async generated target, dynamic factories, and cooperative cancellation.
 
 For further modes, see [compiled verification and dynamic descriptors](../../README.md#verified-generated-bindings),
 [low-level customization](../../README.md#low-level-customization),

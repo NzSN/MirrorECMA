@@ -1,0 +1,21 @@
+{
+  "schema": "mirrorecma.example-witness/v1",
+  "generator": "Apalache",
+  "version": "0.61.0",
+  "command": [
+    "apalache-mc",
+    "check",
+    "--init=Init",
+    "--next=WitnessNext",
+    "--inv=TraceComplete",
+    "--length=15",
+    "--view=View",
+    "examples/work-queue/specs/WorkQueue.tla"
+  ],
+  "expectedExitCode": 12,
+  "reason": "TraceComplete is deliberately false at state 15 to request the witness trace.",
+  "modelSha256": "3262ae5cac7205a8f9ceee2f4fe1d59bf1b2b14d1e3533f700ed9ce68a5ae12d",
+  "traceSha256": "24df406764c8357cdba5f3062d5ac0092d0a1dfb974b2fb3eeb3887603d4918b",
+  "states": 16,
+  "transitions": 15
+}

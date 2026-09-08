@@ -1,0 +1,87 @@
+name: client-ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mirrors_ref:
+        description: 'Explicit matching Mirrors commit SHA (empty uses checked baseline)'
+        required: false
+        type: string
+      live:
+        description: Run real Apalache trace generation as well as offline acceptance
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: MirrorECMA
+      - name: Read pinned tools and compiler baseline
+        id: versions
+        working-directory: MirrorECMA
+        env:
+          REQUESTED_MIRRORS_REF: ${{ inputs.mirrors_ref }}
+        run: |
+          source scripts/ci/versions.env
+          MIRRORS_REF="${REQUESTED_MIRRORS_REF:-$MIRRORS_BASELINE}"
+          [[ "$MIRRORS_REF" =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected a full Mirrors commit SHA'; exit 1; }
+          printf 'node=%s\npnpm=%s\njava=%s\nmirrors=%s\n' "$NODE_VERSION" "$PNPM_VERSION" "$JAVA_VERSION" "$MIRRORS_REF" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: NzSN/Mirrors
+          ref: ${{ steps.versions.outputs.mirrors }}
+          path: Mirrors
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ steps.versions.outputs.node }}
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: ${{ steps.versions.outputs.pnpm }}
+          package_json_file: MirrorECMA/package.json
+          run_install: false
+          cache: true
+          cache_dependency_path: MirrorECMA/pnpm-lock.yaml
+      - name: Install locked client dependencies
+        working-directory: MirrorECMA
+        run: pnpm install --frozen-lockfile
+      - name: Install native prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential libssl-dev pkg-config
+      - uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596 # v1
+        with:
+          lake-package-directory: Mirrors
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        if: ${{ inputs.live == true }}
+        with:
+          distribution: temurin
+          java-version: ${{ steps.versions.outputs.java }}
+      - name: Install checked Apalache release
+        if: ${{ inputs.live == true }}
+        working-directory: MirrorECMA
+        run: |
+          bash scripts/ci/install-apalache.sh "$RUNNER_TEMP/apalache"
+          printf 'APALACHE_MC=%s/bin/apalache-mc\n' "$RUNNER_TEMP/apalache" >> "$GITHUB_ENV"
+      - name: Type checks, unit tests, compiler freshness, and executable acceptance
+        working-directory: MirrorECMA
+        env:
+          MIRRORS_ROOT: ${{ github.workspace }}/Mirrors
+          MIRRORS_REF: ${{ steps.versions.outputs.mirrors }}
+          LIVE: ${{ inputs.live }}
+        run: |
+          args=()
+          if [[ "$LIVE" == true ]]; then args+=(--live); fi
+          bash scripts/ci/check.sh "${args[@]}"

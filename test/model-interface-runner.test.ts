@@ -5,11 +5,15 @@ import {
   ModelInterfaceRegistrationError,
   NegotiatedRunnerError,
   STATE_COMPUTER_CONTRACT_VERSION,
+  ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
+  MIRRORECMA_ASYNC_TARGET_PROFILE,
   runClientNegotiated,
   runClientWithTracesNegotiated,
+  runClientWithTracesNegotiatedWithReport,
   type AdapterFactory,
   type CompiledAdapterSelection,
   type DynamicHandlerSelection,
+  type DynamicHandlerFactorySelection,
   type LocalBinding,
 } from "../src/client.js";
 import {
@@ -24,6 +28,8 @@ import {
 } from "../src/model-interface.js";
 import { DescriptorCache } from "../src/descriptor-cache.js";
 import { DynamicBindingError, type NativeModelValue } from "../src/dynamic-binding.js";
+import { OpaqueItfValue } from "../src/opaque-itf.js";
+import { replayReportFromError } from "../src/replay-report.js";
 import { PassThrough } from "node:stream";
 import type {
   ApalacheConfig,
@@ -295,6 +301,159 @@ function dynamicSelection(
 }
 
 describe("negotiated model-interface runner", () => {
+  it.each([undefined, null, 0, false, ""])("preserves primitive computation rejection and cleanup: %s", async (failure) => {
+    const transport = new ScriptedTransport([specValidated(),
+      JSON.stringify({ proto_step: "initial_state", action: "init", state: {} })]);
+    const calls = counters();
+    let rejected = false;
+    try {
+      await runClientWithTracesNegotiatedWithReport(transport, CFG, [], selection(calls, {
+        computer: () => { throw failure; }, disposeError: new Error("secondary dispose error"),
+      }));
+    } catch (error) { rejected = true; expect(Object.is(error, failure)).toBe(true); }
+    expect(rejected).toBe(true);
+    expect(calls.dispose).toBe(1);
+    expect(transport.closes).toBe(1);
+  });
+
+  it("undefined transport-close rejection still fails a successful negotiated run", async () => {
+    const transport = new ScriptedTransport([specValidated(), JSON.stringify({ proto_step: "all_steps_done" })]);
+    transport.close = async () => { transport.closes += 1; throw undefined; };
+    const calls = counters();
+    let rejected = false;
+    try { await runClientWithTracesNegotiatedWithReport(transport, CFG, [], selection(calls)); }
+    catch (error) { rejected = true; expect(error).toBeUndefined(); }
+    expect(rejected).toBe(true);
+    expect(calls.dispose).toBe(1);
+    expect(transport.closes).toBe(1);
+  });
+
+  it("closes a transport whose readiness rejects before factory or registration", async () => {
+    const failure = new Error("readiness failed");
+    const transport = Object.assign(new ScriptedTransport([]), { ready: Promise.reject(failure) });
+    transport.close = async () => { transport.closes += 1; throw new Error("secondary close failure"); };
+    const calls = counters();
+    await expect(runClientWithTracesNegotiatedWithReport(transport, CFG, [], selection(calls)))
+      .rejects.toBe(failure);
+    expect(calls).toEqual({ factory: 0, computer: 0, dispose: 0, config: 0 });
+    expect(transport.sent).toHaveLength(0);
+    expect(transport.closes).toBe(1);
+  });
+
+  it.each(["null prototype", "throwing getters", "same object rethrow"])(
+    "retains unprintable rejection and disposes/closes once: %s", async (kind) => {
+      const failure: object = kind === "null prototype" ? Object.create(null) : Object.create(null, {
+        code: { get: () => { throw kind === "same object rethrow" ? failure : new Error("bad code getter"); } },
+        message: { get: () => { throw kind === "same object rethrow" ? failure : new Error("bad message getter"); } },
+      });
+      const transport = new ScriptedTransport([specValidated(),
+        JSON.stringify({ proto_step: "initial_state", action: "init", state: {} })]);
+      transport.close = async () => { transport.closes += 1; throw new Error("secondary close failure"); };
+      const calls = counters();
+      let caught: unknown;
+      try {
+        await runClientWithTracesNegotiatedWithReport(transport, CFG, [], selection(calls, {
+          computer: () => { throw failure; }, disposeError: new Error("secondary dispose failure"),
+        }));
+      } catch (error) { caught = error; }
+      expect(caught === failure).toBe(true);
+      expect(replayReportFromError(failure)).toMatchObject({ status: "failed",
+        failure: { code: "replay_failed", message: "replay failed (unprintable rejection)" } });
+      expect(calls.dispose).toBe(1);
+      expect(transport.closes).toBe(1);
+    },
+  );
+
+  it.each([MIRRORECMA_TARGET_PROFILE, MIRRORECMA_ASYNC_TARGET_PROFILE])(
+    "awaits explicitly registered async local computers for %s and returns identity", async (targetProfile) => {
+      const calls = counters();
+      const selected = selection(calls);
+      const key = { semanticDigest: DIGEST, adapterId: "counter", targetProfile,
+        stateComputerContractVersion: ASYNC_STATE_COMPUTER_CONTRACT_VERSION };
+      const events: string[] = [];
+      const asyncSelection: CompiledAdapterSelection = { ...selected, ...key,
+        registry: new CompiledAdapterRegistry([{ key, factory: () => ({
+          semanticDigest: DIGEST,
+          computer: async (_action, _params, _prev, context) => {
+            events.push(`action:${context.traceIndex}:${context.stateIndex}`);
+            await Promise.resolve();
+            events.push("observed");
+            return { count: { tag: "int", val: 0n } };
+          },
+          assertCompatibleConfig: () => {}, dispose: () => { events.push("disposed"); },
+        }) }]),
+      };
+      const transport = new ScriptedTransport([specValidated(),
+        JSON.stringify({ proto_step: "initial_state", action: "init", state: {} }),
+        JSON.stringify({ proto_step: "all_steps_done" })]);
+      const report = await runClientWithTracesNegotiatedWithReport(transport, CFG, [], asyncSelection);
+      expect(report).toMatchObject({ interfaceDigest: DIGEST, statesMatched: 1 });
+      expect(events).toEqual(["action:1:0", "observed", "disposed"]);
+      expect(transport.closes).toBe(1);
+    },
+  );
+
+  it("creates dynamic resources only after descriptor authorization and owns failed binding cleanup", async () => {
+    const { descriptor, contract } = counterArtifacts();
+    let created = 0;
+    let disposed = 0;
+    const factorySelection: DynamicHandlerFactorySelection = {
+      mode: "dynamic", contract, semanticDigest: semanticDescriptorDigest(descriptor),
+      descriptorCache: new DescriptorCache(),
+      createRegistry: () => {
+        created += 1;
+        return { registry: { semanticDigest: semanticDescriptorDigest(descriptor), actions: {}, observations: {} },
+          dispose: () => { disposed += 1; throw new Error("secondary disposal error"); } };
+      },
+    };
+    const rejected = new ScriptedTransport([specValidated()]);
+    await expect(runClientWithTracesNegotiated(rejected, DYNAMIC_CFG, [], factorySelection))
+      .rejects.toMatchObject({ code: "negotiation_status_unexpected" });
+    expect({ created, disposed }).toEqual({ created: 0, disposed: 0 });
+    const accepted = new ScriptedTransport([resolvedReply(descriptor)]);
+    await expect(runClientWithTracesNegotiated(accepted, DYNAMIC_CFG, [], factorySelection))
+      .rejects.toMatchObject({ code: "handler_missing" });
+    expect({ created, disposed }).toEqual({ created: 1, disposed: 1 });
+    expect(accepted.closes).toBe(1);
+  });
+
+  it("cleans up asynchronous dynamic scope on action timeout and prevents late observation", async () => {
+    const { descriptor, contract } = counterArtifacts();
+    let finish!: () => void;
+    let observations = 0;
+    let disposed = 0;
+    const waiting = new Promise<void>((resolve) => { finish = resolve; });
+    const selected: DynamicHandlerFactorySelection = {
+      mode: "dynamic", contract, semanticDigest: semanticDescriptorDigest(descriptor),
+      descriptorCache: new DescriptorCache(),
+      createRegistry: () => ({ execution: "async", registry: {
+        semanticDigest: semanticDescriptorDigest(descriptor),
+        actions: { Initialize: async () => waiting, Tick: async () => {} },
+        observations: { Count: async () => { observations += 1; return 0n; } },
+      }, dispose: () => { disposed += 1; } }),
+    };
+    const transport = new ScriptedTransport([resolvedReply(descriptor),
+      JSON.stringify({ proto_step: "initial_state", action: "init", state: {} }),
+      JSON.stringify({ proto_step: "all_steps_done" })]);
+    await expect(runClientWithTracesNegotiated(transport, DYNAMIC_CFG, [], selected, { actionTimeoutMs: 10 }))
+      .rejects.toMatchObject({ code: "action_timeout" });
+    finish();
+    await Promise.resolve();
+    expect({ observations, disposed }).toEqual({ observations: 0, disposed: 1 });
+    expect(transport.sent).toHaveLength(1);
+    expect(transport.closes).toBe(1);
+  });
+
+  it("preserves receive timeout as a control error before invoking a negotiated factory", async () => {
+    const calls = counters();
+    const transport = new ScriptedTransport([]);
+    transport[Symbol.asyncIterator] = () => ({ next: () => new Promise(() => {}) });
+    await expect(runClientWithTracesNegotiated(transport, CFG, [], selection(calls), { receiveTimeoutMs: 10 }))
+      .rejects.toMatchObject({ code: "receive_timeout" });
+    expect(calls.factory).toBe(0);
+    expect(transport.closes).toBe(1);
+  });
+
   it("fails closed when an otherwise-valid matched reply reaches EOF without LF", async () => {
     const calls = counters();
     const transport = new FramedTransport(Buffer.from(specValidated()));
@@ -525,22 +684,26 @@ describe("negotiated model-interface runner", () => {
     expect(transport.sent.some((line) => line.includes("report_state"))).toBe(false);
   });
 
-  it("rejects opaqueItf before callbacks and before report_state", async () => {
+  it("replays opaqueItf observations without losing their ITF representation", async () => {
     const artifacts = counterArtifacts();
     const raw: any = structuredClone(artifacts.descriptor);
-    raw.observations[0].type = { kind: "opaqueItf", description: "unsupported" };
+    raw.observations[0].type = { kind: "opaqueItf", description: "extension value" };
     const descriptor = decodeSemanticDescriptor(raw);
     const calls = dynamicCalls();
-    const transport = new ScriptedTransport([resolvedReply(descriptor)]);
+    const transport = new ScriptedTransport([resolvedReply(descriptor),
+      JSON.stringify({ proto_step: "initial_state", action: "init", state: {} }),
+      JSON.stringify({ proto_step: "all_steps_done" })]);
 
     await expect(runClientNegotiated(
       transport,
       DYNAMIC_CFG,
       { numTraces: 1 },
-      dynamicSelection(new DescriptorCache(), calls, { descriptor }),
-    )).rejects.toMatchObject({ code: "descriptor_type_unsupported" });
-    expect(calls).toEqual({ action: 0, observation: 0, dispose: 0 });
-    expect(transport.sent.some((line) => line.includes("report_state"))).toBe(false);
+      dynamicSelection(new DescriptorCache(), calls, { descriptor, observations: {
+        Count: () => { calls.observation += 1; return new OpaqueItfValue({ tag: "int", val: 0n }); },
+      } }),
+    )).resolves.toBeUndefined();
+    expect(calls).toEqual({ action: 1, observation: 1, dispose: 1 });
+    expect(JSON.parse(transport.sent[1]!)).toMatchObject({ state: { count: { "#bigint": "0" } } });
   });
 
   it("rejects compiled/dynamic request-mode mismatches before registration", async () => {

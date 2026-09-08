@@ -6,13 +6,19 @@
     "declaration": false,
     "baseUrl": ".",
     "paths": {
-      "mirrorecma": ["src/index.ts"]
+      "mirrorecma": [
+        "src/index.ts"
+      ]
     }
   },
   "include": [
     "src/**/*.ts",
     "examples/generated-counter/**/*.ts",
     "test/generated-counter.smoke.ts",
-    "test/fixtures/model-interface/counter/generated/**/*.ts"
+    "test/fixtures/model-interface/counter/generated/**/*.ts",
+    "examples/work-queue/**/*.ts",
+    "test/work-queue.smoke.ts",
+    "test/async-generated-counter.smoke.ts",
+    "test/fixtures/model-interface/counter/generated-async/**/*.ts"
   ]
 }

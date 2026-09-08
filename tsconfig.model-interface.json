@@ -5,7 +5,9 @@
     "moduleResolution": "node16",
     "baseUrl": ".",
     "paths": {
-      "mirrorecma": ["src/index.ts"]
+      "mirrorecma": [
+        "src/index.ts"
+      ]
     },
     "noEmit": true,
     "isolatedModules": true,
@@ -17,6 +19,8 @@
     "src/**/*.ts",
     "test/model-interface-counter.smoke.ts",
     "test/support/model-interface-pki.ts",
-    "test/fixtures/model-interface/counter/generated/**/*.ts"
+    "test/fixtures/model-interface/counter/generated/**/*.ts",
+    "test/fixtures/model-interface/counter/generated-async/**/*.ts",
+    "test/async-generated-binding.test.ts"
   ]
 }

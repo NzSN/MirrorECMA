@@ -72,7 +72,7 @@ to the absolute path of your Mirrors checkout; the example defaults to the
 sibling `../Mirrors` layout when the variable is omitted.
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 export MIRRORS_ROOT=/absolute/path/to/Mirrors
 (cd "$MIRRORS_ROOT" && lake build mirror model_interface_gen)
 pnpm run check:examples
@@ -98,6 +98,11 @@ This command intentionally exits nonzero: Mirrors detects a `tick` mismatch on
 read-only artifact checks, regeneration, and fresh Apalache traces. Passing
 establishes agreement on the observations and traces exercised; action counts
 show which handlers ran.
+
+Next, the [asynchronous work queue](examples/work-queue/README.md) exercises
+multiple actions, failures, retries, and reset through a real implementation.
+[Reports and asynchronous replay](docs/replay-and-async.md) explain structured
+failures, cancellation, generated async ports, and dynamic factory ownership.
 
 Advanced paths remain available below: [compiled and dynamic bindings](#verified-generated-bindings),
 [low-level customization](#low-level-customization),
@@ -151,7 +156,7 @@ spec-generated protocol traces against the real mirror implementation.
 ## Install & Build
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm run build        # → dist/
 pnpm run check        # type-check only
 MIRRORS_FIXTURES=/path/to/Mirrors/test/fixtures pnpm test
@@ -165,6 +170,45 @@ every state through the JavaScript implementation, and then verifies that an
 extra observable state key is rejected with terminal `step_mismatch` over
 stdio, TCP, and mTLS. `MIRRORS_FIXTURES` selects the canonical wire corpus;
 the sibling `../Mirrors/test/fixtures` checkout is the default.
+
+## Reproducible checks
+
+The same focused command runs on client pushes and pull requests:
+
+```bash
+MIRRORS_ROOT=/absolute/path/to/Mirrors pnpm run ci
+```
+
+It checks the [published tool/compiler pins](scripts/ci/versions.env), all three
+TypeScript configurations, Jest, Counter artifact freshness, generated async
+Counter replay, and passing/faulty Counter and work-queue executables. Install
+the locked dependencies first. For an explicitly paired newer server commit,
+set `MIRRORS_REF` to its full SHA; update
+the checked baseline after publishing and verifying that pair. Manual CI also
+accepts a matching `mirrors_ref` and an optional live Apalache tier. See the
+[CI design](docs/superpowers/specs/2026-09-06-reproducible-ci-design.md) for local
+live commands and the broader cross-client matrix.
+
+## Reports and asynchronous implementations
+
+The existing replay entry points retain `Promise<void>` results. Their additive
+`WithReport` variants return an immutable, JSON-safe `ReplayReport`; failures
+throw and expose partial progress through `replayReportFromError(error)`.
+`ReplayMismatchError` includes the action, inputs, trace/state position,
+expected/actual values, and ordered diff hints. Reports encode arbitrary-size
+integers as ITF `#bigint` decimal strings, so `JSON.stringify(report)` preserves
+them exactly.
+
+Ordinary trace replay also accepts asynchronous computers. For a generated
+asynchronous port, select `mirrorecma-async-v1` and the separate local contract
+`mirrors.async-state-computer/v1`; the synchronous target stays compatible.
+Dynamic handlers opt in with a factory scope whose `execution` is `"async"`.
+Both paths await an operation and its observations before reporting state.
+`ReplayContext.signal`, `actionTimeoutMs`, and `receiveTimeoutMs` provide
+cooperative cancellation and per-operation limits. Application I/O must honor
+the signal; a timeout cannot undo a completed mutation or stop code that ignores
+it. Read the [API guide and cancellation limits](docs/replay-and-async.md) before
+connecting resource-owning or asynchronous implementations.
 
 ## Verified generated bindings
 
@@ -193,27 +237,35 @@ import {
   runClientNegotiated,
   semanticDigestFromHex,
 } from "mirrorecma";
+import { Counter } from "./examples/generated-counter/counter.js";
 import {
   CounterModelInterface,
   CounterSemanticDigest,
-} from "./generated/CounterMirror.generated.js";
+} from "./test/fixtures/model-interface/counter/generated/CounterMirror.generated.js";
 
-const cache = new DescriptorCache(); // explicit, bounded, process-local
 await runClientNegotiated(binaryOrTransport, apalacheConfig, traceConfig, {
   mode: "dynamic",
   contract: CounterModelInterface.contract,
-  descriptorCache: cache,
-  registry: {
-    semanticDigest: semanticDigestFromHex(CounterSemanticDigest),
-    actions: {
-      Initialize: () => counter.reset(),
-      Tick: (inputs) => counter.tick(inputs.Stride as bigint),
-    },
-    observations: {
-      Count: () => counter.count,
-    },
+  semanticDigest: CounterSemanticDigest,
+  descriptorCache: new DescriptorCache(),
+  createRegistry: () => {
+    const counter = new Counter(); // only after descriptor verification
+    return {
+      execution: "sync",
+      registry: {
+        semanticDigest: semanticDigestFromHex(CounterSemanticDigest),
+        actions: {
+          Initialize: () => counter.reset(),
+          Tick: (inputs) => {
+            if (typeof inputs.Stride !== "bigint") throw new Error("invalid stride");
+            counter.increment(inputs.Stride);
+          },
+        },
+        observations: { Count: () => counter.count },
+      },
+      dispose: () => {}, // close application resources here when needed
+    };
   },
-  dispose: () => counter.close(),
   policy: "require",
 });
 ```
@@ -222,8 +274,15 @@ The dynamic binder validates the descriptor digest, exact handler/observer ID
 sets, supported types, projections, native values, and lifecycle before or
 during replay. Inputs are deeply readonly records keyed by stable input ID;
 observers return native values (`bigint`, booleans, strings, null, arrays,
-closed objects, map-entry pairs, or `{ tag, value }` variants). A failure
-poisons that session binding.
+closed objects, map-entry pairs, `{ tag, value }` variants, or validated
+`OpaqueItfValue` wrappers). A failure poisons that session binding.
+
+The factory form owns a returned registry scope and attempts its cleanup exactly
+once even if subsequent binding validation fails. Existing callers may still
+pass a prebuilt `registry`; that form cannot defer resources the caller has
+already constructed. Use `createRegistry` when construction must follow
+negotiation. See [dynamic scopes and opaque values](docs/replay-and-async.md#dynamic-factory-scopes)
+for the async scope and value boundaries.
 
 Both modes default to `require`. Under `prefer`, legacy continuation requires
 an explicit fresh `fallbackFactory`; a digest mismatch never falls back.
@@ -280,16 +339,21 @@ is received.
 
 `target` is either a binary path (spawns the mirror over stdio) or a
 `Transport` (e.g. `connectMirror(host, port)` — see TCP transport). `opts`
-is an optional object: `{ spec?: ApalacheSpec }` — inline spec sources, see
-Inline spec sources (when given, `apalacheConfig.specPath` is ignored by the
-mirror).
+accepts `{ spec?, signal?, actionTimeoutMs?, receiveTimeoutMs? }`. `spec` carries
+inline sources (when given, `apalacheConfig.specPath` is ignored by the mirror).
+The timeout and signal behavior is defined in the
+[replay guide](docs/replay-and-async.md#cancellation-and-timeouts).
 
 The `compute` function is called with:
 
 | Event | Args | Expected return |
 |---|---|---|
-| `initial_state` | `(action, stateFromMirror, {})` | The initial state the client wants to report |
-| `next_step` | `(action, params, prevState)` | The next state after applying the action |
+| `initial_state` | `(action, stateFromMirror, {}, context)` | Initial observed `State` or `Promise<State>` |
+| `next_step` | `(action, params, prevState, context)` | Next observed `State` or `Promise<State>` |
+
+Existing three-argument synchronous callbacks remain valid. The generated port
+exposes only its typed operation inputs and observations, keeping expected model
+state out of the application adapter.
 
 ### `presetClient(states)` → `StateComputer`
 
@@ -498,7 +562,19 @@ unchanged over the TLS transport.
 type StateComputer = (action: string, params: State, prevState: State) => State;
 ```
 
-The function passed to `runClient`. Called on each step with the action name, the mirror's parameters (or initial state), and the previous computed state. Must return the next state as a `Record<string, Value>`.
+This remains the synchronous callback type, including for symbolic exploration.
+The ordinary trace runners accept the additive `ReplayComputer` type:
+
+```ts
+type ReplayComputer = (
+  action: string, params: State, prevState: State, context: ReplayContext,
+) => State | Promise<State>;
+```
+
+It reports the implementation state as `Record<string, Value>` after the
+operation settles. [Async replay](docs/replay-and-async.md) covers the context,
+limits, and generated/dynamic alternatives. Server asynchronous jobs through
+`Connection` are a separate protocol capability.
 
 ### Value Helpers
 

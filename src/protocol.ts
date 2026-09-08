@@ -361,10 +361,17 @@ export function encodeClientMessage(msg: ClientMessage): string {
   );
 }
 
+/** Wire labels are own data, including names with inherited object setters. */
+function setOwnField<T>(record: Record<string, T>, key: string, value: T): void {
+  Object.defineProperty(record, key, {
+    value, enumerable: true, writable: true, configurable: true,
+  });
+}
+
 export function encodeState(state: State): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(state)) {
-    out[k] = encodeValue(v);
+    setOwnField(out, k, encodeValue(v));
   }
   return out;
 }
@@ -381,7 +388,7 @@ function encodeValue(v: Value): unknown {
     case "record": {
       const rec: Record<string, unknown> = {};
       for (const [k, iv] of Object.entries(v.val))
-        rec[k] = encodeValue(iv);
+        setOwnField(rec, k, encodeValue(iv));
       return rec;
     }
     case "variant": return { tag: v.variantTag, value: encodeValue(v.value) };
@@ -447,7 +454,7 @@ function walk(v: unknown): any {
       return { tag: "variant", variantTag: obj.tag as string, value: walk(obj.value) };
     const rec: Record<string, Value> = {};
     for (const [k, val] of Object.entries(obj))
-      rec[k] = walk(val) as Value;
+      setOwnField(rec, k, walk(val) as Value);
     return { tag: "record", val: rec };
   }
   return { tag: "null" };

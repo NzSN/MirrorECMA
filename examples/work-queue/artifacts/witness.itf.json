@@ -1,0 +1,443 @@
+{
+  "#meta": {
+    "format": "ITF",
+    "format-description": "https://apalache-mc.org/docs/adr/015adr-trace.html",
+    "description": "Created by Apalache on Sun Sep 06 11:09:35 CST 2026",
+    "varTypes": {
+      "inFlight": "Int",
+      "pending": "Seq(Int)",
+      "completed": "Set(Int)",
+      "parameters": "{ item: Int, step: Int }",
+      "action_taken": "Str",
+      "failed": "Bool"
+    }
+  },
+  "vars": [
+    "inFlight",
+    "pending",
+    "completed",
+    "parameters",
+    "action_taken",
+    "failed"
+  ],
+  "states": [
+    {
+      "#meta": {
+        "index": 0
+      },
+      "action_taken": "init",
+      "completed": {
+        "#set": []
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "0"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "0"
+        }
+      },
+      "pending": []
+    },
+    {
+      "#meta": {
+        "index": 1
+      },
+      "action_taken": "enqueue",
+      "completed": {
+        "#set": []
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "0"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "1"
+        },
+        "step": {
+          "#bigint": "1"
+        }
+      },
+      "pending": [
+        {
+          "#bigint": "1"
+        }
+      ]
+    },
+    {
+      "#meta": {
+        "index": 2
+      },
+      "action_taken": "enqueue",
+      "completed": {
+        "#set": []
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "0"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "1"
+        },
+        "step": {
+          "#bigint": "2"
+        }
+      },
+      "pending": [
+        {
+          "#bigint": "1"
+        }
+      ]
+    },
+    {
+      "#meta": {
+        "index": 3
+      },
+      "action_taken": "enqueue",
+      "completed": {
+        "#set": []
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "0"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "2"
+        },
+        "step": {
+          "#bigint": "3"
+        }
+      },
+      "pending": [
+        {
+          "#bigint": "1"
+        },
+        {
+          "#bigint": "2"
+        }
+      ]
+    },
+    {
+      "#meta": {
+        "index": 4
+      },
+      "action_taken": "start",
+      "completed": {
+        "#set": []
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "1"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "4"
+        }
+      },
+      "pending": [
+        {
+          "#bigint": "2"
+        }
+      ]
+    },
+    {
+      "#meta": {
+        "index": 5
+      },
+      "action_taken": "enqueue",
+      "completed": {
+        "#set": []
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "1"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "1"
+        },
+        "step": {
+          "#bigint": "5"
+        }
+      },
+      "pending": [
+        {
+          "#bigint": "2"
+        }
+      ]
+    },
+    {
+      "#meta": {
+        "index": 6
+      },
+      "action_taken": "fail",
+      "completed": {
+        "#set": []
+      },
+      "failed": true,
+      "inFlight": {
+        "#bigint": "1"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "6"
+        }
+      },
+      "pending": [
+        {
+          "#bigint": "2"
+        }
+      ]
+    },
+    {
+      "#meta": {
+        "index": 7
+      },
+      "action_taken": "retry",
+      "completed": {
+        "#set": []
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "1"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "7"
+        }
+      },
+      "pending": [
+        {
+          "#bigint": "2"
+        }
+      ]
+    },
+    {
+      "#meta": {
+        "index": 8
+      },
+      "action_taken": "complete",
+      "completed": {
+        "#set": [
+          {
+            "#bigint": "1"
+          }
+        ]
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "0"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "8"
+        }
+      },
+      "pending": [
+        {
+          "#bigint": "2"
+        }
+      ]
+    },
+    {
+      "#meta": {
+        "index": 9
+      },
+      "action_taken": "enqueue",
+      "completed": {
+        "#set": [
+          {
+            "#bigint": "1"
+          }
+        ]
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "0"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "1"
+        },
+        "step": {
+          "#bigint": "9"
+        }
+      },
+      "pending": [
+        {
+          "#bigint": "2"
+        }
+      ]
+    },
+    {
+      "#meta": {
+        "index": 10
+      },
+      "action_taken": "start",
+      "completed": {
+        "#set": [
+          {
+            "#bigint": "1"
+          }
+        ]
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "2"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "10"
+        }
+      },
+      "pending": []
+    },
+    {
+      "#meta": {
+        "index": 11
+      },
+      "action_taken": "complete",
+      "completed": {
+        "#set": [
+          {
+            "#bigint": "1"
+          },
+          {
+            "#bigint": "2"
+          }
+        ]
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "0"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "11"
+        }
+      },
+      "pending": []
+    },
+    {
+      "#meta": {
+        "index": 12
+      },
+      "action_taken": "reset",
+      "completed": {
+        "#set": []
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "0"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "12"
+        }
+      },
+      "pending": []
+    },
+    {
+      "#meta": {
+        "index": 13
+      },
+      "action_taken": "enqueue",
+      "completed": {
+        "#set": []
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "0"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "2"
+        },
+        "step": {
+          "#bigint": "13"
+        }
+      },
+      "pending": [
+        {
+          "#bigint": "2"
+        }
+      ]
+    },
+    {
+      "#meta": {
+        "index": 14
+      },
+      "action_taken": "start",
+      "completed": {
+        "#set": []
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "2"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "14"
+        }
+      },
+      "pending": []
+    },
+    {
+      "#meta": {
+        "index": 15
+      },
+      "action_taken": "complete",
+      "completed": {
+        "#set": [
+          {
+            "#bigint": "2"
+          }
+        ]
+      },
+      "failed": false,
+      "inFlight": {
+        "#bigint": "0"
+      },
+      "parameters": {
+        "item": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "15"
+        }
+      },
+      "pending": []
+    }
+  ]
+}

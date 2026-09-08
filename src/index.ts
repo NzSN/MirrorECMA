@@ -1,6 +1,8 @@
 export {
   runClient,
+  runClientWithReport,
   runClientWithTraces,
+  runClientWithTracesWithReport,
   runClientGenTraces,
   runClientExplore,
   startExploreSession,
@@ -16,6 +18,29 @@ export {
 } from "./client.js";
 
 export { specFromFiles } from "./spec.js";
+
+export {
+  ReplayControlError,
+  type ReplayContext,
+  type ReplayOptions,
+  type ReplayComputer,
+  type AsyncStateComputer,
+} from "./replay-control.js";
+
+export {
+  ReplayMismatchError,
+  replayReportFromError,
+  type ReplayFailure,
+  type ReplayReport,
+} from "./replay-report.js";
+
+export {
+  OpaqueItfValue,
+  opaqueItfValue,
+  OPAQUE_ITF_MAX_DEPTH,
+  OPAQUE_ITF_MAX_NODES,
+  type ReadonlyItfValue,
+} from "./opaque-itf.js";
 
 export {
   MODEL_INTERFACE_CONTRACT_SCHEMA,
@@ -84,6 +109,7 @@ export {
 export {
   DynamicBindingError,
   bindDynamicDescriptor,
+  bindAsyncDynamicDescriptor,
   type NativeModelValue,
   type NativeModelArray,
   type NativeModelRecord,
@@ -94,16 +120,24 @@ export {
   type DynamicHandlerRegistry,
   type DynamicBindingErrorCode,
   type DynamicBinding,
+  type AsyncDynamicBinding,
+  type AsyncDynamicActionHandler,
+  type AsyncDynamicObservationHandler,
+  type AsyncDynamicHandlerRegistry,
 } from "./dynamic-binding.js";
 
 export {
   MIRRORECMA_TARGET_PROFILE,
+  MIRRORECMA_ASYNC_TARGET_PROFILE,
   STATE_COMPUTER_CONTRACT_VERSION,
+  ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
   NegotiatedRunnerError,
   ModelInterfaceRegistrationError,
   CompiledAdapterRegistry,
   runClientNegotiated,
+  runClientNegotiatedWithReport,
   runClientWithTracesNegotiated,
+  runClientWithTracesNegotiatedWithReport,
   type NegotiatedRunnerErrorCode,
   type CompiledAdapterKey,
   type LocalBinding,
@@ -111,6 +145,8 @@ export {
   type CompiledAdapterRegistration,
   type CompiledAdapterSelection,
   type DynamicHandlerSelection,
+  type DynamicHandlerFactorySelection,
+  type DynamicRegistryScope,
   type NegotiatedAdapterSelection,
   type NegotiatedRunOptions,
 } from "./negotiated.js";

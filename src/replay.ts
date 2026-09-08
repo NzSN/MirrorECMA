@@ -1,17 +1,19 @@
 import {
   decodeMirrorMessage,
   encodeState,
-  prettifyState,
-  renderDiffHints,
   type MirrorMessage,
   type State,
-  type StateComputer,
 } from "./protocol.js";
 import type { Transport } from "./transport.js";
+import { ReplayControl, type ReplayComputer, type ReplayOptions } from "./replay-control.js";
+import {
+  attachReplayReport, failedReplayReport, ReplayMismatchError, ReplayRecorder,
+  type ReplayReport,
+} from "./replay-report.js";
 
 /** Receive one complete JSONL payload without interpreting additive fields. */
-export async function receiveLine(it: AsyncIterator<string>): Promise<string> {
-  const { value, done } = await it.next();
+export async function receiveLine(it: AsyncIterator<string>, control?: ReplayControl): Promise<string> {
+  const { value, done } = await (control ? control.run("receive", () => it.next()) : it.next());
   if (done) throw new Error("transport closed unexpectedly");
   return value;
 }
@@ -28,8 +30,9 @@ export function decodeReplayMessage(line: string): MirrorMessage {
 
 export async function receiveReplayMessage(
   it: AsyncIterator<string>,
+  control?: ReplayControl,
 ): Promise<MirrorMessage> {
-  return decodeReplayMessage(await receiveLine(it));
+  return decodeReplayMessage(await receiveLine(it, control));
 }
 
 /** Validate the existing registration barrier before any StateComputer call. */
@@ -49,40 +52,55 @@ export function requireValidRegistration(message: MirrorMessage): void {
 /**
  * Shared trace replay state machine. The caller owns registration negotiation,
  * transport closure, and any binding cleanup. This function intentionally
- * preserves the legacy outbound bytes and error messages.
+ * preserves the legacy outbound bytes. Reports contain aggregate progress only.
  */
 export async function replayLoop(
   t: Transport,
   it: AsyncIterator<string>,
-  compute: StateComputer,
-): Promise<void> {
-  let msg = await receiveReplayMessage(it);
+  compute: ReplayComputer,
+  control: ReplayControl = new ReplayControl(),
+  recorder: ReplayRecorder = new ReplayRecorder(),
+): Promise<ReplayReport> {
   let state: State = {};
   let lastParam: State = {};
   let lastAction = "";
-  for (;;) {
+  try {
+    for (;;) {
+    const msg = await receiveReplayMessage(it, control);
     switch (msg.proto_step) {
-      case "initial_state":
+      case "initial_state": {
+        recorder.begin(true);
         lastAction = msg.action;
-        state = compute(msg.action, msg.state, {});
+        lastParam = structuredClone(msg.state);
+        state = await control.run("action", () => compute(
+          msg.action, msg.state, {}, { signal: control.signal, ...recorder.position },
+        ));
+        control.assertActive();
         t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
+        recorder.reported(msg.action);
         break;
+      }
       case "step_ok":
+        recorder.acknowledge();
         break;
       case "all_steps_done":
-        return;
-      case "next_step":
+        return recorder.complete();
+      case "next_step": {
+        recorder.begin(false);
         lastAction = msg.action;
-        state = compute(msg.action, msg.parameters, state);
-        lastParam = msg.parameters;
+        lastParam = structuredClone(msg.parameters);
+        state = await control.run("action", () => compute(
+          msg.action, msg.parameters, state, { signal: control.signal, ...recorder.position },
+        ));
+        control.assertActive();
         t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
+        recorder.reported(msg.action);
         break;
+      }
       case "step_mismatch": {
-        const hintText = msg.hints?.length
-          ? `: ${renderDiffHints(msg.hints)}`
-          : `: expected ${JSON.stringify(prettifyState(msg.expected))}, got ${JSON.stringify(prettifyState(msg.actual))}`;
-        throw new Error(
-          `step mismatch on action "${msg.action ?? lastAction}" with param "${lastParam}"${hintText}`,
+        throw new ReplayMismatchError(
+          msg.action ?? lastAction, lastParam, msg.expected, msg.actual, msg.hints,
+          recorder.position.traceIndex, recorder.position.stateIndex,
         );
       }
       case "protocol_error":
@@ -92,27 +110,45 @@ export async function replayLoop(
       default:
         throw new Error(`unexpected message: ${msg.proto_step}`);
     }
-    msg = await receiveReplayMessage(it);
+    }
+  } catch (error) {
+    attachReplayReport(error, recorder.report(error));
+    throw error;
   }
 }
 
 /** Run the historical registration barrier and replay lifecycle. */
 export async function runLegacyReplay(
   t: Transport,
-  compute: StateComputer,
-): Promise<void> {
+  compute: ReplayComputer,
+  options: ReplayOptions = {},
+  register?: () => void,
+): Promise<ReplayReport> {
+  const control = new ReplayControl(options);
+  const recorder = new ReplayRecorder();
   const it = t[Symbol.asyncIterator]();
-  let closed = false;
-  const closeOnce = async () => {
-    if (!closed) {
-      closed = true;
-      await t.close();
-    }
-  };
+  let report: ReplayReport | undefined;
+  let primaryError: unknown;
+  let failed = false;
   try {
-    requireValidRegistration(await receiveReplayMessage(it));
-    await replayLoop(t, it, compute);
+    control.assertActive();
+    register?.();
+    requireValidRegistration(await receiveReplayMessage(it, control));
+    report = await replayLoop(t, it, compute, control, recorder);
+  } catch (error) {
+    failed = true;
+    primaryError = error;
+    attachReplayReport(error, recorder.report(error));
   } finally {
-    await closeOnce();
+    control.dispose();
   }
+  try { await t.close(); } catch (error) {
+    if (!failed) {
+      failed = true;
+      primaryError = error;
+      attachReplayReport(error, report ? failedReplayReport(report, error) : recorder.report(error));
+    }
+  }
+  if (failed) throw primaryError;
+  return report!;
 }

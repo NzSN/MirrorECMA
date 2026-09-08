@@ -8,15 +8,19 @@ For generated-adapter onboarding or tutorial changes, read
 [`examples/generated-counter/README.md`](examples/generated-counter/README.md).
 The primary path is compiled negotiation followed by local trace replay; create
 the SUT and generated binding inside the matched registry factory.
+For run reports, asynchronous SUTs, cancellation, dynamic scope ownership, or
+opaque descriptor values, read [`docs/replay-and-async.md`](docs/replay-and-async.md).
+For the queue example, read [`examples/work-queue/README.md`](examples/work-queue/README.md).
 
 ## Commands
 
 ```bash
-pnpm install            # install deps (lockfile is pnpm-lock.yaml)
+pnpm install --frozen-lockfile # install checked dependencies
 pnpm run build          # tsc → dist/
 pnpm run check          # tsc --noEmit (type-check only)
 pnpm run test           # jest (unit + integration, uses --experimental-vm-modules)
-pnpm run check:examples # type-check the tutorial and generated binding
+pnpm run check:examples # type-check examples and generated bindings
+MIRRORS_ROOT=<absolute-checkout> pnpm run ci # focused pinned gate
 MIRRORS_ROOT=<absolute-checkout> pnpm run smoke:generated-counter # tutorial gate
 MIRROR_BIN=<path> pnpm run smoke # broad end-to-end smoke test
 bazel build //:lib      # TypeScript compile via aspect_rules_ts (ts_project)
@@ -25,13 +29,16 @@ bazel test //:smoke     # hermetic smoke test (builds ModelMirros via Bazel)
 
 - Tests need `NODE_OPTIONS="--experimental-vm-modules"` — the `test` script handles this.
 - The smoke test **hard-fails** (`process.exit(1)`) if `MIRROR_BIN` env var is not set.
-- No lint/format scripts configured. Only TypeScript compilation and tests.
+- Tool versions and the published compiler baseline live in `scripts/ci/versions.env`. A deliberately paired newer Mirrors checkout requires `MIRRORS_REF=<full-SHA>`. The focused workflow is `.github/workflows/ci.yml`; live Apalache is explicitly enabled with `--live`.
+- No lint/format scripts configured. TypeScript checks, unit tests, and standalone acceptance gates provide validation.
 - `smoke` runs `test/smoke.test.ts` through the existing ts-node loader. The generated Counter scripts compile to ignored `dist-test/` and run emitted JavaScript; their replay tier needs no live Apalache.
 - Bazel builds via `ts_project(transpiler = "tsc")` from `@aspect_rules_ts`, using `tsconfig.bazel.json` (no `rootDir`/`outDir`). Output lands in `bazel-bin/`.
 
 ## Architecture
 
 - `src/protocol.ts` — `Value`, `State`, message types, JSON encode/decode (ITF format with `#bigint`/`#tup` markers), value helpers (`asInt`, `asStr`, `asRecord`, `getParam`, `getParamInt`)
+- `src/replay-report.ts` / `src/replay-control.ts` — immutable JSON-safe progress/failure reports and serial replay cancellation/deadlines.
+- `src/negotiated.ts` / `src/dynamic-binding.ts` — exact adapter selection, deferred registry scopes, synchronous/asynchronous dynamic interpretation, and cleanup ownership. `src/opaque-itf.ts` validates and brands inert ITF values.
 - `src/client.ts` — `runClient()` (trace generation), `runClientWithTraces()` (pre-computed traces), `runClientGenTraces()` (generate traces to disk), `runClientExplore()` (mirror-driven symbolic checking), `startExploreSession()`/`ExploreSession` (client-driven explorer sessions), `presetClient()` (pre-defined state sequence)
 - `src/spec.ts` — `specFromFiles()`: EXTENDS/INSTANCE dependency-closure resolver producing `{sources: [root, ...deps]}` (root first — apalache treats `sources[0]` as the root module)
 - `src/transport.ts` — `spawnMirror()`: spawns a compatible mirror binary over stdio; `connectMirror(host, port)`: TCP transport for a mirror daemon (`ModelMirrors --serve <port>`); `connectTlsMirror(host, port, opts)`: TLS 1.3 mTLS transport for a mirror server (`ModelMirrors --server <port> --tls ...`). All expose the same async-iterable JSON-lines `Transport`
@@ -57,13 +64,14 @@ bazel test //:smoke     # hermetic smoke test (builds ModelMirros via Bazel)
 - **`paramVars`**: for non-deterministic specs, list state variable names to extract as action parameters. Apalache moves them from `stateVars` into step `parameters`. The `report_state` response must OMIT these variables.
 - **Value encoding**: ints serialize as `{"#bigint": "42"}` in ITF JSON. Use `encodeState()` (not `encodeClientMessage()`) to put states on the wire — `encodeClientMessage` would double-wrap tag representations by running `JSON.stringify` with the bigint replacer over the already-tagged structure.
 - **Bigint**: use `BigInt()` / `0n`, not `number`. JavaScript numbers lose precision beyond `2^53`.
-- **Protocol spec**: `../ModelMirros/specs/MirrorProtocol.tla`
+- **Protocol spec**: `../ModelMirrors/specs/MirrorProtocol.tla`
 - **Node built-ins only for TLS/registry**: `connectTlsMirror` uses `node:tls`, `node:crypto`, `node:net`, `node:fs/promises`; `registry.ts` uses global `fetch`. No npm runtime dependency — the package stays zero-dependency at runtime.
 - **TLS 1.3 only**: `connectTlsMirror` pins `minVersion`/`maxVersion` to `"TLSv1.3"`; the server accepts no other version.
 - **Fingerprint**: the pin is lowercase hex SHA-256 over the **raw DER** encoding of the server leaf certificate (first cert in the presented chain) — use `sock.getPeerX509Certificate().raw`. Case is normalized, never the DER bytes.
-- **`src/protocol.ts` must remain unchanged**: session protocol is transport-independent; mTLS/registry are purely transport-construction concerns.
+- **Wire compatibility**: preserve canonical message bytes, optional-field semantics, ITF constructors, arbitrary-precision integers, and ordinary record keys including `__proto__`. Codec corrections belong in `src/protocol.ts` with focused regression and canonical-corpus evidence; transport changes remain in transport construction. Local async contracts and report schemas do not change the wire protocol.
 - **`.js` import extensions apply everywhere**: `registry.ts` imports `./transport.js` (not `./transport`) exactly like the rest of the package.
 - **Bazel smoke skips TLS/registry**: the commit pinned in `MODULE.bazel` (9cffb8a) is the newest ModelMirros commit that still has a Bazel build, and it compiles a TLS **stub** that exits "TLS is not available in the Bazel build (cabal-only)". So `//:smoke` runs the stdio + TCP scenarios only (see the `RUNFILES` skip), while the full TLS/registry smoke path runs against a cabal-built binary via `MIRROR_BIN` outside Bazel.
 - **Bazel build is ESM**: `ts_project(transpiler = "tsc")` emits ESM (`module: "node16"` under the execroot's `type: "module"` package.json), and `package.bazel.json` declares `"type": "module"` to match — the Bazel build and `//:smoke` are self-consistent. README "Known Issues" documents the history and the legacy consuming workaround for pinned builds.
+- **Generated targets**: keep `mirrorecma-v1` output stable; async ports use `mirrorecma-async-v1` and `mirrors.async-state-computer/v1` in the exact registry key. Regenerate through a matching Mirrors compiler and run `check`; the focused CI baseline validates the synchronous target.
 - **Smoke tests are standalone**: `test/smoke.test.ts`, `test/model-interface-counter.smoke.ts`, and `test/generated-counter.smoke.ts` run through their package scripts, outside Jest. The generated tutorial gate checks model provenance and compiler freshness as well as correct/faulty replay.
 - **Smoke test RUNFILES**: when run under Bazel, the `RUNFILES` env var is used to resolve `MIRROR_BIN` and trace paths.

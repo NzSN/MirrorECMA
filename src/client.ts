@@ -14,10 +14,14 @@ import {
 import type { Transport } from "./transport.js";
 import { readFile } from "node:fs/promises";
 import { receiveReplayMessage, runLegacyReplay } from "./replay.js";
+import { validateReplayOptions, type ReplayComputer, type ReplayOptions } from "./replay-control.js";
+import type { ReplayReport } from "./replay-report.js";
 
 export {
   runClientNegotiated,
   runClientWithTracesNegotiated,
+  runClientNegotiatedWithReport,
+  runClientWithTracesNegotiatedWithReport,
 } from "./negotiated.js";
 export type {
   AdapterFactory,
@@ -25,6 +29,8 @@ export type {
   CompiledAdapterRegistration,
   CompiledAdapterSelection,
   DynamicHandlerSelection,
+  DynamicHandlerFactorySelection,
+  DynamicRegistryScope,
   LocalBinding,
   NegotiatedAdapterSelection,
   NegotiatedRunOptions,
@@ -36,11 +42,13 @@ export {
   ModelInterfaceRegistrationError,
   NegotiatedRunnerError,
   STATE_COMPUTER_CONTRACT_VERSION,
+  ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
+  MIRRORECMA_ASYNC_TARGET_PROFILE,
 } from "./negotiated.js";
 
 export type { State, StateComputer, ApalacheConfig, ApalacheSpec, TraceGenerationConfig, TransitionStatus, InvariantStatus } from "./protocol.js";
 
-export interface RunOptions {
+export interface RunOptions extends ReplayOptions {
   /** Inline spec sources (root module first); when present, the mirror
    *  materializes them and ignores apalacheConfig.specPath. Use
    *  specFromFiles to build this from a root .tla file. */
@@ -55,32 +63,53 @@ export async function runClientWithTraces(
   target: string | Transport,
   apalacheConfig: ApalacheConfig,
   tracePaths: string[],
-  compute: StateComputer
+  compute: ReplayComputer,
+  opts: ReplayOptions = {},
 ): Promise<void> {
+  await runClientWithTracesWithReport(target, apalacheConfig, tracePaths, compute, opts);
+}
+
+export async function runClientWithTracesWithReport(
+  target: string | Transport,
+  apalacheConfig: ApalacheConfig,
+  tracePaths: string[],
+  compute: ReplayComputer,
+  opts: ReplayOptions = {},
+): Promise<ReplayReport> {
+  validateReplayOptions(opts);
   const t = await resolveTransport(target);
-  t.send(encodeClientMessage({
+  return runLegacyReplay(t, compute, opts, () => t.send(encodeClientMessage({
     proto_step: "register_traces",
     apalacheConfig,
     itfTracePaths: tracePaths,
-  }));
-  await runLegacyReplay(t, compute);
+  })));
 }
 
 export async function runClient(
   target: string | Transport,
   apalacheConfig: ApalacheConfig,
   config: TraceGenerationConfig,
-  compute: StateComputer,
+  compute: ReplayComputer,
   opts: RunOptions = {}
 ): Promise<void> {
+  await runClientWithReport(target, apalacheConfig, config, compute, opts);
+}
+
+export async function runClientWithReport(
+  target: string | Transport,
+  apalacheConfig: ApalacheConfig,
+  config: TraceGenerationConfig,
+  compute: ReplayComputer,
+  opts: RunOptions = {},
+): Promise<ReplayReport> {
+  validateReplayOptions(opts);
   const t = await resolveTransport(target);
-  t.send(encodeClientMessage({
+  return runLegacyReplay(t, compute, opts, () => t.send(encodeClientMessage({
     proto_step: "register",
     apalacheConfig,
     traceConfig: config,
     spec: opts.spec,
-  }));
-  await runLegacyReplay(t, compute);
+  })));
 }
 
 export interface GenTracesResult {
@@ -300,7 +329,13 @@ type MaybeReadyTransport = Transport & { ready?: Promise<void> };
 async function resolveTransport(target: string | Transport): Promise<Transport> {
   const t = typeof target === "string" ? spawnMirror(target) : target;
   const maybeReady = t as MaybeReadyTransport;
-  if (maybeReady.ready) await maybeReady.ready;
+  try {
+    if (maybeReady.ready) await maybeReady.ready;
+  } catch (error) {
+    // Ownership starts when the transport is resolved, before registration.
+    try { await t.close(); } catch { /* Keep the readiness failure primary. */ }
+    throw error;
+  }
   return t;
 }
 

@@ -1,4 +1,6 @@
 import type { ApalacheConfig, State, StateComputer, Value } from "./protocol.js";
+import type { AsyncStateComputer, ReplayContext } from "./replay-control.js";
+import { OpaqueItfValue, itfValueIdentity, snapshotItfValue } from "./opaque-itf.js";
 import {
   decodeSemanticDescriptor,
   semanticDescriptorDigest,
@@ -27,7 +29,8 @@ export type NativeModelValue =
   | NativeModelArray
   | NativeModelRecord
   | NativeModelMap
-  | NativeModelVariant;
+  | NativeModelVariant
+  | OpaqueItfValue;
 
 export type DynamicActionHandler = (
   inputs: Readonly<Record<string, NativeModelValue>>,
@@ -40,6 +43,22 @@ export interface DynamicHandlerRegistry {
   readonly semanticDigest: SemanticDigest;
   readonly actions: Readonly<Record<string, DynamicActionHandler>>;
   readonly observations: Readonly<Record<string, DynamicObservationHandler>>;
+}
+
+export type AsyncDynamicActionHandler = (
+  inputs: Readonly<Record<string, NativeModelValue>>,
+  context: ReplayContext,
+) => void | Promise<void>;
+
+export type AsyncDynamicObservationHandler = (
+  context: ReplayContext,
+) => NativeModelValue | Promise<NativeModelValue>;
+
+/** Explicit asynchronous callbacks; descriptors still contain data only. */
+export interface AsyncDynamicHandlerRegistry {
+  readonly semanticDigest: SemanticDigest;
+  readonly actions: Readonly<Record<string, AsyncDynamicActionHandler>>;
+  readonly observations: Readonly<Record<string, AsyncDynamicObservationHandler>>;
 }
 
 export type DynamicBindingErrorCode =
@@ -55,7 +74,9 @@ export type DynamicBindingErrorCode =
   | "input_shape_mismatch"
   | "adapter_failure"
   | "observation_shape_mismatch"
-  | "binding_poisoned";
+  | "binding_poisoned"
+  | "binding_disposed"
+  | "binding_aborted";
 
 export class DynamicBindingError extends Error {
   constructor(
@@ -77,6 +98,10 @@ export interface DynamicBinding {
   dispose(): void | Promise<void>;
 }
 
+export interface AsyncDynamicBinding extends Omit<DynamicBinding, "computer"> {
+  readonly computer: AsyncStateComputer;
+}
+
 function bindingError(
   code: DynamicBindingErrorCode,
   message: string,
@@ -90,7 +115,8 @@ function bindingError(
 }
 
 function ownRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  if (typeof value !== "object" || value === null || Array.isArray(value) ||
+      OpaqueItfValue.is(value)) return null;
   return value as Record<string, unknown>;
 }
 
@@ -103,21 +129,7 @@ function exactKeys(value: Record<string, unknown>, expected: readonly string[], 
 }
 
 function valueIdentity(value: Value): string {
-  switch (value.tag) {
-    case "int": return `int:${value.val}`;
-    case "bool": return value.val ? "bool:1" : "bool:0";
-    case "str": return `str:${JSON.stringify(value.val)}`;
-    case "null": return "null";
-    case "set": return `set:[${value.val.map(valueIdentity).sort().join(",")}]`;
-    case "seq": return `seq:[${value.val.map(valueIdentity).join(",")}]`;
-    case "tuple": return `tuple:[${value.val.map(valueIdentity).join(",")}]`;
-    case "record": return `record:{${Object.keys(value.val).sort()
-      .map((key) => `${JSON.stringify(key)}:${valueIdentity(value.val[key]!)}`).join(",")}}`;
-    case "map": return `map:[${value.val.map(([key, item]) =>
-      `${valueIdentity(key)}=>${valueIdentity(item)}`).sort().join(",")}]`;
-    case "variant": return `variant:${JSON.stringify(value.variantTag)}=${valueIdentity(value.value)}`;
-    case "unserializable": return `unserializable:${JSON.stringify(value.val)}`;
-  }
+  return itfValueIdentity(value);
 }
 
 function assertUniqueValues(values: readonly Value[], path: string): void {
@@ -200,7 +212,7 @@ function freezeArray<T>(values: T[]): readonly T[] {
 }
 
 function rejectDeferredResult(value: unknown, path: string): void {
-  if (typeof value !== "object" || value === null || !("then" in value) ||
+  if ((typeof value !== "object" && typeof value !== "function") || value === null || !("then" in value) ||
       typeof (value as { then?: unknown }).then !== "function") return;
   void Promise.resolve(value).catch(() => {});
   throw new Error(`${path}: asynchronous callbacks are unsupported`);
@@ -266,7 +278,7 @@ function decodeNative(value: Value, shape: ModelType, path: string): NativeModel
       }
       break;
     case "opaqueItf":
-      break;
+      return new OpaqueItfValue(value);
   }
   throw new Error(`${path}: value does not match ${shape.kind}`);
 }
@@ -346,38 +358,9 @@ function encodeNative(value: NativeModelValue, shape: ModelType, path: string): 
       break;
     }
     case "opaqueItf":
-      break;
+      return OpaqueItfValue.encode(value);
   }
   throw new Error(`${path}: implementation value does not match ${shape.kind}`);
-}
-
-function assertSupportedType(type: ModelType, path: string): void {
-  switch (type.kind) {
-    case "int":
-    case "bool":
-    case "str":
-    case "null": return;
-    case "set":
-    case "seq": return assertSupportedType(type.element, `${path}.element`);
-    case "tuple":
-      type.elements.forEach((item, index) => assertSupportedType(item, `${path}.elements[${index}]`));
-      return;
-    case "record":
-      type.fields.forEach((field) => assertSupportedType(field.type, `${path}.${field.wireName}`));
-      return;
-    case "map":
-      assertSupportedType(type.key, `${path}.key`);
-      assertSupportedType(type.value, `${path}.value`);
-      return;
-    case "variant":
-      type.cases.forEach((item) => assertSupportedType(item.payload, `${path}.${item.tag}`));
-      return;
-    case "opaqueItf":
-      throw bindingError(
-        "descriptor_type_unsupported",
-        `${path}: opaqueItf is unsupported by mirrorecma-v1 dynamic bindings`,
-      );
-  }
 }
 
 function assertExactRegistry(
@@ -430,17 +413,21 @@ function projectInputs(
   const inputs = Object.create(null) as Record<string, NativeModelValue>;
   for (const input of action.inputs) {
     const label = `${action.id}.${input.id}`;
-    inputs[input.id] = decodeNative(readPath(root, input.from.path, label), input.type, label);
+    inputs[input.id] = decodeNative(
+      snapshotItfValue(readPath(root, input.from.path, label)), input.type, label,
+    );
   }
   return Object.freeze(inputs);
 }
 
-/** Construct one descriptor-driven binding after negotiation authorization. */
-export function bindDynamicDescriptor(
+function prepareBinding<H extends Function, O extends Function>(
   value: SemanticDescriptor,
-  registry: DynamicHandlerRegistry,
-  dispose: () => void | Promise<void> = () => {},
-): DynamicBinding {
+  registry: {
+    readonly semanticDigest: SemanticDigest;
+    readonly actions: Readonly<Record<string, H>>;
+    readonly observations: Readonly<Record<string, O>>;
+  },
+) {
   const descriptor = decodeSemanticDescriptor(value);
   const digest = semanticDescriptorDigest(descriptor);
   if (registry.semanticDigest !== digest) {
@@ -459,24 +446,17 @@ export function bindDynamicDescriptor(
     "observer_missing",
     "observer_extra",
   );
-  for (const action of actions) {
-    for (const input of action.inputs) assertSupportedType(input.type, `${action.id}.${input.id}`);
-  }
-  for (const observation of descriptor.observations) {
-    assertSupportedType(observation.type, `observation.${observation.id}`);
-  }
-
   const handlerById = Object.freeze(Object.fromEntries(
     actions.map((action) => [
       action.id,
-      ownCallback<DynamicActionHandler>(registry.actions, action.id),
+      ownCallback<H>(registry.actions, action.id),
     ] as const),
   ));
   const observerById = Object.freeze(Object.fromEntries(
     descriptor.observations.map((observation) =>
       [
         observation.id,
-        ownCallback<DynamicObservationHandler>(registry.observations, observation.id),
+        ownCallback<O>(registry.observations, observation.id),
       ] as const),
   ));
   const actionByWire = new Map<string, ResolvedAction>();
@@ -485,12 +465,47 @@ export function bindDynamicDescriptor(
     for (const alias of action.wireAliases) actionByWire.set(alias, action);
   }
   const counts = Object.fromEntries(actions.map((action) => [action.id, 0])) as Record<string, number>;
+  return { descriptor, digest, handlerById, observerById, actionByWire, counts };
+}
+
+function bindingMetadata(
+  descriptor: SemanticDescriptor,
+  digest: SemanticDigest,
+  counts: Record<string, number>,
+) {
+  return {
+    semanticDigest: digest,
+    assertCompatibleConfig: (config: ApalacheConfig) => {
+      const expected = descriptor.runProfile.configuredParamVar ?? "";
+      const actual = config.paramVars ?? "";
+      if (actual !== expected) {
+        throw bindingError("configuration_mismatch", `expected paramVars=${expected}, got ${actual}`);
+      }
+    },
+    coverage: () => Object.freeze({ ...counts }),
+    assertAllActionsCovered: () => {
+      const unseen = Object.keys(counts).filter((id) => counts[id] === 0);
+      if (unseen.length > 0) throw new Error(`uncovered actions: ${unseen.join(", ")}`);
+    },
+  };
+}
+
+/** Construct one synchronous binding after negotiation authorization. */
+export function bindDynamicDescriptor(
+  value: SemanticDescriptor,
+  registry: DynamicHandlerRegistry,
+  dispose: () => void | Promise<void> = () => {},
+): DynamicBinding {
+  const { descriptor, digest, handlerById, observerById, actionByWire, counts } =
+    prepareBinding(value, registry);
   let lifecycle: "fresh" | "initialized" | "poisoned" = "fresh";
   let running = false;
   let disposed = false;
+  let disposal: Promise<void> | undefined;
   const wasPoisoned = () => lifecycle === "poisoned";
 
   const computer: StateComputer = (wireAction, payload, _previousState) => {
+    if (disposed) throw bindingError("binding_disposed", "binding is disposed");
     if (lifecycle === "poisoned") throw bindingError("binding_poisoned", "binding is poisoned");
     if (running) {
       lifecycle = "poisoned";
@@ -509,6 +524,7 @@ export function bindDynamicDescriptor(
       stage = "adapter";
       const handlerResult: unknown = handlerById[action.id]!(inputs);
       rejectDeferredResult(handlerResult, action.id);
+      if (disposed) throw bindingError("binding_disposed", "binding is disposed");
       if (handlerResult !== undefined) {
         throw new Error(`${action.id}: action handlers must return void`);
       }
@@ -519,6 +535,7 @@ export function bindDynamicDescriptor(
       stage = "observation";
       const state = Object.create(null) as State;
       const observed = descriptor.observations.map((observation) => {
+        if (disposed) throw bindingError("binding_disposed", "binding is disposed");
         const value: unknown = observerById[observation.id]!();
         rejectDeferredResult(value, `observation.${observation.id}`);
         return value as NativeModelValue;
@@ -526,6 +543,7 @@ export function bindDynamicDescriptor(
       if (wasPoisoned()) {
         throw new Error("reentrant observation callback poisoned the binding");
       }
+      if (disposed) throw bindingError("binding_disposed", "binding is disposed");
       descriptor.observations.forEach((observation, index) => {
         state[observation.wireName] = encodeNative(
           observed[index]!,
@@ -550,27 +568,140 @@ export function bindDynamicDescriptor(
   };
 
   return Object.freeze({
-    semanticDigest: digest,
+    ...bindingMetadata(descriptor, digest, counts),
     computer,
-    assertCompatibleConfig: (config: ApalacheConfig) => {
-      const expected = descriptor.runProfile.configuredParamVar ?? "";
-      const actual = config.paramVars ?? "";
-      if (actual !== expected) {
-        throw bindingError(
-          "configuration_mismatch",
-          `expected paramVars=${expected}, got ${actual}`,
-        );
-      }
-    },
-    coverage: () => Object.freeze({ ...counts }),
-    assertAllActionsCovered: () => {
-      const unseen = Object.keys(counts).filter((id) => counts[id] === 0);
-      if (unseen.length > 0) throw new Error(`uncovered actions: ${unseen.join(", ")}`);
-    },
-    dispose: async () => {
-      if (disposed) return;
+    dispose: () => {
+      if (disposal !== undefined) return disposal;
       disposed = true;
-      await dispose();
+      disposal = Promise.resolve().then(dispose);
+      return disposal;
+    },
+  });
+}
+
+/** Stop waiting promptly while consuming late rejection from non-cooperative work. */
+function invokeUntilAborted<T>(callback: () => T | Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason instanceof DynamicBindingError
+      ? signal.reason
+      : bindingError("binding_aborted", "dynamic binding invocation aborted", signal.reason));
+    if (signal.aborted) { abort(); return; }
+    signal.addEventListener("abort", abort, { once: true });
+    let result: T | Promise<T>;
+    try {
+      result = callback();
+    } catch (error) {
+      signal.removeEventListener("abort", abort);
+      reject(error);
+      return;
+    }
+    Promise.resolve(result).then(resolve, reject).finally(() => {
+      signal.removeEventListener("abort", abort);
+    });
+  });
+}
+
+/**
+ * Await each action and then one sequential observation pass.
+ * Aborting prevents further binding callbacks; it cannot undo SUT mutations.
+ */
+export function bindAsyncDynamicDescriptor(
+  value: SemanticDescriptor,
+  registry: AsyncDynamicHandlerRegistry,
+  dispose: () => void | Promise<void> = () => {},
+): AsyncDynamicBinding {
+  const { descriptor, digest, handlerById, observerById, actionByWire, counts } =
+    prepareBinding(value, registry);
+  let lifecycle: "fresh" | "initialized" | "poisoned" = "fresh";
+  let running = false;
+  let disposed = false;
+  let disposal: Promise<void> | undefined;
+  let active: AbortController | undefined;
+  const wasPoisoned = () => lifecycle === "poisoned";
+
+  const computer: AsyncStateComputer = async (wireAction, payload, _previousState, context) => {
+    if (disposed) throw bindingError("binding_disposed", "binding is disposed");
+    if (lifecycle === "poisoned") throw bindingError("binding_poisoned", "binding is poisoned");
+    if (running) {
+      lifecycle = "poisoned";
+      const error = bindingError("adapter_failure", "dynamic binding callbacks must not be reentrant");
+      active?.abort(error);
+      throw error;
+    }
+    running = true;
+    const controller = new AbortController();
+    active = controller;
+    const forwardAbort = () => controller.abort(context.signal.reason);
+    context.signal.addEventListener("abort", forwardAbort, { once: true });
+    if (context.signal.aborted) forwardAbort();
+    const invocation = Object.freeze({ ...context, signal: controller.signal });
+    const assertActive = () => {
+      if (disposed) throw bindingError("binding_disposed", "binding is disposed");
+      if (controller.signal.aborted) {
+        throw controller.signal.reason instanceof DynamicBindingError
+          ? controller.signal.reason
+          : bindingError("binding_aborted", "dynamic binding invocation aborted", controller.signal.reason);
+      }
+      if (wasPoisoned()) throw bindingError("binding_poisoned", "binding is poisoned");
+    };
+    let stage: "dispatch" | "input" | "adapter" | "observation" = "dispatch";
+    try {
+      assertActive();
+      const action = actionByWire.get(wireAction);
+      if (action === undefined) throw bindingError("unknown_action", `unknown action ${wireAction}`);
+      if (action.phase === "transition" && lifecycle === "fresh") {
+        throw bindingError("transition_before_initialization", "transition before initialization");
+      }
+      stage = "input";
+      const inputs = projectInputs(action, payload, descriptor);
+      assertActive();
+      stage = "adapter";
+      const result = await invokeUntilAborted(() => handlerById[action.id]!(inputs, invocation), controller.signal);
+      assertActive();
+      if (result !== undefined) throw new Error(`${action.id}: action handlers must return void`);
+      lifecycle = "initialized";
+      stage = "observation";
+      const observed: NativeModelValue[] = [];
+      for (const observation of descriptor.observations) {
+        assertActive();
+        observed.push(await invokeUntilAborted(
+          () => observerById[observation.id]!(invocation), controller.signal,
+        ));
+        assertActive();
+      }
+      const state = Object.create(null) as State;
+      descriptor.observations.forEach((observation, index) => {
+        assertActive();
+        state[observation.wireName] = encodeNative(
+          observed[index]!, observation.type, `observation.${observation.id}`,
+        );
+      });
+      assertActive();
+      counts[action.id] += 1;
+      return state;
+    } catch (error) {
+      lifecycle = "poisoned";
+      if (error instanceof DynamicBindingError && (stage === "dispatch" ||
+          error.code === "binding_aborted" || error.code === "binding_disposed")) throw error;
+      const code = stage === "input" ? "input_shape_mismatch"
+        : stage === "observation" ? "observation_shape_mismatch" : "adapter_failure";
+      throw bindingError(code, `dynamic binding failed for action ${wireAction}`, error);
+    } finally {
+      context.signal.removeEventListener("abort", forwardAbort);
+      active = undefined;
+      running = false;
+    }
+  };
+
+  return Object.freeze({
+    ...bindingMetadata(descriptor, digest, counts),
+    computer,
+    dispose: () => {
+      if (disposal !== undefined) return disposal;
+      disposed = true;
+      active?.abort(bindingError("binding_disposed", "binding is disposed"));
+      disposal = Promise.resolve().then(dispose);
+      return disposal;
     },
   });
 }

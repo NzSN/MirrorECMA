@@ -1,0 +1,28 @@
+{
+  "schema": "mirrors.model-interface/v1",
+  "interfaceVersion": "1.0.0",
+  "model": { "module": "WorkQueue", "source": "examples/work-queue/specs/WorkQueue.tla" },
+  "wire": { "actionVariable": "action_taken", "parameterVariable": "parameters" },
+  "initializers": [
+    { "id": "Initialize", "wireAction": "init", "wireAliases": [], "inputs": [] }
+  ],
+  "actions": [
+    {
+      "id": "Enqueue", "wireAction": "enqueue", "wireAliases": [],
+      "inputs": [{ "id": "Item", "from": { "root": "stepParameters", "path": [
+        { "field": "parameters" }, { "field": "item" }
+      ] } }]
+    },
+    { "id": "Start", "wireAction": "start", "wireAliases": [], "inputs": [] },
+    { "id": "Fail", "wireAction": "fail", "wireAliases": [], "inputs": [] },
+    { "id": "Retry", "wireAction": "retry", "wireAliases": [], "inputs": [] },
+    { "id": "Complete", "wireAction": "complete", "wireAliases": [], "inputs": [] },
+    { "id": "Reset", "wireAction": "reset", "wireAliases": [], "inputs": [] }
+  ],
+  "observations": [
+    { "id": "Pending", "wireName": "pending", "provenance": "implementation" },
+    { "id": "InFlight", "wireName": "inFlight", "provenance": "implementation" },
+    { "id": "Completed", "wireName": "completed", "provenance": "implementation" },
+    { "id": "Failed", "wireName": "failed", "provenance": "implementation" }
+  ]
+}

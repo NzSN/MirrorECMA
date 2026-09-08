@@ -4,7 +4,6 @@ import {
   type ApalacheSpec,
   type Register,
   type RegisterTraces,
-  type StateComputer,
   type TraceGenerationConfig,
 } from "./protocol.js";
 import {
@@ -25,6 +24,8 @@ import {
 import { DescriptorCache, DescriptorCacheError } from "./descriptor-cache.js";
 import {
   bindDynamicDescriptor,
+  bindAsyncDynamicDescriptor,
+  type AsyncDynamicHandlerRegistry,
   type DynamicHandlerRegistry,
 } from "./dynamic-binding.js";
 import {
@@ -32,9 +33,18 @@ import {
   receiveLine,
   requireValidRegistration,
 } from "./replay.js";
+import {
+  ReplayControl, ReplayControlError, validateReplayOptions,
+  type ReplayComputer, type ReplayOptions,
+} from "./replay-control.js";
+import {
+  attachReplayReport, failedReplayReport, ReplayRecorder, type ReplayReport,
+} from "./replay-report.js";
 
 export const MIRRORECMA_TARGET_PROFILE = "mirrorecma-v1" as const;
 export const STATE_COMPUTER_CONTRACT_VERSION = "mirrors.state-computer/v1" as const;
+export const ASYNC_STATE_COMPUTER_CONTRACT_VERSION = "mirrors.async-state-computer/v1" as const;
+export const MIRRORECMA_ASYNC_TARGET_PROFILE = "mirrorecma-async-v1" as const;
 
 export type NegotiatedRunnerErrorCode =
   | "negotiation_missing"
@@ -99,7 +109,7 @@ export interface CompiledAdapterKey {
 
 export interface LocalBinding {
   readonly semanticDigest: SemanticDigest;
-  readonly computer: StateComputer;
+  readonly computer: ReplayComputer;
   assertCompatibleConfig(config: ApalacheConfig): void;
   coverage?(): Readonly<Record<string, number>>;
   dispose(): void | Promise<void>;
@@ -197,11 +207,38 @@ export interface DynamicHandlerSelection {
   readonly dispose?: () => void | Promise<void>;
 }
 
+export type DynamicRegistryScope =
+  | {
+    readonly execution?: "sync";
+    readonly registry: DynamicHandlerRegistry;
+    readonly dispose?: () => void | Promise<void>;
+  }
+  | {
+    readonly execution: "async";
+    readonly registry: AsyncDynamicHandlerRegistry;
+    readonly dispose?: () => void | Promise<void>;
+  };
+
+/** Inert identity first; the runner owns a returned scope even if binding fails. */
+export interface DynamicHandlerFactorySelection {
+  readonly mode: "dynamic";
+  readonly request?: "descriptor";
+  readonly contract: ContractV1;
+  readonly semanticDigest: string;
+  readonly createRegistry: (
+    config: ApalacheConfig, descriptor: SemanticDescriptor,
+  ) => DynamicRegistryScope | Promise<DynamicRegistryScope>;
+  readonly descriptorCache: DescriptorCache;
+  readonly policy?: NegotiationPolicy;
+  readonly fallbackFactory?: AdapterFactory;
+}
+
 export type NegotiatedAdapterSelection =
   | CompiledAdapterSelection
-  | DynamicHandlerSelection;
+  | DynamicHandlerSelection
+  | DynamicHandlerFactorySelection;
 
-export interface NegotiatedRunOptions {
+export interface NegotiatedRunOptions extends ReplayOptions {
   readonly spec?: ApalacheSpec;
 }
 
@@ -209,19 +246,28 @@ type MaybeReadyTransport = Transport & { ready?: Promise<void> };
 
 async function resolveTransport(target: string | Transport): Promise<Transport> {
   const t = typeof target === "string" ? spawnMirror(target) : target;
-  const ready = (t as MaybeReadyTransport).ready;
-  if (ready) await ready;
+  try {
+    const ready = (t as MaybeReadyTransport).ready;
+    if (ready) await ready;
+  } catch (error) {
+    try { await t.close(); } catch { /* Keep the readiness failure primary. */ }
+    throw error;
+  }
   return t;
 }
 
 function selectedKey(selection: CompiledAdapterSelection): CompiledAdapterKey {
-  if (selection.targetProfile !== MIRRORECMA_TARGET_PROFILE) {
+  if (selection.targetProfile !== MIRRORECMA_TARGET_PROFILE &&
+      selection.targetProfile !== MIRRORECMA_ASYNC_TARGET_PROFILE) {
     throw runnerError(
       "target_profile_mismatch",
       `negotiated runner requires target profile ${MIRRORECMA_TARGET_PROFILE}`,
     );
   }
-  if (selection.stateComputerContractVersion !== STATE_COMPUTER_CONTRACT_VERSION) {
+  if ((selection.stateComputerContractVersion !== STATE_COMPUTER_CONTRACT_VERSION &&
+       selection.stateComputerContractVersion !== ASYNC_STATE_COMPUTER_CONTRACT_VERSION) ||
+      (selection.targetProfile === MIRRORECMA_ASYNC_TARGET_PROFILE &&
+       selection.stateComputerContractVersion !== ASYNC_STATE_COMPUTER_CONTRACT_VERSION)) {
     throw runnerError(
       "state_computer_contract_mismatch",
       `negotiated runner requires StateComputer contract ${STATE_COMPUTER_CONTRACT_VERSION}`,
@@ -246,7 +292,8 @@ interface PreparedAdapter {
 interface PreparedDynamic {
   readonly kind: "dynamic";
   readonly semanticDigest: SemanticDigest;
-  readonly registry: DynamicHandlerRegistry;
+  readonly registry?: DynamicHandlerRegistry;
+  readonly createRegistry?: DynamicHandlerFactorySelection["createRegistry"];
   readonly descriptorCache: DescriptorCache;
   readonly ifNoneMatch?: SemanticDigest;
   readonly policy: NegotiationPolicy;
@@ -281,7 +328,7 @@ interface PreparedNegotiation {
 
 function isDynamicSelection(
   selection: NegotiatedAdapterSelection,
-): selection is DynamicHandlerSelection {
+): selection is DynamicHandlerSelection | DynamicHandlerFactorySelection {
   return selection.mode === "dynamic";
 }
 
@@ -315,19 +362,21 @@ function prepareNegotiation(
   return { request, prepared: correlatedPrepared };
 }
 
-function prepareDynamic(selection: DynamicHandlerSelection): PreparedDynamic {
+function prepareDynamic(selection: DynamicHandlerSelection | DynamicHandlerFactorySelection): PreparedDynamic {
   if (selection.request !== undefined && selection.request !== "descriptor") {
     throw runnerError("negotiation_status_unexpected", "dynamic selection requires descriptor mode");
   }
-  const semanticDigest = semanticDigestFromHex(selection.registry.semanticDigest);
+  const semanticDigest = semanticDigestFromHex("createRegistry" in selection
+    ? selection.semanticDigest : selection.registry.semanticDigest);
   return Object.freeze({
     kind: "dynamic" as const,
     semanticDigest,
-    registry: selection.registry,
+    ...("createRegistry" in selection
+      ? { createRegistry: selection.createRegistry }
+      : { registry: selection.registry, dispose: selection.dispose }),
     descriptorCache: selection.descriptorCache,
     policy: selection.policy ?? "require",
     fallbackFactory: selection.fallbackFactory,
-    dispose: selection.dispose,
   });
 }
 
@@ -493,15 +542,25 @@ async function runNegotiatedReplay(
   t: Transport,
   config: ApalacheConfig,
   prepared: PreparedSelection,
-): Promise<void> {
+  options: ReplayOptions,
+  registration: string,
+): Promise<ReplayReport> {
+  const control = new ReplayControl(options);
+  const recorder = new ReplayRecorder(expectedDigest(prepared));
   const it = t[Symbol.asyncIterator]();
   let binding: LocalBinding | undefined;
+  let disposeScope: (() => Promise<void>) | undefined;
   let primaryError: unknown;
+  let failed = false;
+  let report: ReplayReport | undefined;
   try {
+    control.assertActive();
+    t.send(registration);
     let decoded: ReturnType<typeof decodeModelInterfaceMirrorMessage>;
     try {
-      decoded = decodeModelInterfaceMirrorMessage(await receiveLine(it));
+      decoded = decodeModelInterfaceMirrorMessage(await receiveLine(it, control));
     } catch (cause) {
+      if (cause instanceof ReplayControlError) throw cause;
       const code = cause instanceof ModelInterfaceProtocolError &&
           /digest|semanticDigest/.test(cause.message)
         ? "descriptor_digest_invalid"
@@ -538,6 +597,7 @@ async function runNegotiatedReplay(
       );
     }
     const authorization = authorizeReply(prepared, extension);
+    control.assertActive();
     let label: string;
     if (authorization.kind === "compiled") {
       if (prepared.kind !== "compiled") throw new Error("internal compiled authorization mismatch");
@@ -545,11 +605,28 @@ async function runNegotiatedReplay(
       label = `adapter key for ${prepared.key.adapterId}`;
     } else if (authorization.kind === "dynamic") {
       if (prepared.kind !== "dynamic") throw new Error("internal dynamic authorization mismatch");
-      binding = bindDynamicDescriptor(
-        authorization.descriptor,
-        prepared.registry,
-        prepared.dispose,
-      );
+      if (prepared.createRegistry) {
+        let scope: DynamicRegistryScope;
+        try {
+          scope = await prepared.createRegistry(config, authorization.descriptor);
+        } catch (cause) {
+          throw runnerError("adapter_factory_failed", "dynamic registry factory failed", cause);
+        }
+        let disposed = false;
+        disposeScope = async () => {
+          if (disposed) return;
+          disposed = true;
+          await scope.dispose?.();
+        };
+        control.assertActive();
+        binding = scope.execution === "async"
+          ? bindAsyncDynamicDescriptor(authorization.descriptor, scope.registry, disposeScope)
+          : bindDynamicDescriptor(authorization.descriptor, scope.registry, disposeScope);
+      } else {
+        binding = bindDynamicDescriptor(
+          authorization.descriptor, prepared.registry!, prepared.dispose,
+        );
+      }
       label = "dynamic registry";
     } else {
       binding = await createBinding(
@@ -563,28 +640,43 @@ async function runNegotiatedReplay(
         ? `legacy fallback for ${prepared.key.adapterId}`
         : "dynamic legacy fallback";
     }
+    control.assertActive();
     validateBinding(binding, expectedDigest(prepared), label, config);
-    await replayLoop(t, it, binding.computer);
+    report = await replayLoop(t, it, binding.computer, control, recorder);
   } catch (error) {
+    failed = true;
     primaryError = error;
+    attachReplayReport(error, recorder.report(error));
+  } finally {
+    control.dispose();
   }
 
   let cleanupError: unknown;
-  if (binding !== undefined) {
+  let cleanupFailed = false;
+  if (binding !== undefined || disposeScope !== undefined) {
     try {
-      await binding.dispose();
+      if (binding) await binding.dispose();
+      else await disposeScope!();
     } catch (cause) {
+      cleanupFailed = true;
       cleanupError = runnerError("adapter_dispose_failed", "adapter binding disposal failed", cause);
     }
   }
   try {
     await t.close();
   } catch (error) {
-    if (primaryError === undefined && cleanupError === undefined) cleanupError = error;
+    if (!failed && !cleanupFailed) {
+      cleanupFailed = true;
+      cleanupError = error;
+    }
   }
 
-  if (primaryError !== undefined) throw primaryError;
-  if (cleanupError !== undefined) throw cleanupError;
+  if (failed) throw primaryError;
+  if (cleanupFailed) {
+    attachReplayReport(cleanupError, report ? failedReplayReport(report, cleanupError) : recorder.report(cleanupError));
+    throw cleanupError;
+  }
+  return report!;
 }
 
 export async function runClientNegotiated(
@@ -594,6 +686,17 @@ export async function runClientNegotiated(
   selection: NegotiatedAdapterSelection,
   opts: NegotiatedRunOptions = {},
 ): Promise<void> {
+  await runClientNegotiatedWithReport(target, apalacheConfig, config, selection, opts);
+}
+
+export async function runClientNegotiatedWithReport(
+  target: string | Transport,
+  apalacheConfig: ApalacheConfig,
+  config: TraceGenerationConfig,
+  selection: NegotiatedAdapterSelection,
+  opts: NegotiatedRunOptions = {},
+): Promise<ReplayReport> {
+  validateReplayOptions(opts);
   const base: Register = {
     proto_step: "register",
     apalacheConfig,
@@ -603,13 +706,7 @@ export async function runClientNegotiated(
   const { request, prepared } = prepareNegotiation(selection);
   const registration = encodeModelInterfaceRegistration(base, request);
   const t = await resolveTransport(target);
-  try {
-    t.send(registration);
-  } catch (error) {
-    await t.close();
-    throw error;
-  }
-  await runNegotiatedReplay(t, apalacheConfig, prepared);
+  return runNegotiatedReplay(t, apalacheConfig, prepared, opts, registration);
 }
 
 export async function runClientWithTracesNegotiated(
@@ -617,7 +714,19 @@ export async function runClientWithTracesNegotiated(
   apalacheConfig: ApalacheConfig,
   tracePaths: string[],
   selection: NegotiatedAdapterSelection,
+  opts: ReplayOptions = {},
 ): Promise<void> {
+  await runClientWithTracesNegotiatedWithReport(target, apalacheConfig, tracePaths, selection, opts);
+}
+
+export async function runClientWithTracesNegotiatedWithReport(
+  target: string | Transport,
+  apalacheConfig: ApalacheConfig,
+  tracePaths: string[],
+  selection: NegotiatedAdapterSelection,
+  opts: ReplayOptions = {},
+): Promise<ReplayReport> {
+  validateReplayOptions(opts);
   const base: RegisterTraces = {
     proto_step: "register_traces",
     apalacheConfig,
@@ -626,11 +735,5 @@ export async function runClientWithTracesNegotiated(
   const { request, prepared } = prepareNegotiation(selection);
   const registration = encodeModelInterfaceRegistration(base, request);
   const t = await resolveTransport(target);
-  try {
-    t.send(registration);
-  } catch (error) {
-    await t.close();
-    throw error;
-  }
-  await runNegotiatedReplay(t, apalacheConfig, prepared);
+  return runNegotiatedReplay(t, apalacheConfig, prepared, opts, registration);
 }
