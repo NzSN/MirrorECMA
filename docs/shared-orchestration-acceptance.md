@@ -126,7 +126,11 @@ changes to that recorded snapshot.
 
 The MirrorECMA implementation is recorded by the commit containing this ledger.
 The companion Mirrors and MirrorGate changes were validated in their working
-trees; their recorded base revisions do not include those changes. The C++
+trees; their recorded base revisions do not include those changes. The published
+source revisions for this implementation are
+[Mirrors `df2f91a`](https://github.com/NzSN/Mirrors/commit/df2f91aa052fedbbe7d544fb0e3d28565e04114f)
+and [MirrorGate `15608a0`](https://github.com/NzSN/MirrorGate/commit/15608a0a533418b243bc799513a2ca1292cbf68c).
+The archived working-tree hashes remain the historical execution evidence. The C++
 companion is a reusable acceptance integration under MirrorGate, not a released
 generic MirrorCPP package API.
 
@@ -135,3 +139,15 @@ and [CI entry script](../tools/ci/shared-orchestration.sh) require explicit
 companion commits and a prepared self-hosted Linux/Bubblewrap runner. YAML and
 shell validation passed. No hosted CI run or package publication was performed;
 the public profile remains experimental until those distribution gates are met.
+
+## Follow-up: fresh restricted authoring
+
+The [fresh Counter authoring experiment](../experiments/blind-counter/results/2026-09-08/REPORT.md)
+subsequently started from an empty submission and used an isolated author with
+only Gate-mediated tools. The source was written, publicly tested, frozen,
+built, and privately evaluated successfully: four traces, four initializations,
+36 ticks, one worker, and confirmed cleanup. This follow-up added public bounded
+authoring stdout/stderr and corrected a generated deadline timer edge case.
+Its final MirrorECMA regression suite passed 340/340 tests, and the Mirrors gate
+passed again. These results supplement the earlier 42-case integration matrix;
+private evaluation inputs remain unarchived.

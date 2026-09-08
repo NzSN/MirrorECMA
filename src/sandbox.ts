@@ -45,6 +45,9 @@ import { createVerifyRequest, encodeModelInterfaceRegistration } from "./model-i
 const CONTROL_SPECIFIER = "mirrorgate/control";
 const WORKER_SPECIFIER = "mirrorgate/worker";
 const MAX_DIAGNOSTIC_BYTES = 65_535;
+/** Maximum raw bytes retained from each authoring command output stream. */
+export const SANDBOX_AUTHORING_OUTPUT_BYTES = 65_535;
+const MAX_GATE_OUTPUT_CHUNK_BYTES = 16_384;
 const MAX_RETAINED_SINK_FAILURES = 32;
 const CATALOG_ID = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
 const retainedSinkFailures = new WeakMap<object, readonly string[]>();
@@ -119,6 +122,18 @@ export interface SandboxTightenedLimits {
   readonly scratchBytes?: number;
 }
 
+export interface SandboxAuthoringExecResult {
+  readonly exitCode: number;
+  /** Actual stdout byte count reported by Gate, including uncaptured bytes. */
+  readonly stdoutBytes: number;
+  /** Actual stderr byte count reported by Gate, including uncaptured bytes. */
+  readonly stderrBytes: number;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly stdoutTruncated: boolean;
+  readonly stderrTruncated: boolean;
+}
+
 export interface SandboxAuthoringSession {
   readonly publicManifest: SandboxPublicManifest;
   readonly files: Readonly<Record<string, string>>;
@@ -126,7 +141,7 @@ export interface SandboxAuthoringSession {
     readonly toolId: string;
     readonly arguments: readonly string[];
     readonly cwd?: string;
-  }): Promise<{ readonly exitCode: number; readonly stdoutBytes: number; readonly stderrBytes: number }>;
+  }): Promise<SandboxAuthoringExecResult>;
 }
 
 export interface SandboxDisclosurePolicy {
@@ -220,7 +235,18 @@ interface GateOperationOutcome<T> {
 }
 
 interface GateOperation<T> {
+  readonly id?: number;
   wait(options?: { signal?: AbortSignal; timeoutMs?: number }): Promise<GateOperationOutcome<T>>;
+}
+
+interface GateAuthoringOutputEvent {
+  readonly event: "authoring.output";
+  readonly data: {
+    readonly operationId: number;
+    readonly stream: "stdout" | "stderr";
+    readonly chunk: number;
+    readonly bytesBase64: string;
+  };
 }
 
 interface GatePrepared {
@@ -266,6 +292,10 @@ interface GateSession {
     summary?: { status: string; failureFamily?: string },
     options?: { timeoutMs?: number },
   ): Promise<GateOperation<GateCleanup>>;
+  onEvent?(
+    listener: (event: unknown) => void,
+    options?: { replay?: boolean },
+  ): () => void;
 }
 
 interface GateClient {
@@ -539,6 +569,173 @@ async function waitSucceeded<T>(
     throw new GateOperationError(outcome.error.code, outcome.error.stage, outcome.error.message);
   }
   throw new GateOperationError("OPERATION_UNKNOWN", "cleanup", "Gate operation did not reach a terminal result");
+}
+
+interface AuthoringStreamCapture {
+  readonly retained: Uint8Array;
+  retainedBytes: number;
+  totalBytes: number;
+  nextChunk: number;
+}
+
+function newAuthoringStreamCapture(): AuthoringStreamCapture {
+  return {
+    retained: new Uint8Array(SANDBOX_AUTHORING_OUTPUT_BYTES),
+    retainedBytes: 0,
+    totalBytes: 0,
+    nextChunk: 1,
+  };
+}
+
+function decodeAuthoringOutput(stream: AuthoringStreamCapture, truncated: boolean): string {
+  const retained = stream.retained.subarray(0, stream.retainedBytes);
+  const decoder = new TextDecoder("utf-8");
+  // Streaming mode deliberately leaves an incomplete final code point buffered
+  // when the byte cap splits one. Invalid bytes wholly inside the capture still
+  // use the platform's normal replacement-character decoding.
+  return decoder.decode(retained, truncated ? { stream: true } : undefined);
+}
+
+class AuthoringOutputCapture {
+  readonly stdout = newAuthoringStreamCapture();
+  readonly stderr = newAuthoringStreamCapture();
+  operationId: number | undefined;
+  failure: GateSdkError | undefined;
+
+  receive(value: unknown): void {
+    if (this.failure !== undefined || typeof value !== "object" || value === null ||
+        (value as { event?: unknown }).event !== "authoring.output") return;
+    try {
+      const data = (value as { data?: unknown }).data;
+      if (typeof data !== "object" || data === null) throw new TypeError("missing event data");
+      const event = { event: "authoring.output", data } as GateAuthoringOutputEvent;
+      const { operationId, stream, chunk, bytesBase64 } = event.data;
+      if (!Number.isSafeInteger(operationId) || operationId <= 0 ||
+          (stream !== "stdout" && stream !== "stderr") ||
+          !Number.isSafeInteger(chunk) || chunk <= 0 || typeof bytesBase64 !== "string" ||
+          !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(bytesBase64)) {
+        throw new TypeError("invalid output event fields");
+      }
+      if (this.operationId === undefined) this.operationId = operationId;
+      if (this.operationId !== operationId) throw new TypeError("foreign authoring operation output");
+      const target = stream === "stdout" ? this.stdout : this.stderr;
+      if (chunk !== target.nextChunk) throw new TypeError("noncontiguous output chunks");
+      if (target.nextChunk === Number.MAX_SAFE_INTEGER) throw new TypeError("too many output chunks");
+      target.nextChunk += 1;
+      const decoded = Buffer.from(bytesBase64, "base64");
+      if (decoded.byteLength > MAX_GATE_OUTPUT_CHUNK_BYTES || decoded.toString("base64") !== bytesBase64) {
+        throw new TypeError("invalid base64 output");
+      }
+      if (target.totalBytes > Number.MAX_SAFE_INTEGER - decoded.byteLength) {
+        throw new TypeError("output byte count overflow");
+      }
+      target.totalBytes += decoded.byteLength;
+      const available = SANDBOX_AUTHORING_OUTPUT_BYTES - target.retainedBytes;
+      const retained = Math.min(available, decoded.byteLength);
+      if (retained > 0) {
+        target.retained.set(decoded.subarray(0, retained), target.retainedBytes);
+        target.retainedBytes += retained;
+      }
+    } catch (cause) {
+      this.failure = new GateSdkError("MirrorGate emitted invalid or foreign authoring output", { cause });
+    }
+  }
+
+  bindOperation(operationId: unknown): void {
+    if (!Number.isSafeInteger(operationId) || (operationId as number) <= 0) {
+      throw new GateSdkError("MirrorGate authoring operation handle has no valid ID");
+    }
+    if (this.operationId !== undefined && this.operationId !== operationId) {
+      throw new GateSdkError("MirrorGate authoring output operation ID does not match its handle");
+    }
+    this.operationId = operationId as number;
+    if (this.failure !== undefined) throw this.failure;
+  }
+
+  result(
+    receipt: { exitCode: number; stdoutBytes: number; stderrBytes: number },
+    outputEventsAvailable: boolean,
+  ): SandboxAuthoringExecResult {
+    if (this.failure !== undefined) throw this.failure;
+    if (!Number.isSafeInteger(receipt.exitCode) || !Number.isSafeInteger(receipt.stdoutBytes) ||
+        receipt.stdoutBytes < 0 || !Number.isSafeInteger(receipt.stderrBytes) || receipt.stderrBytes < 0) {
+      throw new GateSdkError("MirrorGate returned an invalid authoring command receipt");
+    }
+    if (!outputEventsAvailable) {
+      if (receipt.stdoutBytes !== 0 || receipt.stderrBytes !== 0) {
+        throw new GateSdkError("MirrorGate authoring output events are unavailable for nonempty output");
+      }
+    } else if (this.stdout.totalBytes !== receipt.stdoutBytes || this.stderr.totalBytes !== receipt.stderrBytes) {
+      throw new GateSdkError("MirrorGate authoring output byte counts do not match its receipt");
+    }
+    const stdoutTruncated = receipt.stdoutBytes > this.stdout.retainedBytes;
+    const stderrTruncated = receipt.stderrBytes > this.stderr.retainedBytes;
+    return Object.freeze({
+      exitCode: receipt.exitCode,
+      stdoutBytes: receipt.stdoutBytes,
+      stderrBytes: receipt.stderrBytes,
+      stdout: decodeAuthoringOutput(this.stdout, stdoutTruncated),
+      stderr: decodeAuthoringOutput(this.stderr, stderrTruncated),
+      stdoutTruncated,
+      stderrTruncated,
+    });
+  }
+}
+
+async function runAuthoringCommand(
+  session: GateSession,
+  request: Parameters<SandboxAuthoringSession["exec"]>[0],
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+  setCurrentStop: (stop: (() => void) | undefined) => void,
+): Promise<SandboxAuthoringExecResult> {
+  const capture = new AuthoringOutputCapture();
+  const subscribe = session.onEvent;
+  if (subscribe !== undefined && typeof subscribe !== "function") {
+    throw new GateSdkError("MirrorGate authoring event subscription is invalid");
+  }
+  const outputEventsAvailable = subscribe !== undefined;
+  let unsubscribe: (() => void) | undefined;
+  let stopped = false;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    try {
+      unsubscribe?.();
+    } catch (cause) {
+      capture.failure ??= new GateSdkError(
+        "MirrorGate authoring event listener could not be removed",
+        { cause },
+      );
+    }
+  };
+  let primary: unknown;
+  let result: SandboxAuthoringExecResult | undefined;
+  try {
+    if (subscribe !== undefined) {
+      unsubscribe = subscribe.call(session, (event) => capture.receive(event), { replay: false });
+      if (typeof unsubscribe !== "function") {
+        throw new GateSdkError("MirrorGate authoring event subscription is invalid");
+      }
+      setCurrentStop(stop);
+    }
+    const operation = await session.authoringExec({
+      toolId: request.toolId,
+      arguments: [...request.arguments],
+      ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
+    }, { signal, timeoutMs });
+    if (outputEventsAvailable) capture.bindOperation(operation.id);
+    const receipt = await waitSucceeded(operation, signal, timeoutMs);
+    result = capture.result(receipt, outputEventsAvailable);
+  } catch (error) {
+    primary = error;
+  } finally {
+    stop();
+    if (primary === undefined && capture.failure !== undefined) primary = capture.failure;
+    setCurrentStop(undefined);
+  }
+  if (primary !== undefined) throw primary;
+  return result!;
 }
 
 function workerTimeout(context: SandboxReplayContext): number {
@@ -1013,25 +1210,44 @@ export async function evaluateSandboxedWithDependencies(
 
     if (plan.author !== undefined) {
       let active = true;
+      let execInFlight = false;
+      let stopCurrentExec: (() => void) | undefined;
       const files = prepared.model.authoringBundle?.files ?? Object.freeze({});
       const authorSession: SandboxAuthoringSession = Object.freeze({
         publicManifest: prepared.manifest,
         files,
         exec: async (request: Parameters<SandboxAuthoringSession["exec"]>[0]) => {
           if (!active) throw new SandboxModelError("authoring session is sealed");
-          return waitSucceeded(await session!.authoringExec({
-            toolId: request.toolId,
-            arguments: [...request.arguments],
-            ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
-          }, { signal, timeoutMs: deadlines.registrationMs }), signal);
+          if (execInFlight) throw new SandboxModelError("only one authoring command may run at a time");
+          execInFlight = true;
+          const pending = runAuthoringCommand(
+            session!,
+            request,
+            signal,
+            deadlines.registrationMs,
+            (stop) => { stopCurrentExec = stop; },
+          );
+          // A callback may accidentally discard the returned promise. Keep its
+          // rejection observed while the outer lifecycle seals and closes Gate.
+          pending.catch(() => {});
+          try {
+            return await pending;
+          } finally {
+            execInFlight = false;
+          }
         },
       });
       const pendingAuthor = Promise.resolve().then(() => plan.author!(authorSession));
       pendingAuthor.catch(() => {});
       try {
         await awaitReplayOperation(pendingAuthor, signal, deadlines.registrationMs, "registration");
+        if (execInFlight) {
+          throw new SandboxModelError("author callback returned before its authoring command completed");
+        }
       } finally {
         active = false;
+        stopCurrentExec?.();
+        stopCurrentExec = undefined;
       }
     }
 

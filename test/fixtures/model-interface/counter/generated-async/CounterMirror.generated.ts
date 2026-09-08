@@ -309,10 +309,15 @@ function awaitPortOperation<T>(operation: PromiseLike<T>, context: ReplayContext
       bindingError("operation_cancelled", "replay operation was cancelled", context.signal.reason),
     ));
     context.signal.addEventListener("abort", onAbort, { once: true });
-    const remaining = Math.max(0, context.deadline - performance.now());
-    deadlineTimer = setTimeout(() => finish(() => reject(
-      bindingError("deadline_exceeded", "replay deadline expired"),
-    )), Math.min(Math.ceil(remaining), 2_147_483_647));
+    const armDeadline = (): void => {
+      const remaining = context.deadline - performance.now();
+      if (remaining <= 0) {
+        finish(() => reject(bindingError("deadline_exceeded", "replay deadline expired")));
+      } else {
+        deadlineTimer = setTimeout(armDeadline, Math.min(Math.max(1, Math.ceil(remaining)), 2_147_483_647));
+      }
+    };
+    armDeadline();
     void Promise.resolve(operation).then(
       (value) => finish(() => {
         const after = contextError(context);

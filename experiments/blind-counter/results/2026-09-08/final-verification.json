@@ -1,0 +1,16 @@
+{
+  "schema": "mirrorecma.blind-counter-final-verification/v1",
+  "result": {
+    "status": "passed",
+    "runId": "7b47407c-f833-4418-8c97-1cb1495d2a16",
+    "cleanup": "confirmed"
+  },
+  "actions": {
+    "Initialize": 4,
+    "Tick": 36
+  },
+  "sourceUnchanged": true,
+  "authoringPerformed": false,
+  "privateTraceCount": 4,
+  "generatedBindingSha256": "70d6d7286d5834191a2c91d24c5363aaf2daad203a81ea37d6dfdf4e567df6f4"
+}

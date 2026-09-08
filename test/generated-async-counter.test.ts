@@ -249,6 +249,48 @@ describe("generated mirrorecma-async-v1 Counter binding", () => {
     expect(binding.coverage()).toEqual({ Initialize: 0, Tick: 0 });
   });
 
+  test("an early host timer callback rechecks and rearms the monotonic deadline", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    let injectedEarlyCallback = false;
+    globalThis.setTimeout = ((callback: () => void, delay?: number) => {
+      if (!injectedEarlyCallback) {
+        injectedEarlyCallback = true;
+        const placeholder = originalSetTimeout(() => undefined, 0);
+        queueMicrotask(callback);
+        return placeholder;
+      }
+      return originalSetTimeout(callback, delay);
+    }) as typeof setTimeout;
+
+    const controller = new AbortController();
+    const binding = bindCounterAsync({
+      initialize: () => new Promise<void>(() => undefined),
+      tick: async () => undefined,
+      observe: async () => ({ count: 0n }),
+    }, { paramVars: "parameters" });
+    const pending = binding.computer(input("init"), {
+      signal: controller.signal,
+      deadline: performance.now() + 1_000,
+    });
+    let settled = false;
+    void pending.then(
+      () => { settled = true; },
+      () => { settled = true; },
+    );
+    try {
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(injectedEarlyCallback).toBe(true);
+      expect(settled).toBe(false);
+      controller.abort(new Error("finish early-timer test"));
+      await expect(pending).rejects.toMatchObject({ code: "operation_cancelled" });
+      expect(binding.coverage()).toEqual({ Initialize: 0, Tick: 0 });
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+      if (!controller.signal.aborted) controller.abort();
+    }
+  });
+
   test("exports stable async identities and a sanitized public manifest", () => {
     expect(CounterAsyncTargetProfile).toBe("mirrorecma-async-v1");
     expect(CounterAsyncStateComputerContractVersion).toBe("mirrors.async-state-computer/v1");

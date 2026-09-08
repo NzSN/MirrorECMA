@@ -1,0 +1,32 @@
+{
+  "schema": "mirrorecma.blind-counter-evaluator/v1",
+  "mirrorEcmaCompiledRoot": "/operator/MirrorECMA/dist-sandbox",
+  "gateSdkRoot": "/operator/packed-mirrorgate",
+  "gateCommand": "/operator/MirrorGate/bin/mirrorgate",
+  "gatePolicyFile": "/private/blind-counter/control-policy.json",
+  "gatePolicyId": "blind.counter.node",
+  "submissionRootId": "submission",
+  "submissionRelativePath": "fresh-counter",
+  "submissionDirectory": "/private/blind-counter/submissions/fresh-counter",
+  "buildPlanId": "blind.counter.build",
+  "mirrorBinary": "/operator/Mirrors/.lake/build/bin/mirror",
+  "counterInterfaceLockPath": "/operator/MirrorECMA/test/fixtures/model-interface/counter/Counter.mirror-interface.lock.json",
+  "privateSpecPath": "/private/blind-counter/Counter.tla",
+  "privateTracePaths": ["/private/blind-counter/counter-private.itf.json"],
+  "invariant": "TraceComplete",
+  "constInit": "CInit",
+  "lengthBound": 3,
+  "modelRevisionId": "counter-private-v1",
+  "privateProbePaths": [
+    "/private/blind-counter/evaluator.json",
+    "/private/blind-counter/control-policy.json",
+    "/operator/MirrorECMA/test/fixtures/model-interface/counter/Counter.mirror-interface.lock.json",
+    "/private/blind-counter/Counter.tla",
+    "/private/blind-counter/counter-private.itf.json"
+  ],
+  "privateEnvironmentNames": ["BLIND_COUNTER_PRIVATE_CANARY"],
+  "evidencePath": "/private/blind-counter/evidence.json",
+  "registrationMs": 600000,
+  "stepMs": 10000,
+  "receiveMs": 60000
+}

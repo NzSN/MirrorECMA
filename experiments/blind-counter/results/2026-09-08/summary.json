@@ -1,0 +1,71 @@
+{
+  "schema": "mirrorecma.blind-counter-run-summary/v1",
+  "status": "passed",
+  "initialSourceFileCount": 0,
+  "authoredFiles": [
+    "adapter.mjs",
+    "build.mjs"
+  ],
+  "authoringToolExecCount": 3,
+  "privateTraceCount": 4,
+  "privateStateCount": 40,
+  "actions": {
+    "Initialize": 4,
+    "Tick": 36
+  },
+  "workerCount": 1,
+  "cleanup": "confirmed",
+  "freshPrivateTraceGeneration": true,
+  "privateInputsArchived": false,
+  "publicBundleSha256": "0518f603f7bf720b0973e43b5bfb0de974c72cb189b1c9bf9b0f527ce0e2b8ab",
+  "sourceHash": "e0e4a4672aed30e8dcfd840e39eaa025f42e8a6a6881ab076f9ac13aeceafa81",
+  "artifactHash": "58767d6769ab3a6681c4dfc54289333db2fea7c0c7c951a1b9888d21cd58bafe",
+  "evaluatorHarnessSha256": "33ad9ac86a87b4762ceabcd3d1964f178e09b92531ec455de7184b4121d86ca1",
+  "gateSdkArchive": {
+    "sha256": "314f77b75eaefa8d866fb93bd3328d596073bd017b90c8bb1f3e38f4ca214570",
+    "package": "mirrorgate-0.1.0.tgz"
+  },
+  "setupAttempts": [
+    {
+      "stage": "author-host approval configuration",
+      "sourceFilesWritten": 0,
+      "privateModelFeedbackToAuthor": false
+    },
+    {
+      "stage": "post-freeze evaluator sealing probe",
+      "authorCompleted": true,
+      "buildPassed": true,
+      "workerLaunches": 0,
+      "cleanup": "confirmed",
+      "resolution": "caught expected immediate STATE_INVALID; repeated with new empty submission and fresh author context",
+      "privateModelFeedbackToAuthor": false
+    }
+  ],
+  "files": {
+    "REPORT.md": "90c557a9e867fd09154a9af9cca08ca7060d4bde80aa378695f4cd5bb1695e21",
+    "author-events.jsonl": "e5f1df6a795263e378315f34b092ab2b068e207e8c4a8d74fb899606932fde1f",
+    "author-final.txt": "676d18bb747adc129dd64746f1d4fd18ec7e99d5915a1d24f79215dc607a3f64",
+    "author-profile.json": "8509a85743dbe66f131bd49f435416aa5698f3adb79e8df3a026ec9f3ec36b54",
+    "author-prompt.txt": "f80fb47178e521d939e4b79b44909704fdd4865aa99525c6876de49912636af0",
+    "evidence.json": "49335dba80fa7c8bbbc3a2dbccad7675e3c8cc688f6fa0cb2df6aeec2b29bad3",
+    "final-verification.json": "e17bff7c4db3aab11950077e6c947912f96603af12d8d940406acf23b5a2fc84",
+    "submission/adapter.mjs": "c8442d9d91e9b836414a3becd64d42cf0f0bcf943f6963e08b814b884a335a8a",
+    "submission/build.mjs": "7863f673f1ddb17beb1578c058dab654f39f7e021d24e0b11f3ca7187d28dd21",
+    "tool-audit.json": "8cc8caf96441ef7c14b25b09cb894a196921a24644b4599349320bc7c26702a8"
+  },
+  "postExperimentVerification": "final-verification.json",
+  "validation": {
+    "mirrorEcmaJest": {
+      "suites": 17,
+      "passed": 340,
+      "failed": 0
+    },
+    "evaluatorSealingTests": {
+      "passed": 3,
+      "failed": 0
+    },
+    "typechecks": "passed",
+    "mirrorsLakeTest": "ALL LAKE TESTS GREEN",
+    "liveApalache": true
+  }
+}

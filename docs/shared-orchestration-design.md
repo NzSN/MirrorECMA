@@ -152,6 +152,16 @@ The host must configure its agent's other tools and context consistently.
 Gate independently seals authoring when preparation begins, including late
 requests from an author callback that has already returned.
 
+Each restricted `exec` result includes `exitCode`, Gate's actual
+`stdoutBytes`/`stderrBytes` receipts, UTF-8 `stdout`/`stderr`, and independent
+truncation flags. MirrorECMA subscribes to the public Gate event stream before
+dispatch, accepts only `authoring.output` for the returned operation ID, and
+retains at most `SANDBOX_AUTHORING_OUTPUT_BYTES` (65,535) raw bytes per stream.
+It removes the listener when the command settles or authoring is sealed. A
+nonempty receipt without a complete correlated event stream fails closed; a
+legacy test double without `onEvent` remains usable only for zero-output
+commands. Only one authoring command may be in flight in an evaluation.
+
 Its public authoring bundle contains the sanitized manifest, the worker
 adapter interface, and approved public declarations/examples. It does not
 contain the full generated model-facing binding or normalized private

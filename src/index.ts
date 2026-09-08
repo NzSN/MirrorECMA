@@ -168,6 +168,7 @@ export {
 export {
   evaluateSandboxed,
   sandboxDiagnosticFailures,
+  SANDBOX_AUTHORING_OUTPUT_BYTES,
   type SandboxWorkerRuntime,
   type TrustedGateLauncher,
   type SandboxGateEndpoint,
@@ -175,6 +176,7 @@ export {
   type SandboxSubmission,
   type SandboxReplayRequest,
   type SandboxTightenedLimits,
+  type SandboxAuthoringExecResult,
   type SandboxAuthoringSession,
   type SandboxDisclosurePolicy,
   type SandboxCleanupStatus,
