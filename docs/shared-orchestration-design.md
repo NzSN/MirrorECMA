@@ -13,6 +13,14 @@ through the proposed
 Behavioral explanations use
 [PFPL-style semantic notation](https://github.com/NzSN/Mirrors/blob/main/Docs/semantic-notation.md).
 
+The accepted [implementation boundary](implementation-boundary-design.md)
+supersedes this document's placement of Gate-specific orchestration inside
+MirrorECMA. The sections below record the existing experimental landing and its
+historical contracts/evidence; they do not define the revised target core API.
+MirrorECMA will retain implementation-neutral MBT. The coordinator talks directly
+to Gate, and Gate-aware evaluation composition moves to an external integration
+under an explicit consumer-migration plan. No runtime extraction has landed yet.
+
 ## 1. Result to deliver
 
 A trusted TypeScript caller invokes one `evaluateSandboxed` entry point with
@@ -71,7 +79,8 @@ alone cannot implement §13.
 | MirrorGate | Control schemas and fixtures, preparation state transitions, immutable artifact leases, backend admission, managed worker transport, cancellation and forced cleanup |
 | Mirrors | Existing model protocol/comparison and a new deterministic async TypeScript emission profile |
 | MirrorECMA | Strict required negotiation, native async generated binding, projection/encoding, replay, structured reports, and the TypeScript facade |
-| Trusted evaluator/agent host | Private model and credential custody, public manifest approval, tool exposure, and result disclosure |
+| Trusted evaluator/caller | Private models, approved public implementation brief/manifest, and result disclosure |
+| Planned MirrorGate agent host | Fresh implementer launch/configuration, injected approved context, restricted tools, model credential handling, and lifecycle cleanup |
 | Worker shim and submitted adapter | Worker-v1 protocol and actual SUT operations inside the restricted environment |
 
 ```text
@@ -151,6 +160,12 @@ session constructor, policy file, worker endpoint, or private replay data.
 The host must configure its agent's other tools and context consistently.
 Gate independently seals authoring when preparation begins, including late
 requests from an author callback that has already returned.
+
+A managed-agent variant of this `author` callback is no longer planned.
+The coordinator supplies public authoring inputs directly to Gate. The external
+integration retains Gate ownership and supplies only a generic implementation
+binding to MirrorECMA. See the [migration contract](implementation-boundary-design.md#existing-coupling-and-migration)
+and [execution restrictions](implementation-boundary-design.md#information-and-execution-restrictions).
 
 Each restricted `exec` result includes `exitCode`, Gate's actual
 `stdoutBytes`/`stderrBytes` receipts, UTF-8 `stdout`/`stderr`, and independent
@@ -419,9 +434,11 @@ Invalid local model/configuration/registry selections have a separate
 `configuration` family. The trusted evaluator's disclosure policy determines
 the public view; it is not a second implementation of Gate's sandbox policy.
 
-An agent tool wrapper exposes only the policy-approved public result and the
-restricted authoring tools. Its host must mediate every other access-capable
-tool and exclude private data from prompts/retrieval. Type checks and sandbox
+In current callback integrations, the external agent host must expose only
+approved authoring tools and results, mediate every other access-capable tool,
+and exclude private context. The planned Gate host takes over that implementation.
+In the revised target, the coordinator injects the brief directly through Gate's
+hosting interface; that responsibility is outside MirrorECMA. Type checks and sandbox
 access tests do not prove honest observations or eliminate inference from
 permitted inputs and verdicts.
 

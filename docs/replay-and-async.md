@@ -11,6 +11,18 @@ These are client-local capabilities. They preserve ordinary `register`,
 descriptor. Server asynchronous jobs through `Connection` remain a separate
 protocol capability.
 
+For externally authored or isolated implementations, see the accepted
+[implementation boundary](implementation-boundary-design.md). MirrorECMA keeps
+generic negotiation/replay/binding semantics; the coordinating agent talks to
+Gate directly and a separate trusted integration supplies an implementation
+proxy. The existing Gate-aware sandbox facade still awaits migration; it will
+not gain the superseded managed-agent author option.
+
+The [MBT harness design](mbt-harness-design.md) describes source-code test and
+service entry points sharing one suite and deferred implementation factory.
+The service wrapper projects allowed reports without changing replay semantics;
+its proposed start/query/cancel protocol is not an existing MirrorECMA API.
+
 ## Run reports
 
 The existing trace runners still return `Promise<void>`. Use their additive

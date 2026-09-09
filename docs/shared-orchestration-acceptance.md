@@ -151,3 +151,25 @@ authoring stdout/stderr and corrected a generated deadline timer edge case.
 Its final MirrorECMA regression suite passed 340/340 tests, and the Mirrors gate
 passed again. These results supplement the earlier 42-case integration matrix;
 private evaluation inputs remain unarchived.
+
+## Planned decoupling and direct Gate authoring — 2026-09-09
+
+The [implementation boundary](implementation-boundary-design.md) supersedes the
+unimplemented managed-author option. The coordinator will request authoring
+directly from Gate; an external integration will supply a generic implementation
+proxy to MirrorECMA. Historical facade/Counter evidence remains valid for the
+tested coupled implementation, but proves neither extraction nor the new host.
+Future evidence must cover Gate-free core consumers, equivalent local/proxy MBT,
+consumer migration, required-match zero-launch failures, and real restricted
+authoring/build/worker handoff and cleanup. No runtime decoupling is recorded.
+
+## Planned reusable harness and evaluation service — 2026-09-09
+
+The [harness design](mbt-harness-design.md) reuses an application suite across
+source tests, CLI, and service calls. The optional service is separate from the
+implementation proxy and from MirrorECMA's generic MBT API. No service endpoint,
+package, or proxy acceptance evidence exists yet. Future evidence must compare
+fixed-input local/service outcomes and cover authorized suite/implementation
+resolution, private-suite integrity, request/run lifetime, result projection,
+required-match worker admission, and cleanup. Existing replay/sandbox evidence
+does not certify this additional interface.

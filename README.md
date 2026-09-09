@@ -10,7 +10,28 @@ adds strict async replay over the public MirrorGate control and worker SDKs.
 The [acceptance ledger](docs/shared-orchestration-acceptance.md) separates local
 working-tree evidence from hosted CI and released-package support.
 
-## Experimental sandbox orchestration
+The accepted [implementation boundary](docs/implementation-boundary-design.md)
+keeps MirrorECMA focused on MBT against caller-supplied implementations. A
+user-started coordinator requests restricted authoring directly from MirrorGate;
+a separate trusted integration supplies the implementation proxy to MirrorECMA.
+The proposal to add agent prompts/hosting to MirrorECMA is superseded. Existing
+experimental Gate-aware APIs below remain until their documented migration lands.
+
+The [reusable harness design](docs/mbt-harness-design.md) allows the same MBT
+suite to run as source-code tests, a CLI, or a proxy-accessible evaluation service.
+Implementation proxies and evaluation-service proxies serve different roles;
+their wrappers remain outside MirrorECMA's core. Service delivery is planned.
+
+The [implementation work plan](docs/mbt-integration-tasks.md) records the
+reviewed extraction, shared-harness, and consumer-validation assignments. Runtime
+changes and optional evaluation-service delivery remain queued.
+
+## Existing experimental sandbox orchestration
+
+This section describes current coupled functionality, not the revised core
+architecture. Its extraction/compatibility work is planned; no API is removed
+by the architecture decision. New hosting features belong in Gate and the
+external integration rather than this MirrorECMA facade.
 
 `evaluateSandboxed` accepts a trusted Gate endpoint, approved submission and
 policy IDs, compiler-owned model metadata, and a private replay request. It
