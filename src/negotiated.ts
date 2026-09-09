@@ -180,7 +180,7 @@ export interface AsyncCompiledExecutionSelection {
   readonly targetProfile: string;
   readonly stateComputerContractVersion: string;
   readonly registry: AsyncCompiledAdapterRegistry;
-  /** Async execution currently admits only the strict sandbox-compatible policy. */
+  /** Async execution requires a strict compiled model match before factory invocation. */
   readonly policy?: "require";
 }
 

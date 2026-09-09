@@ -79,7 +79,7 @@ export type AdapterFactory<B extends CallbackLocalBinding = LocalBinding> = (
 
 /**
  * The authority argument is present only after a strict compiled async match.
- * Sandbox factories use it for Gate authorization before constructing a port.
+ * External implementation factories can use it for admission before constructing a port.
  */
 export type AsyncAdapterFactory = (
   config: ApalacheConfig,

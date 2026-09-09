@@ -19,6 +19,9 @@
     "examples/work-queue/**/*.ts",
     "test/work-queue.smoke.ts",
     "test/async-generated-counter.smoke.ts",
-    "test/fixtures/model-interface/counter/generated-async/**/*.ts"
+    "test/fixtures/model-interface/counter/generated-async/**/*.ts",
+    "examples/mbt-counter/**/*.ts",
+    "test/mbt-counter.test.ts",
+    "test/mbt-counter.smoke.ts"
   ]
 }

@@ -6,6 +6,9 @@ MirrorECMA retains implementation-neutral MBT semantics. The user-started
 coordinator interacts directly with MirrorGate; a separate trusted integration
 supplies the resulting implementation proxy to MirrorECMA.
 
-This superseded proposal was not implemented. The existing experimental
-`evaluateSandboxed` facade still requires the migration described in the new
-design; neither removal of that facade nor runtime decoupling has happened yet.
+The superseded MirrorECMA managed-author option was not implemented. The
+[2.0 migration](migration-v2.md) is complete: `evaluateSandboxed` moved to
+`mirrorgate-mirrorecma/legacy`, and core has no Gate dependency or facade.
+Managed authoring instead uses Gate control v2 and its installed MCP adapter;
+[final validation](https://github.com/NzSN/MirrorGate/blob/main/docs/managed-workflow-validation.md)
+includes actual coordinating and implementing Codex processes.

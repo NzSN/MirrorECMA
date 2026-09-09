@@ -1,23 +1,25 @@
 # MBT integration migration — implementation work packages
 
-Status: AH8.1 migration planning draft, 2026-09-09. Runtime migration has not
-started. The [MirrorGate ledger](../../MirrorGate/docs/agent-hosting-tasks.md)
-is authoritative for assignment, dispatch, dependencies, and completion. All
-packages below are assigned to `specification_implementer`; assignment alone
-does not establish implemented behavior. This document refines AH8 rather than
-creating a second independent project ledger.
+Status: the external integration, reusable Counter suite and MirrorECMA 2.0.0
+cutover are integrated into the destination checkouts and locally validated.
+Hash-verified integration, destination CI with live Apalache, the Gate gates and
+installed-consumer acceptance passed. The central cross-client gate also reported `INTEROP MATRIX GREEN`. See [Gate workflow validation](https://github.com/NzSN/MirrorGate/blob/main/docs/managed-workflow-validation.md) for authoritative evidence and
+[migration-v2.md](migration-v2.md) for the removal/evidence map. Publication is
+separate. The [MirrorGate ledger](https://github.com/NzSN/MirrorGate/blob/main/docs/agent-hosting-tasks.md)
+remains authoritative for assignment and final completion. This document retains
+the original AH8 planning sequence and acceptance requirements.
 
 The controlling contracts are the [implementation boundary](implementation-boundary-design.md),
 [reusable harness design](mbt-harness-design.md), and
-[Gate evaluation-service design](../../MirrorGate/docs/evaluation-service-design.md).
+[Gate evaluation-service design](https://github.com/NzSN/MirrorGate/blob/main/docs/evaluation-service-design.md).
 Mirrors requires no server, protocol, compiler, or model-semantics changes.
 MirrorECMA will not gain a managed-agent author option.
 
 ## AH8.1 — Source inventory and migration decisions
 
-The current coupled implementation is real and must be migrated deliberately:
+The pre-2.0 coupled implementation inventory is retained for migration accounting:
 
-| Existing source | Current responsibility | Target owner |
+| Pre-2.0 source | Former responsibility | Migration owner |
 | --- | --- | --- |
 | `src/sandbox.ts` | `evaluateSandboxed`, Gate SDK loading, endpoint/policy types, author callback, preparation, authorization/acquisition, public-port proxy, disclosure and cleanup | Separate trusted integration in MirrorGate |
 | `src/sandbox-model.ts` | Descriptor/manifest checks, Gate port schema, public manifest export, generated public-port model adapter, authoring bundle | Separate trusted integration; reuse Gate's public sanitizer where equivalent and retain its validation evidence |
@@ -27,7 +29,7 @@ The current coupled implementation is real and must be migrated deliberately:
 | `examples/sandbox-counter/`, `tsconfig.sandbox.json` | Gate-specific example and build configuration | External integration example/build configuration |
 | `experiments/blind-counter/evaluator.mjs` and author helpers | Current experiment-specific host and evaluator composition | Migrate live entry point to Gate hosting plus external evaluation; preserve historical results |
 
-The existing generic seam is sufficient to start extraction:
+The implemented integration reuses the existing generic seam:
 
 - `AsyncCompiledAdapterRegistry` registers an exact key with
   `AsyncAdapterFactory(config, authority)`, returning `AsyncLocalBinding`.
@@ -44,15 +46,14 @@ The existing generic seam is sufficient to start extraction:
 - A prepared artifact is eligible input to the external factory. An already
   launched evaluation worker is not: that would bypass deferred admission.
 
-There are concrete extraction hazards. `sandbox.ts` currently imports
-`AsyncNegotiationAuthority` from `negotiation-core.ts` and
-`awaitReplayOperation` from `async-replay.ts`; these are not named root exports.
-The extracted package must not replace local imports with private deep imports.
-Infer the authority through public `AsyncAdapterFactory` types, and implement
-integration-owned bounded waits for Gate I/O using public cancellation/deadline
-contracts. If an unavoidable generic API gap is found, specify and test it with
-both a local implementation and a non-Gate external implementation before adding
-any public API. Do not copy MirrorECMA's negotiation/replay state machine.
+The following extraction hazard is historical: the former core `sandbox.ts`
+imported `AsyncNegotiationAuthority` from `negotiation-core.ts` and
+`awaitReplayOperation` from `async-replay.ts`, neither a named root export.
+The extracted package resolves authority through public `AsyncAdapterFactory`
+types and owns its bounded Gate I/O waits. It does not deep-import MirrorECMA
+internals or copy its negotiation/replay state machine. Any future generic API
+gap still requires implementation-neutral specification and local/external
+consumer tests before adding a public API.
 
 The authority also contains private configuration and transport access. Gate
 receives only its bounded attestation fields, not the complete authority object.
@@ -61,15 +62,14 @@ this extraction does not rename the emitted schema or require a compiler change.
 
 ### Packaging and compatibility decision
 
-Use a distinct optional ESM package sourced from
-`MirrorGate/integrations/mirrorecma/`, provisionally named
-`mirrorgate-mirrorecma`. The package name, exact compatible peer ranges, and
-packed declarations must be recorded before AH8.2 edits shared metadata. The
-name is a proposed local package identity, not an assertion of registry
-availability or publication. MirrorGate's existing core SDK package stays
-independent of MirrorECMA. The integration depends only on both public packages.
+The locally implemented optional ESM package is `mirrorgate-mirrorecma@0.1.0`,
+sourced from `MirrorGate/integrations/mirrorecma/`. It accepts the public
+`mirrorgate@0.1.0` SDK and MirrorECMA `^1.0.0 || ^2.0.0`. Its packed JavaScript
+and declarations are validated locally; the package remains private and is not
+a registry/publication claim. Gate's core SDK remains independent of MirrorECMA.
 
-Migrate in stages:
+The original staged migration sequence is retained below as rationale. The
+2.0.0 cutover has removed the transitional core exports and optional Gate peer:
 
 1. Add and validate the external package against packed public dependencies.
    Retain existing experimental exports while consumers migrate. This intermediate
@@ -87,17 +87,19 @@ Migrate in stages:
    decision before removal; do not silently remove current imports in a compatible
    release. Source completion and publishing a release are separate actions.
 
-Do not add a root forwarding shim that imports the external package: it would
-reintroduce Gate coupling and can produce a package dependency cycle. If a
-transition release retains old root exports, the ledger must say that complete
-core decoupling is pending. No commit, version publication, or remote release is
-implied by these assignments.
+The original transition retained root exports and therefore remained coupled.
+The integrated 2.0 cutover removes them without a forwarding shim, which would
+reintroduce Gate coupling or a package dependency cycle. Version publication
+or a remote release is not implied by the implementation assignments.
 
 ## Work packages and exclusive ownership
 
-All filenames listed as new below are proposed locations within the assigned
-module. The dispatcher must hand off shared files before edits. Workers preserve
-unrelated existing changes and do not expand into other AH tasks.
+The table preserves the original assignment boundaries and planned filenames.
+For implemented locations, use the [migration map](migration-v2.md): Gate owns
+`src/{sandbox,sandbox-model,provider,workflow,receipt}.ts`, `/legacy`, the moved
+suites and installed-package matrix driver; MirrorECMA owns
+`examples/mbt-counter/` and the core package-boundary checks. Further edits still
+require an ownership handoff and must preserve unrelated changes.
 
 | ID | Responsibility and owned files | Dependencies / handoff |
 | --- | --- | --- |
@@ -211,8 +213,9 @@ retention and cleanup status. Requests carry approved references, not JavaScript
 functions, arbitrary host paths, model text or raw Gate handles. Compare service
 outcomes with source-test/CLI outcomes for the same fixed inputs, and test private
 suite replacement, disclosure, disconnect/cancel races and bounded output.
-AH12 is optional and does not block AH8.3 or base AH8/AH9 acceptance. Its status
-remains separately pending until service-specific checks actually pass.
+AH12 is optional and does not block AH8.3 or base AH8/AH9 acceptance. Its
+loopback service/proxy and installed same-suite acceptance have passed in Gate.
+Service deployment/publication remains separate from this local validation.
 
 ## Validation and completion evidence
 
@@ -233,6 +236,9 @@ At implementation time, record exact commands, revisions, exit codes and skips:
 - Both edited repositories: `git diff --check`, destination diff/status review,
   and working relative documentation links.
 
-AH8.1 planning completion means the inventory, dependency/ownership decomposition
-and migration proposal were reviewed. It is not completion of AH8.2–AH8.5,
-AH12, or runtime decoupling. No runtime tests were run for this planning draft.
+The original AH8.1 planning review did not establish runtime completion. The
+subsequent integrated implementation has core-only packed consumers, moved
+integration suites, reusable Counter replay and managed-workflow evidence.
+Destination live CI and Gate/integration/42-row matrix gates passed. Full
+cross-client interop also passed; the authoritative validation/task ledgers
+record the final result. No published release or hosted-CI result is implied.

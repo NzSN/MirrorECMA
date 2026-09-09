@@ -1,10 +1,14 @@
 # Reusable MBT harnesses and evaluation access
 
-Status: accepted design, 2026-09-09. Generic negotiated replay and async binding
-factories exist today. The reusable application layout and evaluation-service
-interface below are design examples, not newly implemented exports or endpoints.
-The [implementation boundary](implementation-boundary-design.md) continues to
-keep MirrorECMA independent of agent hosting and Gate orchestration.
+Status: the reusable Counter suite, source tests/CLI and MirrorECMA 2.0.0
+core boundary are integrated and locally validated in the destination checkouts.
+Gate's optional local service, source/CLI/MCP entry points and real restricted
+implementer path passed installed-consumer acceptance against the same suite.
+Full cross-client interop passed (`INTEROP MATRIX GREEN`). See [Gate workflow validation](https://github.com/NzSN/MirrorGate/blob/main/docs/managed-workflow-validation.md) for
+recorded evidence; publication and remote deployment are separate.
+The [implementation boundary](implementation-boundary-design.md) keeps
+MirrorECMA independent of agent hosting, Gate orchestration and service transport.
+The runnable application example is [MBT Counter](../examples/mbt-counter/README.md).
 
 ## One harness, multiple entry points
 
@@ -113,16 +117,19 @@ Gate, its implementation belongs to the optional trusted Gate/MirrorECMA
 integration. MirrorECMA does not become an RPC server or gain Gate-specific
 options. Applications provide their approved suite modules and disclosure policy.
 
-The proposed logical operations are:
+The Gate-owned proxy exposes these implemented operations:
 
 ```text
-startEvaluation(suiteId, implementationRef) -> runId
-getEvaluation(runId)                       -> progress / terminal result
-cancelEvaluation(runId)                    -> cancellation status
+start({startKey, suiteRef, implementationRef}) -> run
+get({runId} | {startKey})                     -> current run
+cancel(runId)                                -> cancellation acknowledgement/run
+wait(runId)                                  -> terminal run
 ```
 
-These names are illustrative; no wire schema or endpoint is implemented. The
-service resolves approved suites and implementations under the caller's authority,
+The [versioned service contract](https://github.com/NzSN/MirrorGate/blob/main/docs/evaluation-service-contract-v1.md)
+defines authenticated loopback HTTP, closed records, epochs and bounds. These
+are optional Gate integration APIs, not MirrorECMA exports. The service resolves
+approved suites and implementations under the caller's authority,
 records the exact resolved revisions, and retains resources through cleanup.
 It accepts references rather than remotely supplied JavaScript functions, arbitrary
 host paths, private model text, or raw Gate handles. Suite selection must not
@@ -132,10 +139,11 @@ The service run reference is different from a Mirrors session, Gate operation,
 worker handle, or hosting run. Its status includes an allowed model outcome and
 separate cleanup state. Cancellation acknowledgement is not completion, and a
 lost start reply must not cause an automatic duplicate evaluation. Full progress
-bounds, correlation, request deduplication/query, caller authorization, retention,
-and disconnect semantics need a versioned service contract before implementation.
+bounds, correlation, request deduplication/query, caller authorization, retention
+and disconnect semantics are specified by that versioned service contract and
+validated independently of model and isolation behavior.
 
-See [Gate's evaluation-service design](../../MirrorGate/docs/evaluation-service-design.md)
+See [Gate's evaluation-service design](https://github.com/NzSN/MirrorGate/blob/main/docs/evaluation-service-design.md)
 for resource ownership, the relationship to hosting, and acceptance requirements.
 An evaluation RPC layer does not add remote control or reconnect to Gate v1.
 
@@ -160,6 +168,6 @@ delivery. It preserves the same generic MBT implementation-factory seam.
 - Test/service wrapper reuse is separate from proving actual sandbox isolation;
   Gate profiles still need real authoring/build/worker denial and cleanup checks.
 
-AH8 in the [Gate task ledger](../../MirrorGate/docs/agent-hosting-tasks.md) owns
+AH8 in the [Gate task ledger](https://github.com/NzSN/MirrorGate/blob/main/docs/agent-hosting-tasks.md) owns
 shared integration/harness migration; AH12 owns the optional service contract,
 proxy entry point, and service acceptance. Source tests need not depend on AH12.

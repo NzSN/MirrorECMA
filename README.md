@@ -5,77 +5,56 @@ conformance checker compatible with the ModelMirrors JSONL protocol. Connect a
 real implementation to a generated typed interface, replay TLA+ model traces,
 and let Mirrors compare the implementation's observations with the model.
 
-The experimental [shared sandbox orchestration facade](docs/shared-orchestration-design.md)
-adds strict async replay over the public MirrorGate control and worker SDKs.
-The [acceptance ledger](docs/shared-orchestration-acceptance.md) separates local
-working-tree evidence from hosted CI and released-package support.
-
-The accepted [implementation boundary](docs/implementation-boundary-design.md)
-keeps MirrorECMA focused on MBT against caller-supplied implementations. A
-user-started coordinator requests restricted authoring directly from MirrorGate;
-a separate trusted integration supplies the implementation proxy to MirrorECMA.
-The proposal to add agent prompts/hosting to MirrorECMA is superseded. Existing
-experimental Gate-aware APIs below remain until their documented migration lands.
+The 2.0 source cutover keeps MirrorECMA focused on MBT against caller-supplied
+implementations. A user-started coordinator requests restricted authoring directly
+from MirrorGate; Gate's optional `mirrorgate-mirrorecma` integration supplies the
+implementation proxy. Core has no Gate dependency, peer, launcher, or sandbox
+facade. Generic negotiation, generated binding, replay and report APIs are unchanged.
+See the [2.0 migration guide](docs/migration-v2.md) and
+[implementation boundary](docs/implementation-boundary-design.md). Source version
+2.0.0 is a breaking cutover decision, not a published-release claim.
 
 The [reusable harness design](docs/mbt-harness-design.md) allows the same MBT
 suite to run as source-code tests, a CLI, or a proxy-accessible evaluation service.
 Implementation proxies and evaluation-service proxies serve different roles;
-their wrappers remain outside MirrorECMA's core. Service delivery is planned.
+their wrappers remain outside MirrorECMA's core. Gate's [optional loopback HTTP
+service](https://github.com/NzSN/MirrorGate/blob/main/integrations/mirrorecma/service/README.md)
+is implemented and locally validated through that same suite.
 
 The [implementation work plan](docs/mbt-integration-tasks.md) records the
-reviewed extraction, shared-harness, and consumer-validation assignments. Runtime
-changes and optional evaluation-service delivery remain queued.
+extraction, shared-harness, and consumer-validation assignments. Optional
+evaluation-service delivery remains separate from core MBT.
 
-## Existing experimental sandbox orchestration
+The [documentation index](docs/README.md) distinguishes runnable examples,
+current APIs, completed migration, implemented hosting/service interfaces, and
+historical design records. [Final coordinated validation](https://github.com/NzSN/MirrorGate/blob/main/docs/managed-workflow-validation.md)
+records destination tests, full interop, and the real Codex-to-Gate MCP workflow.
 
-This section describes current coupled functionality, not the revised core
-architecture. Its extraction/compatibility work is planned; no API is removed
-by the architecture decision. New hosting features belong in Gate and the
-external integration rather than this MirrorECMA facade.
+## Optional restricted evaluation integration
 
-`evaluateSandboxed` accepts a trusted Gate endpoint, approved submission and
-policy IDs, compiler-owned model metadata, and a private replay request. It
-preflights the complete portable manifest before loading Gate, prepares and
-freezes the artifact, requires an exact Mirrors `verify/require` match, and only
-then authorizes and attaches a managed execution worker. The facade returns a
-fixed public result after Gate cleanup; mismatch state and failure messages are
-released only by the caller's trusted disclosure policy.
-
-The first profile is local Linux/Bubblewrap, owned stdio or attached Unix
-control, and `node-v1` or `rust-v1` workers. MirrorGate is an optional peer, so
-ordinary MirrorECMA imports and existing synchronous clients do not resolve its
-SDK. Calling the sandbox facade requires a compatible installed `mirrorgate`
-package and an operator-approved controller/policy; there is no download or raw
-subprocess fallback.
-
-Use the compiler-owned async Counter module through its mechanical public-port
-adapter:
+Gate-aware callers migrate their imports to the separate Gate-owned package:
 
 ```ts
-const model = createSandboxCompiledModel({
-  metadata: CounterModelInterface,
-  descriptor: verifiedCounterDescriptor,
-  adapterId: "counter.generated-async-v1",
-  publicManifest: CounterPublicManifest,
-  targetProfile: CounterAsyncTargetProfile,
-  stateComputerContractVersion: CounterAsyncStateComputerContractVersion,
-  bindPublicPort: bindCounterAsyncPublicPort,
-});
-
-const result = await evaluateSandboxed({
-  gate: { kind: "owned", launcher: { command: gateBin }, policyFile },
-  policyId: "counter",
-  submission: { kind: "prebuilt", input: { rootId: "submission", relativePath: "counter" } },
-  runtime: "node-v1",
-  model,
-  replay: { kind: "traces", target: mirrorBin, config, tracePaths },
-});
+import {
+  evaluateSandboxed, createSandboxCompiledModel,
+  type SandboxEvaluationPlan,
+} from "mirrorgate-mirrorecma/legacy";
 ```
 
-Run `pnpm run check:sandbox` for the dedicated generated-artifact compilation
-gate. `pnpm run smoke:sandbox` is a required real-backend gate and fails when
-its explicitly prepared Mirrors/Gate/runtime inputs are absent. The runnable
-[sandbox Counter example](examples/sandbox-counter/README.md) lists its inputs.
+That explicit compatibility entry retains the previous callback, disclosure and
+cleanup semantics; MirrorECMA does not forward these imports or depend on the
+integration. Install compatible locally packed packages according to the
+[Gate integration guide](https://github.com/NzSN/MirrorGate/blob/main/integrations/mirrorecma/README.md).
+The Gate package and integration may be private; no registry availability is
+implied. New managed authoring uses Gate directly and supplies a deferred factory
+to the ordinary MBT suite.
+
+The former sandbox tests and 42-row TypeScript/C++ acceptance driver now live
+with the Gate integration. Their Node/Rust, owned/attached, required-match,
+correct/faulty, source-author and cancellation scenarios remain required. Use
+`pnpm run check:package-boundary` with `MIRROR_BIN` to prove that a packed core-only
+consumer can compile declarations and run local MBT, mismatch, cancellation and
+report checks without either Gate package.
 
 The manual
 [required-backend workflow](.github/workflows/shared-orchestration.yml) runs on
@@ -265,7 +244,7 @@ spec-generated protocol traces against the real mirror implementation.
 pnpm install --frozen-lockfile
 pnpm run build        # → dist/
 pnpm run check        # type-check only
-pnpm run check:sandbox # async generated binding + sandbox facade/example
+pnpm run check:package-boundary # packed core-only declarations + local MBT (requires MIRROR_BIN)
 MIRRORS_FIXTURES=/path/to/Mirrors/test/fixtures pnpm test
 MIRROR_BIN=/path/to/Mirrors/.lake/build/bin/mirror \
   SPEC=/path/to/authoritative/Counter.tla pnpm run smoke

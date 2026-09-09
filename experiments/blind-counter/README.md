@@ -1,5 +1,15 @@
 # Blind Counter authoring experiment
 
+Status: existing helper-driven experiment and historical acceptance source.
+Its author-host scripts still launch/configure the agent outside Gate's control
+API. The [current target](../../docs/implementation-boundary-design.md) instead
+has the coordinator call Gate directly, with a separate integration supplying
+the implementation to generic MirrorECMA MBT. [AH8](../../docs/mbt-integration-tasks.md)
+owns managed-workflow migration. The current helper-driven evaluator imports
+`mirrorecma` and `mirrorgate-mirrorecma/legacy` as installed public packages;
+it does not use removed MirrorECMA root exports. This compatibility import change
+does not replace helper hosting with the managed Gate API.
+
 This experiment starts with an empty source directory, lets an isolated coding
 agent author a Counter through MirrorGate-managed Node or Python commands, seals
 and builds that source in a separate restricted phase, and evaluates the frozen
@@ -14,6 +24,12 @@ It is an evaluator harness, not a Counter implementation. No existing Counter
 source is copied into the submission. The only author-visible materials are the
 files under [`public/`](public/), MirrorGate's sanitized public port manifest,
 and outputs from that author's correlated tool commands.
+
+Install compatible locally packed `mirrorecma` (2.0), `mirrorgate` and
+`mirrorgate-mirrorecma` packages in the evaluator consumer before running it.
+`mirrorEcmaCompiledRoot` now identifies `dist-test` containing only the generated
+fixture/evidence tree; library code resolves through package names. The original
+configuration field is retained for this historical helper interface.
 
 ## Boundary and flow
 
@@ -76,10 +92,10 @@ the submission root and every approved runtime mount. Create the synthetic
 canary named by `publicProbePaths` as a regular file outside those roots. Its
 path is intentionally public; its random contents remain evaluator-private.
 
-Build MirrorECMA's existing sandbox output and pack MirrorGate's public SDK:
+Build the generic example/generated fixture output and pack MirrorGate's public SDK:
 
 ```bash
-pnpm run build:sandbox
+pnpm run build:examples
 npm --prefix /operator/MirrorGate pack --pack-destination /private/blind-counter/pack
 ```
 

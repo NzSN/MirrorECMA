@@ -62,10 +62,12 @@ command -v c++ >/dev/null
 }
 
 cd "$ecma_root"
-pnpm run check:sandbox
+pnpm run check
+pnpm run build
 
 cd "$mirrors_root"
 lake build mirror model_interface_gen
+(cd "$ecma_root" && MIRROR_BIN="$mirrors_root/.lake/build/bin/mirror" pnpm run check:package-boundary)
 
 evidence="${MIRRORGATE_CONTROL_EVIDENCE:-${RUNNER_TEMP:-/tmp}/mirrorgate-control-v1-${GITHUB_RUN_ID:-local}.jsonl}"
 export MIRRORECMA_ROOT="$ecma_root"

@@ -1,13 +1,22 @@
 # Landing Shared Sandbox Orchestration in MirrorECMA
 
-Status: **experimental implementation landed; released support remains gated by acceptance evidence**.
+The 2.0 source cutover moves the Gate-specific facade and TypeScript acceptance
+consumer to `MirrorGate/integrations/mirrorecma/`; see [migration-v2.md](migration-v2.md).
+The earlier placement, commands and dated results below are historical. The
+current 42-row driver retains its scenarios and evidence schema while importing
+installed public packages. [Final destination validation](https://github.com/NzSN/MirrorGate/blob/main/docs/managed-workflow-validation.md)
+passed, including actual managed hosting; package publication remains separate.
+
+Status: **historical pre-2.0 landing design**. The body below preserves the
+original ownership, file layout and planning language. Use the
+[migration guide](migration-v2.md) and current Gate integration for implemented APIs.
 Baseline: MirrorECMA `89fbd14`, MirrorGate `a377341`, Mirrors `acc3d9d`.
 The baseline below records the pre-implementation audit. Current local, hosted,
 and release evidence is tracked separately in
 [the acceptance ledger](shared-orchestration-acceptance.md); this design alone
 is not a support claim.
 This document implements
-[client guide §13](https://github.com/NzSN/Mirrors/blob/main/Docs/client-implementation-guide.md#13-shared-sandbox-orchestration-design-profile)
+[client guide §13](https://github.com/NzSN/Mirrors/blob/main/Docs/client-implementation-guide.md#13-shared-sandbox-orchestration-experimental-profile)
 through the proposed
 [MirrorGate control v1 contract](https://github.com/NzSN/MirrorGate/blob/main/docs/orchestration-control-v1.md).
 Behavioral explanations use
@@ -17,9 +26,10 @@ The accepted [implementation boundary](implementation-boundary-design.md)
 supersedes this document's placement of Gate-specific orchestration inside
 MirrorECMA. The sections below record the existing experimental landing and its
 historical contracts/evidence; they do not define the revised target core API.
-MirrorECMA will retain implementation-neutral MBT. The coordinator talks directly
-to Gate, and Gate-aware evaluation composition moves to an external integration
-under an explicit consumer-migration plan. No runtime extraction has landed yet.
+MirrorECMA 2 now retains implementation-neutral MBT. The coordinator talks
+directly to Gate; Gate-aware composition resides in `mirrorgate-mirrorecma`.
+Extraction, consumer migration, managed hosting and the optional loopback service
+are implemented and validated. The remaining sections record the earlier landing.
 
 ## 1. Result to deliver
 
@@ -164,7 +174,7 @@ requests from an author callback that has already returned.
 A managed-agent variant of this `author` callback is no longer planned.
 The coordinator supplies public authoring inputs directly to Gate. The external
 integration retains Gate ownership and supplies only a generic implementation
-binding to MirrorECMA. See the [migration contract](implementation-boundary-design.md#existing-coupling-and-migration)
+binding to MirrorECMA. See the [migration contract](implementation-boundary-design.md#versioned-coupling-removal)
 and [execution restrictions](implementation-boundary-design.md#information-and-execution-restrictions).
 
 Each restricted `exec` result includes `exitCode`, Gate's actual

@@ -5,6 +5,13 @@ model interface. Mirrors replays a model trace, the adapter invokes real
 operations and observes real state, and Mirrors compares those observations
 with the expected model states.
 
+This runnable example uses generic implementation bindings and needs no Gate
+host or evaluation service. To structure the same MBT logic as a reusable module
+called from source-code tests, CLI, or a service wrapper, see the
+[harness design](../../docs/mbt-harness-design.md) and implemented
+[reusable Counter suite](../mbt-counter/README.md). Gate's optional evaluation
+service invokes the same suite; this tutorial's commands remain current.
+
 ## 1. Start with the implementation
 
 [counter.ts](counter.ts) contains the system under test (SUT). It imports

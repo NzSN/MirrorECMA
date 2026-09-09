@@ -1,5 +1,12 @@
 # Shared orchestration implementation and acceptance
 
+The 2.0 source cutover moves the Gate-specific facade and TypeScript acceptance
+consumer to `MirrorGate/integrations/mirrorecma/`; see [migration-v2.md](migration-v2.md).
+The earlier placement, commands and dated results below are historical. The
+current 42-row driver retains its scenarios and evidence schema while importing
+installed public packages. [Final integrated acceptance](https://github.com/NzSN/MirrorGate/blob/main/docs/managed-workflow-validation.md)
+has passed; publication remains separate.
+
 This ledger tracks the implementation of
 [the shared orchestration design](shared-orchestration-design.md). Local
 working-tree validation, hosted CI, and released package compatibility are
@@ -152,24 +159,26 @@ Its final MirrorECMA regression suite passed 340/340 tests, and the Mirrors gate
 passed again. These results supplement the earlier 42-case integration matrix;
 private evaluation inputs remain unarchived.
 
-## Planned decoupling and direct Gate authoring — 2026-09-09
+## Completed decoupling and direct Gate authoring — 2026-09-09
 
-The [implementation boundary](implementation-boundary-design.md) supersedes the
-unimplemented managed-author option. The coordinator will request authoring
-directly from Gate; an external integration will supply a generic implementation
-proxy to MirrorECMA. Historical facade/Counter evidence remains valid for the
-tested coupled implementation, but proves neither extraction nor the new host.
-Future evidence must cover Gate-free core consumers, equivalent local/proxy MBT,
-consumer migration, required-match zero-launch failures, and real restricted
-authoring/build/worker handoff and cleanup. No runtime decoupling is recorded.
+The [2.0 migration](migration-v2.md) removes the Gate-aware core facade and peer.
+Gate's separate integration supplies a generic implementation factory to the
+same source-test/CLI Counter suite. Gate-free packed consumers, local/proxy
+outcome equivalence, required-match zero-worker failures, and all 42 shared
+control cases passed in the destination checkouts.
 
-## Planned reusable harness and evaluation service — 2026-09-09
+Gate control v2 and its installed MCP adapter now own managed authoring. A real
+Codex coordinator launched a fresh real Codex implementer through that adapter;
+explicit submission, ordinary MBT and cleanup passed. The
+[final validation report](https://github.com/NzSN/MirrorGate/blob/main/docs/managed-workflow-validation.md)
+records exact commands, versions, source/artifact identities and separate runtime
+audit evidence. The earlier helper-based experiment above remains historical.
 
-The [harness design](mbt-harness-design.md) reuses an application suite across
-source tests, CLI, and service calls. The optional service is separate from the
-implementation proxy and from MirrorECMA's generic MBT API. No service endpoint,
-package, or proxy acceptance evidence exists yet. Future evidence must compare
-fixed-input local/service outcomes and cover authorized suite/implementation
-resolution, private-suite integrity, request/run lifetime, result projection,
-required-match worker admission, and cleanup. Existing replay/sandbox evidence
-does not certify this additional interface.
+## Reusable harness and optional evaluation service — 2026-09-09
+
+The [harness design](mbt-harness-design.md) now has a runnable Counter suite used
+by source tests, CLI, local/proxy providers and Gate's optional loopback HTTP
+service. Installed correct/faulty service cases matched source-suite outcomes;
+service authorization, bounded lifetime, disclosure and cleanup checks passed.
+The service package and protocol remain outside MirrorECMA core. Remote TLS
+service deployment and publication are not part of this local validation.

@@ -1,6 +1,6 @@
 {
   "name": "mirrorecma",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "TypeScript client for ModelMirros protocol",
   "license": "ISC",
   "author": "",
@@ -11,8 +11,8 @@
     "dist"
   ],
   "scripts": {
-    "prepare": "tsc",
-    "build": "tsc",
+    "prepare": "node scripts/clean-dist.mjs && tsc",
+    "build": "node scripts/clean-dist.mjs && tsc",
     "check": "tsc --noEmit",
     "check:model-interface": "tsc -p tsconfig.model-interface.json --noEmit",
     "check:examples": "tsc -p tsconfig.examples.json --noEmit",
@@ -30,10 +30,11 @@
     "smoke:work-queue": "pnpm run build:examples && node dist-test/test/work-queue.smoke.js",
     "smoke:async-generated-counter": "pnpm run build:examples && node dist-test/test/async-generated-counter.smoke.js",
     "ci": "bash scripts/ci/check.sh",
-    "check:sandbox": "tsc -p tsconfig.sandbox.json --noEmit",
-    "build:sandbox": "tsc -p tsconfig.sandbox.json",
-    "example:sandbox-counter": "pnpm run build:sandbox && node dist-sandbox/examples/sandbox-counter/run.js",
-    "smoke:sandbox": "pnpm run build:sandbox && node dist-sandbox/test/sandbox-counter.smoke.js"
+    "example:mbt-counter": "pnpm run build:examples && node dist-test/examples/mbt-counter/run.js",
+    "example:mbt-counter:broken": "pnpm run build:examples && node dist-test/examples/mbt-counter/run.js --broken",
+    "test:mbt-counter": "NODE_OPTIONS=\"--experimental-vm-modules\" jest --runInBand test/mbt-counter.test.ts",
+    "smoke:mbt-counter": "pnpm run build:examples && node dist-test/test/mbt-counter.smoke.js",
+    "check:package-boundary": "pnpm run build && node scripts/check-package-boundary.mjs"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
@@ -44,13 +45,5 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.5"
   },
-  "packageManager": "pnpm@11.22.0",
-  "peerDependencies": {
-    "mirrorgate": "0.1.0"
-  },
-  "peerDependenciesMeta": {
-    "mirrorgate": {
-      "optional": true
-    }
-  }
+  "packageManager": "pnpm@11.22.0"
 }

@@ -1,9 +1,19 @@
 # Design: ModelMirrors Server-Mode Support
 
 **Date:** 2026-08-19
-**Status:** planned — implementation plan: `docs/superpowers/plans/2026-08-19-server-mode-support.md`
+**Status:** historical design; the mTLS/registry transport and readiness handling
+are implemented. The original plan, upstream pins and proposed changes below
+record the 2026-08-19 baseline. Use the [current README](../README.md) and
+[coordinated validation](https://github.com/NzSN/MirrorGate/blob/main/docs/managed-workflow-validation.md)
+for supported behavior and final tests.
 **Upstream reference:** [ModelMirros `docs/server-mode-design.md`](https://github.com/NzSN/ModelMirrors/blob/main/docs/server-mode-design.md) (current server mode: mTLS + optional Consul service registry)
 **Protocol reference:** ModelMirros `docs/protocol-spec.md`, section "Discovery and mTLS (Client Guide)"
+
+This dated design describes the Mirrors model-server transport. It is distinct
+from the implemented optional [evaluation-service proxy](mbt-harness-design.md#optional-evaluation-service-contract),
+which requests complete MBT runs from a trusted harness. It does not provide
+remote Gate control or agent hosting. Use the current [README](../README.md) for
+implemented APIs and the [documentation index](README.md) for the later designs.
 
 ## Conclusion: what ModelMirrors server mode is
 

@@ -15,8 +15,8 @@ For externally authored or isolated implementations, see the accepted
 [implementation boundary](implementation-boundary-design.md). MirrorECMA keeps
 generic negotiation/replay/binding semantics; the coordinating agent talks to
 Gate directly and a separate trusted integration supplies an implementation
-proxy. The existing Gate-aware sandbox facade still awaits migration; it will
-not gain the superseded managed-agent author option.
+proxy. The Gate-aware facade is available from the external `/legacy` entry
+point after the [2.0 cutover](migration-v2.md); core has no managed-agent author option.
 
 The [MBT harness design](mbt-harness-design.md) describes source-code test and
 service entry points sharing one suite and deferred implementation factory.
@@ -218,8 +218,8 @@ uses `MIRRORECMA_TARGET_PROFILE` and `STATE_COMPUTER_CONTRACT_VERSION`. The
 [async Counter acceptance executable](../test/async-generated-counter.smoke.ts)
 shows an explicit adapter from the generated input/context API to the callback
 runner, retaining progress reports. The
-[sandbox Counter](../examples/sandbox-counter/README.md) uses the compiled
-execution API directly.
+[reusable MBT Counter](../examples/mbt-counter/README.md) uses the compiled
+execution API directly with a supplied implementation factory.
 
 The semantic lock, descriptor schema, canonical digest, negotiation bytes, and
 ITF state encoding are shared with the synchronous target. Target profile and

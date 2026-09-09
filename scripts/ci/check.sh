@@ -57,6 +57,7 @@ if "$live"; then
 else
   pnpm run smoke:generated-counter
 fi
+MIRROR_BIN="$MIRRORS_ROOT/.lake/build/bin/mirror" pnpm run check:package-boundary
 pnpm run smoke:async-generated-counter
 if "$live"; then
   pnpm run smoke:work-queue --live

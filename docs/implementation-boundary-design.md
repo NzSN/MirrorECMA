@@ -1,10 +1,15 @@
 # MBT against implementations: MirrorECMA and MirrorGate ownership
 
-Status: accepted architecture revision, 2026-09-09; runtime migration is planned.
+Status: architecture accepted 2026-09-09; the 2.0.0 cutover and external Gate
+integration are integrated and locally validated in the destination checkouts.
+Full cross-client interop passed (`INTEROP MATRIX GREEN`). [Gate workflow validation](https://github.com/NzSN/MirrorGate/blob/main/docs/managed-workflow-validation.md) records
+the completed destination, integration and real-implementer gates; publication
+remains separate.
 This supersedes the proposal to add managed-agent authoring to MirrorECMA.
 No `author: {kind: "managedAgent", ...}` option will be added under this design.
-The existing experimental `evaluateSandboxed` facade remains implemented and
-Gate-aware until a separate compatibility-preserving migration lands.
+The former experimental `evaluateSandboxed` facade is owned by
+`mirrorgate-mirrorecma/legacy`; it is absent from the 2.0 core. See the
+[versioned migration guide](migration-v2.md).
 
 ## Decision
 
@@ -52,8 +57,8 @@ public libraries. Neither core library needs the other's internal modules.
 ```mermaid
 flowchart TD
     User["User"] <-->|"Requirements and specifications"| Coordinator["User-started coordinating agent"]
-    Coordinator -->|"Approved brief and public port"| Hosting["MirrorGate hosting tool / SDK: planned"]
-    Hosting --> Host["MirrorGate agent host: planned"]
+    Coordinator -->|"Approved brief and public port"| Hosting["MirrorGate hosting tool / SDK"]
+    Hosting --> Host["MirrorGate agent host"]
     Host --> Author["Restricted implementer"]
     Author -->|"Submission"| Prepared["Gate: freeze source, restricted build, freeze artifact"]
     Coordinator -->|"Write MBT harness"| Integration["Separate trusted evaluation integration"]
@@ -65,9 +70,10 @@ flowchart TD
     Proxy <-->|"Public port RPC"| Worker
 ```
 
-The diagram describes target ownership. The hosting operation and extraction of
-the current coupled facade are planned. Existing Mirrors transports, generated
-bindings, generic replay, and Gate sandbox/worker infrastructure are implemented.
+The diagram describes the integrated ownership boundary. Destination live CI,
+Gate hosting, the optional evaluation integration and core-decoupling gates have
+passed. Full cross-client interop passed (`INTEROP MATRIX GREEN`). Mirrors transports, generated
+bindings and generic replay retain their existing semantics.
 Apalache is the integrated model backend. TLC can be a separate specification
 check; an automated TLC backend/trace conversion is not supplied by this design.
 
@@ -169,28 +175,21 @@ Source co-location does not authorize an implementer to read private tests or
 replace the evaluator's approved suite revision. The service owns private suite
 selection and result disclosure; Gate owns worker isolation/cleanup. See
 [reusable MBT harnesses](mbt-harness-design.md) and the
-[optional evaluation service](../../MirrorGate/docs/evaluation-service-design.md).
+[optional evaluation service](https://github.com/NzSN/MirrorGate/blob/main/docs/evaluation-service-design.md).
 
-## Existing coupling and migration
+## Versioned coupling removal
 
-Today `src/sandbox.ts` contains `evaluateSandboxed`, Gate endpoint/policy types,
-SDK loading, author callbacks, preparation, worker orchestration, and combined
-disclosure/cleanup handling. `src/sandbox-model.ts` includes Gate manifest/proxy
-adaptation. Root exports and the optional Gate peer declaration expose that
-experimental integration. This is existing behavior, not the desired core seam.
+The 2.0.0 source cutover removes `src/sandbox.ts`, `src/sandbox-model.ts`, their
+root exports and the optional Gate peer. The implementation, model/manifest
+validation, four unit suites and native TypeScript matrix driver move to
+MirrorGate's optional integration. Core does not import a forwarding shim.
 
-Do not extend it with a managed-agent author option. AH8 must inventory and move
-Gate-specific composition to the external integration, reusing generic replay,
-negotiation, generated bindings, and reports. Decide a public package location
-and explicit compatibility/deprecation strategy before removing or redirecting
-existing exports. Any temporary compatibility shim is migration machinery, not
-the target core contract. Keep historical examples/evidence clearly identified
-until replacements and consumer checks pass. This document changes no runtime
-API, dependency, or existing callback behavior by itself.
-
-The [AH8 migration work plan](mbt-integration-tasks.md) defines extraction,
-compatibility, reusable suite, experiment, and consumer-regression ownership.
-It is a reviewed planning deliverable; runtime migration remains queued.
+Existing consumers change Gate-aware imports to `mirrorgate-mirrorecma/legacy`;
+generic imports remain `mirrorecma`. The [2.0 migration guide](migration-v2.md)
+records all removed exports, evidence destinations and installed-package checks.
+Historical results and their helper-driven runtime claims remain historical.
+The cutover and destination integration are validated; package publication is
+a separate action. The earlier isolated preparation stage is historical evidence.
 
 ## Acceptance
 
@@ -208,6 +207,6 @@ It is a reviewed planning deliverable; runtime migration remains queued.
 - Existing experimental consumers have a documented, tested migration path;
   source/dependency inspection confirms the promised core decoupling.
 
-The [Gate task ledger](../../MirrorGate/docs/agent-hosting-tasks.md) records AH8
+The [Gate task ledger](https://github.com/NzSN/MirrorGate/blob/main/docs/agent-hosting-tasks.md) records AH8
 for integration extraction/consumer migration and AH11 for the coordinator's
-standard hosting tool. Both remain queued; no runtime decoupling is claimed yet.
+standard hosting tool. Their final acceptance is independent of core package checks.

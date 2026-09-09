@@ -6,6 +6,13 @@ failure/retry, completion, and reset. Each operation awaits disk I/O; the
 observers reload persisted application state before comparison with the
 independent TLA+ model.
 
+This is an implemented async application example. The
+[reusable harness design](../../docs/mbt-harness-design.md) describes the
+implemented Counter source-test/CLI/service pattern around generic MBT semantics;
+see the [Counter suite](../mbt-counter/README.md). An
+external implementation provider may use a proxy; a service proxy requests an
+entire evaluation. Neither is required for this example.
+
 Run these commands from the MirrorECMA repository root, after `pnpm install`:
 
 ```bash

@@ -1,6 +1,6 @@
 {
   "schema": "mirrorecma.blind-counter-evaluator/v1",
-  "mirrorEcmaCompiledRoot": "/operator/MirrorECMA/dist-sandbox",
+  "mirrorEcmaCompiledRoot": "/operator/MirrorECMA/dist-test",
   "gateSdkRoot": "/operator/packed-mirrorgate",
   "gateCommand": "/operator/MirrorGate/bin/mirrorgate",
   "gatePolicyFile": "/private/blind-counter/control-policy.json",

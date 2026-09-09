@@ -665,19 +665,20 @@ async function main() {
   if (resolvedControlUrl !== expectedControlUrl || resolvedWorkerUrl !== expectedWorkerUrl) {
     failure("gateSdkRoot does not identify the normally resolved packed mirrorgate package");
   }
-  const [clientModule, generatedModule, control, workerSdk] = await Promise.all([
-    import(pathToFileURL(resolve(config.mirrorEcmaCompiledRoot, "src/index.js")).href),
+  const [clientModule, integrationModule, generatedModule, control, workerSdk] = await Promise.all([
+    import("mirrorecma"),
+    import("mirrorgate-mirrorecma/legacy"),
     import(pathToFileURL(resolve(config.mirrorEcmaCompiledRoot,
       "test/fixtures/model-interface/counter/generated-async/CounterMirror.generated.js")).href),
     import("mirrorgate/control"),
     import("mirrorgate/worker"),
   ]);
-  if (typeof clientModule.evaluateSandboxed !== "function" ||
-      typeof clientModule.createSandboxCompiledModel !== "function" ||
+  if (typeof integrationModule.evaluateSandboxed !== "function" ||
+      typeof integrationModule.createSandboxCompiledModel !== "function" ||
       typeof generatedModule.bindCounterAsyncPublicPort !== "function" ||
       typeof control.ControlClient !== "function" ||
       typeof workerSdk.createPublicManifest !== "function") {
-    failure("compiled MirrorECMA or packed Gate SDK is incompatible");
+    failure("packed MirrorECMA, Gate integration, or generated fixture is incompatible");
   }
 
   const telemetry = new GateTelemetry();
@@ -694,7 +695,7 @@ async function main() {
     ...descriptorFields,
     schema: clientModule.MODEL_INTERFACE_DESCRIPTOR_SCHEMA,
   });
-  const model = clientModule.createSandboxCompiledModel({
+  const model = integrationModule.createSandboxCompiledModel({
     metadata: generatedModule.CounterModelInterface,
     descriptor,
     adapterId: "counter.generated-async-v1",
@@ -712,7 +713,7 @@ async function main() {
   const probeToken = `BLIND_COUNTER_AUTHORING_GUARD_OK:${sha256(`${Date.now()}:${process.pid}`).slice(0, 24)}\n`;
   let result;
   try {
-    result = await clientModule.evaluateSandboxed({
+    result = await integrationModule.evaluateSandboxed({
     gate: {
       kind: "owned",
       launcher: {
