@@ -12,6 +12,7 @@ facade and optional peer; see the [migration guide](migration-v2.md).
 | Connect a local implementation to a generated model interface | [Generated Counter tutorial](../examples/generated-counter/README.md) | Runnable example |
 | Async operations, cancellation, reports, and binding lifetime | [Replay and async reference](replay-and-async.md), [work queue](../examples/work-queue/README.md) | Implemented APIs and runnable example |
 | Understand MirrorECMA/Gate ownership | [Implementation boundary](implementation-boundary-design.md) | 2.0 source boundary; package publication separate |
+| Review projected-collection workflow follow-ups | [Implementation boundary](implementation-boundary-design.md#projected-collection-workflow-findings), [Gate follow-ups](https://github.com/NzSN/MirrorGate/blob/main/docs/restricted-workflow-followups.md) | Proposed ownership and acceptance criteria; not implemented |
 | Use one suite from source tests, CLI, or an evaluation proxy | [Reusable MBT harness](mbt-harness-design.md) | Runnable source/CLI suite; Gate-owned loopback service validated separately |
 | Review the completed extraction and harness migration | [AH8 work packages](mbt-integration-tasks.md) | Integrated implementation and validation ownership |
 | Run managed authoring and evaluate the result | [Installed Gate Counter workflow](https://github.com/NzSN/MirrorGate/blob/main/integrations/mirrorecma/examples/counter/README.md) | Actual coordinator/implementer MCP workflow validated |
@@ -34,7 +35,9 @@ one approved suite; the service and Gate integration remain external wrappers.
 Private suites/models must stay outside implementer access even when test files
 are versioned beside application source.
 
-Mirrors' model protocol and compiler need no changes for this design. Gate's
+MirrorECMA's boundary does not depend on Mirrors compiler internals. Mirrors'
+separate proposal-scaffolding and trace-projection additions preserve this
+dependency direction. Gate's
 [hosting design](https://github.com/NzSN/MirrorGate/blob/main/docs/agent-hosting-design.md),
 [task ledger](https://github.com/NzSN/MirrorGate/blob/main/docs/agent-hosting-tasks.md),
 and [optional evaluation service](https://github.com/NzSN/MirrorGate/blob/main/docs/evaluation-service-design.md)

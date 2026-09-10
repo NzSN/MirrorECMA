@@ -191,6 +191,36 @@ Historical results and their helper-driven runtime claims remain historical.
 The cutover and destination integration are validated; package publication is
 a separate action. The earlier isolated preparation stage is historical evidence.
 
+## Projected-collection workflow findings
+
+A 2026-09-10 restricted application run exercised a generated async interface
+whose projected observations included sets and a sequence of records. The final
+implementation passed 14 traces and 49 transitions with confirmed Gate cleanup;
+a fault injection passed its public build and was rejected during model replay.
+This is dated local evidence recorded by the Gate workflow, not a MirrorECMA
+release or exhaustive model claim.
+
+The run does not change this document's dependency decision. It sharpens the
+following ownership rules:
+
+- generated MirrorECMA ports retain their implementation-neutral array-shaped
+  collection representation; Gate's Node worker SDK owns conversion to native
+  `Set` and `Map` values and should supply any implementer-side adapter kit;
+- build mount discovery, immutable repair attempts, source seeding, terminal
+  cleanup retrieval, and trusted receipt persistence belong to Gate or its
+  optional integration, not MirrorECMA core;
+- if MirrorECMA adds stable mismatch classes, they must describe generic replay
+  failures without Gate concepts. The Gate integration and evaluator disclosure
+  policy separately decide whether an allowlisted class or public observation ID
+  may leave trusted evaluation; and
+- a cross-repository projected-collection fixture should call only MirrorECMA's
+  public factory, negotiation, replay, report, and disposal APIs. It must not add
+  a Gate endpoint, agent option, build plan, or receipt store to this package.
+
+The proposed Gate-side work and disclosure limits are tracked in the
+[restricted workflow follow-ups](https://github.com/NzSN/MirrorGate/blob/main/docs/restricted-workflow-followups.md).
+No listed proposal is implemented merely by this application result.
+
 ## Acceptance
 
 - Ordinary MirrorECMA tests, imports, declarations, local implementation replay,
