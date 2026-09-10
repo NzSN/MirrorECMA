@@ -86,6 +86,10 @@ check; an automated TLC backend/trace conversion is not supplied by this design.
 | External evaluation integration | Public MirrorECMA and Gate interfaces, trusted compiled binding, caller-owned evaluation/disclosure configuration | A second Gate state machine or unrestricted submission execution |
 | Coordinator's hosting tool | Approved task inputs and caller-scoped run references | Raw administrative handles or private evaluator diagnostics in agent-visible results |
 
+The Gate-side admission, snapshot, sandbox-launch, worker, and cleanup ownership
+behind this table is specified in the
+[MirrorGate supervisor design](https://github.com/NzSN/MirrorGate/blob/main/docs/sandbox/supervisor-design.md).
+
 The existing [async adapter factory](../src/adapter-registry.ts) accepts
 `(config, authority)` and returns `AsyncLocalBinding`, registered through
 `AsyncCompiledAdapterRegistry`. The ordinary
@@ -218,7 +222,7 @@ following ownership rules:
   a Gate endpoint, agent option, build plan, or receipt store to this package.
 
 The proposed Gate-side work and disclosure limits are tracked in the
-[restricted workflow follow-ups](https://github.com/NzSN/MirrorGate/blob/main/docs/restricted-workflow-followups.md).
+[restricted workflow follow-ups](https://github.com/NzSN/MirrorGate/blob/main/docs/sandbox/restricted-workflow-followups.md).
 No listed proposal is implemented merely by this application result.
 
 ## Acceptance
