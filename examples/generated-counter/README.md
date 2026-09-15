@@ -291,7 +291,7 @@ map to actual operations and which implementation state the observer reports.
 Generation supplies types and protocol handling; you author that semantic
 mapping. Update the adapter only after generating the corresponding port, and
 construct each SUT inside the matched registry factory. The
-[compiler design](https://github.com/NzSN/Mirrors/blob/main/Docs/model-interface-compiler-design.md)
+[compiler design](https://github.com/NzSN/Mirrors/blob/main/Docs/model-interface-compiler/design.md)
 describes supported evidence and publication rules.
 
 Next, follow the [asynchronous work queue](../work-queue/README.md) for multiple

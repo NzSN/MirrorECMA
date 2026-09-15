@@ -210,4 +210,4 @@ trace selection as part of that testing claim.
 - [Negotiated client lifecycle](../../../src/negotiated.ts).
 - [Compiler commands](../../../../Mirrors/tools/ModelInterfaceGen.lean).
 - [Client negotiation requirements](../../../../Mirrors/Docs/client-implementation-guide.md).
-- [Compiler ownership and provenance](../../../../Mirrors/Docs/model-interface-compiler-design.md).
+- [Compiler ownership and provenance](../../../../Mirrors/Docs/model-interface-compiler/design.md).
