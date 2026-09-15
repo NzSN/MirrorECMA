@@ -6,3 +6,4 @@ _apalache-out/
 package-lock.json
 /.agent-shell/
 bazel-*
+**/tmp/*
