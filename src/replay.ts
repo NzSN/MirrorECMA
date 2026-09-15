@@ -81,6 +81,30 @@ export async function replayLoop(
   }
 }
 
+/** Run one registration barrier and replay over an already-owned iterator.
+ *  Performs no transport close; the caller owns the lifecycle. */
+export async function runReplayExchange(
+  t: Transport,
+  it: AsyncIterator<string>,
+  compute: ReplayComputer,
+  options: ReplayOptions = {},
+  register?: () => void,
+): Promise<ReplayReport> {
+  const control = new ReplayControl(options);
+  const recorder = new ReplayRecorder();
+  try {
+    control.assertActive();
+    register?.();
+    requireValidRegistration(await receiveReplayMessage(it, control));
+    return await replayLoop(t, it, compute, control, recorder);
+  } catch (error) {
+    attachReplayReport(error, recorder.report(error));
+    throw error;
+  } finally {
+    control.dispose();
+  }
+}
+
 /** Run the historical registration barrier and replay lifecycle. */
 export async function runLegacyReplay(
   t: Transport,
@@ -88,29 +112,21 @@ export async function runLegacyReplay(
   options: ReplayOptions = {},
   register?: () => void,
 ): Promise<ReplayReport> {
-  const control = new ReplayControl(options);
-  const recorder = new ReplayRecorder();
   const it = t[Symbol.asyncIterator]();
   let report: ReplayReport | undefined;
   let primaryError: unknown;
   let failed = false;
   try {
-    control.assertActive();
-    register?.();
-    requireValidRegistration(await receiveReplayMessage(it, control));
-    report = await replayLoop(t, it, compute, control, recorder);
+    report = await runReplayExchange(t, it, compute, options, register);
   } catch (error) {
     failed = true;
     primaryError = error;
-    attachReplayReport(error, recorder.report(error));
-  } finally {
-    control.dispose();
   }
   try { await t.close(); } catch (error) {
     if (!failed) {
       failed = true;
       primaryError = error;
-      attachReplayReport(error, report ? failedReplayReport(report, error) : recorder.report(error));
+      attachReplayReport(error, failedReplayReport(report!, error));
     }
   }
   if (failed) throw primaryError;

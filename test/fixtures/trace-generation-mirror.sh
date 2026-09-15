@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+: "${TG4_MIRROR_BIN:?set TG4_MIRROR_BIN}"
+: "${TG4_FAKE_APALACHE:?set TG4_FAKE_APALACHE}"
+export APALACHE_MC="$TG4_FAKE_APALACHE"
+exec "$TG4_MIRROR_BIN"

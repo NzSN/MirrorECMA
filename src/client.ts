@@ -1,4 +1,4 @@
-import { spawnMirror } from "./transport.js";
+import { spawnMirror, validateProtocolLine } from "./transport.js";
 import {
   MirrorMessage,
   State,
@@ -13,9 +13,13 @@ import {
 } from "./protocol.js";
 import type { Transport } from "./transport.js";
 import { readFile } from "node:fs/promises";
-import { receiveReplayMessage, runLegacyReplay } from "./replay.js";
+import { receiveReplayMessage, runLegacyReplay, runReplayExchange } from "./replay.js";
 import { validateReplayOptions, type ReplayComputer, type ReplayOptions } from "./replay-control.js";
-import type { ReplayReport } from "./replay-report.js";
+import {
+  attachReplayReport,
+  failedReplayReport,
+  type ReplayReport,
+} from "./replay-report.js";
 
 export {
   runClientNegotiated,
@@ -138,15 +142,14 @@ export async function runClientGenTraces(
   config: TraceGenerationConfig,
   opts: RunOptions = {}
 ): Promise<GenTracesResult> {
-  const t = await resolveTransport(target);
-  t.send(encodeClientMessage({
+  const registration = encodeClientMessage({
     proto_step: "register_trace_gen",
     apalacheConfig,
     traceConfig: config,
     destPath,
     spec: opts.spec,
-  }));
-  return genTracesLoop(t);
+  });
+  return runOwnedRegistration(target, registration, async (_t, it) => receiveGenTraces(it));
 }
 
 export async function runClientExplore(
@@ -157,15 +160,19 @@ export async function runClientExplore(
   maxSteps: number,
   compute: StateComputer
 ): Promise<void> {
-  const t = await resolveTransport(target);
-  t.send(encodeClientMessage({
+  const registration = encodeClientMessage({
     proto_step: "register_explore",
     spec,
     invariants,
     exports,
     maxSteps,
-  }));
-  await runLegacyReplay(t, compute);
+  });
+  await runOwnedRegistration(
+    target,
+    registration,
+    (t, it) => runReplayExchange(t, it, compute),
+    (report, error) => attachReplayReport(error, failedReplayReport(report, error)),
+  );
 }
 
 export class ExploreSession {
@@ -357,24 +364,46 @@ export function presetClient(states: State[]): StateComputer {
   };
 }
 
-async function genTracesLoop(t: Transport): Promise<GenTracesResult> {
-  const it = t[Symbol.asyncIterator]();
-  let closed = false;
-  const closeOnce = async () => {
-    if (!closed) {
-      closed = true;
-      await t.close();
-    }
-  };
+/** Own one registration exchange: validate before acquisition, send inside
+ *  the cleanup-owned scope, and preserve the primary error across close. */
+async function runOwnedRegistration<T>(
+  target: string | Transport,
+  encodedRegistration: string,
+  exchange: (transport: Transport, iterator: AsyncIterator<string>) => Promise<T>,
+  onCleanupFailure?: (value: T, error: unknown) => void,
+): Promise<T> {
+  validateProtocolLine(encodedRegistration);
+  const t = await resolveTransport(target);
+  let value: T | undefined;
+  let primaryError: unknown;
+  let failed = false;
   try {
-    const msg = await receiveReplayMessage(it);
-    if (msg.proto_step === "protocol_error") throw new Error(msg.error);
-    if (msg.proto_step === "register_error") throw new Error(`register failed: ${msg.error}`);
-    if (msg.proto_step === "gen_traces_done") {
-      return { itfTracePaths: msg.itfTracePaths, itfTraces: msg.itfTraces ?? [] };
-    }
-    throw new Error(`expected gen_traces_done, got ${msg.proto_step}`);
-  } finally {
-    await closeOnce();
+    const it = t[Symbol.asyncIterator]();
+    t.send(encodedRegistration);
+    value = await exchange(t, it);
+  } catch (error) {
+    failed = true;
+    primaryError = error;
   }
+  try {
+    await t.close();
+  } catch (error) {
+    if (!failed) {
+      onCleanupFailure?.(value!, error);
+      failed = true;
+      primaryError = error;
+    }
+  }
+  if (failed) throw primaryError;
+  return value!;
+}
+
+async function receiveGenTraces(it: AsyncIterator<string>): Promise<GenTracesResult> {
+  const msg = await receiveReplayMessage(it);
+  if (msg.proto_step === "protocol_error") throw new Error(msg.error);
+  if (msg.proto_step === "register_error") throw new Error(`register failed: ${msg.error}`);
+  if (msg.proto_step === "gen_traces_done") {
+    return { itfTracePaths: msg.itfTracePaths, itfTraces: msg.itfTraces ?? [] };
+  }
+  throw new Error(`expected gen_traces_done, got ${msg.proto_step}`);
 }
