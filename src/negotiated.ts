@@ -1,3 +1,4 @@
+import type { SuiteLifetime } from "./suite-lifetime.js";
 import type { MatchedEvidenceTracker } from "./matched-evidence.js";
 import { spawnMirror, type Transport } from "./transport.js";
 import {
@@ -192,6 +193,8 @@ export type CompiledExecutionSelection =
 export interface NegotiatedReportRunOptions extends NegotiatedRunOptions {
   /** Trusted matched-evidence collector; no effect on existing report semantics. */
   readonly matchedEvidence?: MatchedEvidenceTracker;
+  /** Internal suite opt-in: independent shared cleanup budget and joined late factories. */
+  readonly suiteLifetime?: SuiteLifetime;
   readonly signal?: AbortSignal;
   readonly deadlines?: Partial<ReplayDeadlines>;
 }
@@ -701,15 +704,13 @@ function prepareAsyncAdapter(
   return Object.freeze({ key, factory: selection.registry.resolve(key) });
 }
 
-async function closeReportTransport(t: Transport, deadlines: ReplayDeadlines): Promise<void> {
+async function closeReportTransport(t: Transport, deadlines: ReplayDeadlines, lifetime?: SuiteLifetime): Promise<void> {
   try {
-    await awaitReplayOperation(
-      Promise.resolve().then(() => t.close()),
-      undefined,
-      deadlines.receiveMs,
-      "close",
-    );
+    const closing = Promise.resolve().then(() => t.close());
+    if (lifetime) await lifetime.wait(closing);
+    else await awaitReplayOperation(closing, undefined, deadlines.receiveMs, "close");
   } catch (cause) {
+    if (lifetime) { lifetime.cleanupFailed = true; lifetime.unconfirmed ||= cause instanceof ReplayDeadlineError; }
     if (cause instanceof ReplayDeadlineError) throw cause;
     throw new ReplayCleanupError("model transport cleanup failed", cause);
   }
@@ -719,6 +720,7 @@ async function resolveReportTransport(
   target: string | Transport,
   signal: AbortSignal | undefined,
   deadlines: ReplayDeadlines,
+  lifetime?: SuiteLifetime,
 ): Promise<Transport> {
   throwIfReplayCancelled(signal);
   const t = typeof target === "string" ? spawnMirror(target) : target;
@@ -729,7 +731,7 @@ async function resolveReportTransport(
     } catch (error) {
       const primary = normalizeReplayFailure(error);
       try {
-        await closeReportTransport(t, deadlines);
+        await closeReportTransport(t, deadlines, lifetime);
       } catch (cleanup) {
         retainReplayCleanupFailure(primary, cleanup);
       }
@@ -824,20 +826,21 @@ async function runCompiledReportReplay(
     ? prepareAsyncAdapter(selection)
     : undefined;
   const expected = syncPrepared?.key.semanticDigest ?? asyncPrepared!.key.semanticDigest;
-  const t = await resolveReportTransport(target, options.signal, deadlines);
+  const t = await resolveReportTransport(target, options.signal, deadlines, options.suiteLifetime);
   let it: AsyncIterator<string>;
   try {
     it = t[Symbol.asyncIterator]();
   } catch (error) {
     const primary = normalizeReplayFailure(error);
     try {
-      await closeReportTransport(t, deadlines);
+      await closeReportTransport(t, deadlines, options.suiteLifetime);
     } catch (cleanup) {
       retainReplayCleanupFailure(primary, cleanup);
     }
     throw primary;
   }
   let binding: LocalBinding | AsyncLocalBinding | undefined;
+  let lateFactoryCleanup: Promise<unknown> | undefined;
   let hasPrimaryError = false;
   let primaryError: Error | undefined;
   let report: CompiledReplayReport | undefined;
@@ -883,10 +886,11 @@ async function runCompiledReportReplay(
           "step",
         );
       } catch (cause) {
-        pendingFactory.then(
+        lateFactoryCleanup = pendingFactory.then(
           (lateBinding) => Promise.resolve().then(() => lateBinding.dispose()),
           () => {},
-        ).catch(() => {});
+        );
+        lateFactoryCleanup.catch(() => {});
         if (cause instanceof ReplayCancelledError || cause instanceof ReplayDeadlineError) throw cause;
         throw runnerError("adapter_factory_failed", `adapter factory failed for ${label}`, cause);
       }
@@ -932,10 +936,11 @@ async function runCompiledReportReplay(
         );
       } catch (cause) {
         factoryController.abort(cause);
-        pendingFactory.then(
+        lateFactoryCleanup = pendingFactory.then(
           (lateBinding) => Promise.resolve().then(() => lateBinding.dispose()),
           () => {},
-        ).catch(() => {});
+        );
+        lateFactoryCleanup.catch(() => {});
         if (cause instanceof ReplayCancelledError || cause instanceof ReplayDeadlineError) throw cause;
         throw runnerError(
           "adapter_factory_failed",
@@ -983,30 +988,37 @@ async function runCompiledReportReplay(
   }
 
   const cleanupErrors: unknown[] = [];
+  const lifetime = options.suiteLifetime;
+  lifetime?.startCleanup();
+  const awaitCleanup = <T>(operation: Promise<T>): Promise<T> => lifetime !== undefined
+    ? lifetime.wait(operation)
+    : awaitReplayOperation(operation, undefined, deadlines.receiveMs, "close");
   // Closing first interrupts a registration/receive wait and transfers owned
   // model-process termination to the transport while binding cleanup proceeds.
   const pendingTransportClose = Promise.resolve().then(() => t.close());
   pendingTransportClose.catch(() => {});
   if (binding !== undefined) {
     try {
-      await awaitReplayOperation(
-        Promise.resolve(binding.dispose()),
-        undefined,
-        deadlines.receiveMs,
-        "close",
-      );
+      await awaitCleanup(Promise.resolve().then(() => binding!.dispose()));
     } catch (cause) {
       cleanupErrors.push(
         runnerError("adapter_dispose_failed", "adapter binding disposal failed", cause),
       );
     }
   }
+  if (lifetime !== undefined && lateFactoryCleanup !== undefined) {
+    try { await awaitCleanup(lateFactoryCleanup); } catch (error) { cleanupErrors.push(error); }
+  }
   try {
-    await awaitReplayOperation(pendingTransportClose, undefined, deadlines.receiveMs, "close");
+    await awaitCleanup(pendingTransportClose);
   } catch (error) {
     cleanupErrors.push(error instanceof ReplayDeadlineError
       ? error
       : new ReplayCleanupError("model transport cleanup failed", error));
+  }
+  if (lifetime !== undefined) {
+    lifetime.cleanupFailed ||= cleanupErrors.length > 0;
+    lifetime.unconfirmed ||= cleanupErrors.some((e) => e instanceof ReplayDeadlineError || (e instanceof Error && e.cause instanceof ReplayDeadlineError));
   }
   const cleanupError = cleanupErrors.length <= 1
     ? cleanupErrors[0]

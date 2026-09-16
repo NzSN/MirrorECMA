@@ -177,38 +177,10 @@ the factory settles; any returned scope is then cleaned up. A blocked event
 loop delays timer delivery, although a completed over-budget action is checked
 before its state can be sent.
 
-## Trace generation and the version-1 transport boundary
-
-MirrorECMA validates the exact encoded registration before acquiring an owned
-mirror process. `runClientGenTraces` and `runClientExplore` therefore reject an
-oversized inline `spec.sources` closure without spawning a child. After a
-transport has been acquired, registration send, receive, decode, and replay all
-share one cleanup-owned exchange: the transport is closed exactly once, and a
-cleanup failure does not replace an earlier operation failure.
-
-Inline sources are portable only while the complete compact JSONL
-registration fits the 65,535-byte version-1 payload limit. There is no hidden
-source upload or chunking path. `destPath` is a server-side path. A local stdio
-trace-generation request may receive durable returned paths with an empty
-`itfTraces` array when the full reply is too large; callers can consume those
-paths because the process shares the filesystem. TCP and mTLS clients never
-treat server-local paths as a substitute for inline traces. An oversized
-remote result fails explicitly with `TRACE_RESULT_TOO_LARGE`; an asynchronous
-job retains the same job ID and terminal error across repeated queries.
-
-Applications may run `apalache-mc` directly and replay checked-in output with
-`runClientWithTraces` or its negotiated variants. That is an explicit
-application workflow, useful for large artifacts and reproducible MBT. The
-client library does not silently invoke Apalache or retry a failed Mirrors
-registration through a second generation implementation.
-
 ## Generated asynchronous ports
 
 `mirrorecma-v1` continues to emit the synchronous port used by Counter. Use the
-separate `mirrorecma-async-v1` target with a matching current Mirrors compiler
-whenever any generated-port operation returns a promise. Selecting the
-synchronous target for a promise-returning implementation is a contract error,
-not an implicit request to await it:
+separate `mirrorecma-async-v1` target with a matching current Mirrors compiler:
 
 ```bash
 MODEL_INTERFACE_GEN=/absolute/path/to/Mirrors/.lake/build/bin/model_interface_gen
@@ -353,3 +325,12 @@ Opaque support belongs to the local dynamic interpreter. It does not widen the
 portable generated profile: both current TypeScript emitters still reject an
 opaque lock type with `MIC-E-TYPE-001`. No descriptor or report schema changes
 are needed for dynamic opaque values.
+
+## Checked application suites
+
+The additive [application suite API](application-suites.md) derives exact compiled
+selection from a generated model handle, checks corpus/source provenance before
+construction, requires explicit `step_ok` acceptance evidence, and joins local
+cleanup with an independent budget. Use `defineSuite` with `runSuite` for native
+adapters or `runSuiteWithFactory` for trusted generic providers. Existing replay
+APIs, reports, and their diagnostic counting semantics remain unchanged.

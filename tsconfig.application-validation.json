@@ -5,12 +5,20 @@
     "outDir": "dist-validation",
     "declaration": false,
     "baseUrl": ".",
-    "paths": { "mirrorecma": ["src/index.ts"] }
+    "paths": {
+      "mirrorecma": [
+        "src/index.ts"
+      ]
+    }
   },
   "include": [
     "src/**/*.ts",
     "examples/work-queue/artifacts/generated-async/**/*.ts",
     "examples/persistent-transfer/artifacts/generated/**/*.ts",
-    "examples/lease-service/artifacts/generated/**/*.ts"
+    "examples/lease-service/artifacts/generated/**/*.ts",
+    "examples/*/artifacts/bundle/**/*.ts",
+    "examples/work-queue/suite.ts",
+    "examples/persistent-transfer/suite.ts",
+    "examples/lease-service/suite.ts"
   ]
 }

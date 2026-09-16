@@ -3,47 +3,30 @@ import { readFile, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { AsyncCompiledAdapterRegistry, ReplayMismatchError, ReplayCancelledError,
-  ReplayDeadlineError, replayCleanupFailure, semanticDigestFromHex,
-  runClientWithTracesNegotiatedWithReport } from '../../dist/index.js';
+import { ReplayMismatchError, runSuite, runSuiteWithFactory } from '../../dist/index.js';
 import { root, run, sha256 } from './regenerate.mjs';
 
-export async function loadApplication(folder) {
+export async function loadApplication(folder, options = {}) {
   assert(['persistent-transfer', 'lease-service', 'work-queue'].includes(folder), 'unknown application');
   const directory = join(root, 'examples', folder);
   const app = JSON.parse(await readFile(join(directory, 'application.json'), 'utf8'));
-  const generated = await import(pathToFileURL(join(root, 'dist-validation/examples', folder,
-    'artifacts', app.generatedDirectory ?? 'generated', `${app.module}Mirror.generated.js`)));
-  return { ...app, directory, generated,
-    metadata: generated[`${app.module}ModelInterface`],
-    publicManifest: generated[`${app.module}PublicManifest`],
-    bindPublicPort: generated[`bind${app.module}AsyncPublicPort`],
-    key: { semanticDigest: semanticDigestFromHex(generated[`${app.module}SemanticDigest`]),
-      adapterId: `${folder}.validation/v1`, targetProfile: 'mirrorecma-async-v1',
-      stateComputerContractVersion: 'mirrors.async-state-computer/v1' },
-    config: { specPath: join(directory, 'specs', `${app.module}.tla`), initPredicate: 'Init',
-      nextPredicate: 'WitnessNext', invariant: 'TraceComplete', lengthBound: app.length, paramVars: 'parameters' },
-    trace: join(directory, 'artifacts/witness.itf.json'),
-  };
+  const declared = await import(pathToFileURL(join(root, 'dist-validation/examples', folder, 'suite.js')));
+  const modelPath = join(directory, 'specs', `${app.module}.tla`);
+  const trace = join(directory, 'artifacts/witness.itf.json');
+  const paths = options.tracePaths ?? [trace, trace];
+  const traces = await Promise.all(paths.map(async path => ({path, sha256: await sha256(path)})));
+  const suite = declared.defineApplicationSuite(modelPath, traces);
+  return {...app, directory, trace, suite, model: suite.model,
+    localFaults: app.localFaults ?? app.faults,
+    publicManifest: suite.model.publicManifest, config: suite.replay.config};
 }
 
-/** Shared suite for local factories and Gate's deferred provider.factory. */
+/** Generic providers and local adapters consume the same declared suite. */
 export function runApplicationSuite(app, factory, options = {}) {
-  return runClientWithTracesNegotiatedWithReport(
-    options.mirror ?? process.env.MIRROR_BIN ?? resolve(root, '../Mirrors/.lake/build/bin/mirror'),
-    app.config, options.tracePaths ?? [app.trace, app.trace],
-    { execution: 'async', mode: 'compiled', request: 'verify', policy: 'require', metadata: app.metadata,
-      ...app.key, registry: new AsyncCompiledAdapterRegistry([{ key: app.key, factory }]) },
-    { signal: options.signal, deadlines: options.deadlines ?? { registrationMs: 30_000, stepMs: 5_000, receiveMs: 30_000 } },
-  );
-}
-
-export function classify(error) {
-  if (error === undefined) return 'passed';
-  if (error instanceof ReplayMismatchError) return 'mismatch';
-  if (error instanceof ReplayCancelledError) return 'cancelled';
-  if (error instanceof ReplayDeadlineError) return 'timeout';
-  return 'infrastructure-error';
+  return runSuiteWithFactory(app.suite, {
+    mirror: options.mirror ?? process.env.MIRROR_BIN ?? resolve(root, '../Mirrors/.lake/build/bin/mirror'),
+    signal: options.signal, timeouts: options.timeouts,
+  }, factory);
 }
 
 export async function checkArtifacts(app) {
@@ -54,94 +37,95 @@ export async function checkArtifacts(app) {
   assert.equal(await sha256(app.trace), provenance.traceSha256, 'stale trace');
   if (provenance.contractSha256) assert.equal(await sha256(contract), provenance.contractSha256, 'stale interface contract');
   const compiler = process.env.MODEL_INTERFACE_GEN ?? resolve(root, '../Mirrors/.lake/build/bin/model_interface_gen');
-  run(compiler, ['check', '--spec', app.config.specPath, '--contract', contract, '--evidence', app.trace,
+  run(compiler, ['check-bundle', '--spec', app.config.specPath, '--contract', contract, '--evidence', app.trace,
     '--param-var', 'parameters', '--lock', join(dir, `${app.module}.mirror-interface.lock.json`),
-    '--target', 'mirrorecma-async-v1', '--out', join(dir, app.generatedDirectory ?? 'generated')]);
-  run(compiler, ['preflight', '--lock', join(dir, `${app.module}.mirror-interface.lock.json`),
-    '--trace', app.trace, '--require-all-actions']);
+    '--target', 'mirrorecma-async-v1', '--out', join(dir, 'bundle')]);
+  for (const trace of app.suite.replay.traces) run(compiler, ['preflight',
+    '--lock', join(dir, `${app.module}.mirror-interface.lock.json`), '--trace', trace.path, '--require-all-actions']);
 }
 
 export async function evaluateLocal(app, variant, options = {}) {
   const scratch = await mkdtemp(join(tmpdir(), `${app.folder}-acceptance-`));
-  const { createAdapter } = await import(pathToFileURL(join(app.directory, 'service.mjs')));
   const controller = new AbortController();
-  const counts = {}, pairs = {};
-  let previous, disposed = false, allocations = 0, error, report;
+  let disposed = false, allocations = 0;
   const started = performance.now();
   try {
-    const factory = async config => {
-      allocations++;
-      const adapter = await createAdapter(variant, scratch);
-      const port = {
-        invoke: async (id, inputs, context) => {
-          if (id !== 'Initialize' && variant === 'crash') throw new Error('injected application failure');
-          if (id !== 'Initialize' && ['hang', 'cancel'].includes(variant)) {
-            if (variant === 'cancel') controller.abort('acceptance cancellation');
-            return new Promise((_, reject) => {
-              if (context.signal.aborted) reject(context.signal.reason);
-              else context.signal.addEventListener('abort', () => reject(context.signal.reason), { once: true });
-            });
+    const suiteResult = await runSuite(app.suite, {
+      mirror: options.mirror ?? process.env.MIRROR_BIN ?? resolve(root, '../Mirrors/.lake/build/bin/mirror'),
+      signal: controller.signal,
+      timeouts: {registrationMs: 30_000, actionMs: variant === 'hang' ? 100 : 5_000,
+        receiveMs: 30_000, cleanupMs: 5_000},
+      implementation: async context => {
+        // Import application code and allocate the actual SUT only after admission.
+        const module = app.folder === 'work-queue' ? 'native-service.mjs' : 'service.mjs';
+        const {createAdapter} = await import(pathToFileURL(join(app.directory, module)));
+        const controlCase = ['crash', 'hang', 'cancel'].includes(variant);
+        const adapter = await createAdapter(controlCase ? 'correct' : variant, scratch);
+        allocations++;
+        const dispose = async () => { await adapter.dispose(); disposed = true; };
+        context.deferCleanup(dispose);
+        if (controlCase) {
+          for (const operation of app.publicManifest.actions) {
+            adapter.actions[operation.id] = async (_inputs, replayContext) => {
+              if (variant === 'crash') throw new Error('injected application failure');
+              if (variant === 'cancel') controller.abort('acceptance cancellation');
+              return new Promise((_, reject) => {
+                if (replayContext.signal.aborted) reject(replayContext.signal.reason);
+                else replayContext.signal.addEventListener('abort', () => reject(replayContext.signal.reason), {once: true});
+              });
+            };
           }
-          await adapter.actions[id](inputs);
-          counts[id] = (counts[id] ?? 0) + 1;
-          if (id === 'Initialize') previous = undefined;
-          if (previous) { const pair = `${previous}->${id}`; pairs[pair] = (pairs[pair] ?? 0) + 1; }
-          previous = id;
-        },
-        observe: async () => {
-          const native = await adapter.observe();
-          // Generated TS ports use array-shaped sets; the Gate worker uses native Set.
-          return Object.fromEntries(Object.entries(native).map(([key, value]) => [key, value instanceof Set ? [...value] : value]));
-        },
-      };
-      const binding = app.bindPublicPort(port, config);
-      return { ...binding, semanticDigest: app.key.semanticDigest,
-        dispose: async () => { await adapter.dispose(); disposed = true; } };
-    };
-    try {
-      report = await runApplicationSuite(app, factory, { ...options, signal: controller.signal,
-        deadlines: { registrationMs: 30_000, stepMs: variant === 'hang' ? 100 : 5_000, receiveMs: 30_000 } });
-    } catch (caught) { error = caught; }
+        }
+        return {port: adapter, dispose};
+      },
+    });
     const remaining = await readdir(scratch);
-    const cleanup = { kind: 'local-resource-census', status: allocations === 1 && disposed && remaining.length === 0
-      && replayCleanupFailure(error) === undefined ? 'confirmed' : 'failed', remainingEntries: remaining };
-    return { variant, classification: classify(error), durationMs: performance.now() - started, allocations,
-      report, actionCounts: counts, sequenceCounts: pairs, cleanup,
-      failure: error instanceof ReplayMismatchError ? error.toJSON() : error ? { code: error.code, message: error.message } : undefined };
-  } finally { await rm(scratch, { recursive: true, force: true }); }
+    const cleanup = {kind: 'local-resource-census', status: allocations === 1 && disposed && remaining.length === 0
+      && suiteResult.cleanup.status === 'succeeded' && suiteResult.cleanup.quiescence === 'confirmed' ? 'confirmed' : 'failed',
+      remainingEntries: remaining};
+    const failure = suiteResult.trustedError instanceof ReplayMismatchError
+      ? suiteResult.trustedError.toJSON() : suiteResult.failure;
+    return {variant, classification: suiteResult.outcome, durationMs: performance.now() - started, allocations,
+      suiteResult, actionCounts: suiteResult.evidence.actionCounts,
+      sequenceCounts: suiteResult.evidence.pairCounts, cleanup, failure};
+  } finally { await rm(scratch, {recursive: true, force: true}); }
 }
 
 export async function runLocalAcceptance(app, options = {}) {
+  if (options.tracePaths) app = await loadApplication(app.folder, options);
   await checkArtifacts(app);
   const results = [];
-  for (const variant of ['correct', ...Object.keys(app.faults), 'crash', 'hang', 'cancel']) {
+  for (const variant of ['correct', ...Object.keys(app.localFaults), 'crash', 'hang', 'cancel']) {
     const result = await evaluateLocal(app, variant, options);
     results.push(result);
-    assert.equal(result.cleanup.status, 'confirmed', `${variant}: local cleanup failed`);
+    assert.equal(result.cleanup.status, 'confirmed', `${variant}: local cleanup failed: ${JSON.stringify(result)}`);
     if (variant === 'correct') {
       assert.equal(result.classification, 'passed', JSON.stringify(result));
-      assert.equal(result.report.acceptedTraces, 2);
-      assert.equal(result.report.acceptedSteps, 2 * app.length);
-      for (const operation of [...app.publicManifest.initializers, ...app.publicManifest.actions]) {
-        assert(result.actionCounts[operation.id] > 0, `missing action ${operation.id}`);
-      }
-    } else if (app.faults[variant]) {
+      assert.equal(result.suiteResult.acceptance.status, 'met');
+      assert.equal(result.suiteResult.evidence.tracesCompleted, 2);
+      assert.equal(result.suiteResult.evidence.initializationsMatched, '2');
+      assert.equal(result.suiteResult.evidence.transitionsMatched, String(2 * app.length));
+      for (const operation of app.publicManifest.actions) assert(BigInt(result.actionCounts[operation.id]) > 0n);
+    } else if (app.localFaults[variant]) {
+      const expected = app.localFaults[variant];
       assert.equal(result.classification, 'mismatch', `${variant}: not a behavioral mismatch: ${JSON.stringify(result)}`);
-      assert.equal(result.failure.action, app.faults[variant].action);
-      assert.equal(result.failure.stateIndex, app.faults[variant].step);
-      assert.equal(result.failure.traceIndex, 0);
-      result.expectedFirstMismatch = { code: 'replay_mismatch', traceIndex: 0,
-        stateIndex: app.faults[variant].step, action: app.faults[variant].action };
-    } else assert.equal(result.classification, { crash: 'infrastructure-error', hang: 'timeout', cancel: 'cancelled' }[variant]);
+      assert.equal(result.failure.action, expected.action);
+      assert.equal(result.failure.stateIndex, expected.step);
+      assert.equal(result.failure.traceIndex, expected.trace ?? 0);
+      result.expectedFirstMismatch = {code: 'replay_mismatch', traceIndex: expected.trace ?? 0,
+        stateIndex: expected.step, action: expected.action};
+    } else assert.equal(result.classification, {crash: 'failed', hang: 'timedOut', cancel: 'cancelled'}[variant]);
   }
   const mirror = options.mirror ?? process.env.MIRROR_BIN ?? resolve(root, '../Mirrors/.lake/build/bin/mirror');
-  return { schema: 'mirrorecma.application-validation/v1', application: app.folder,
+  return {schema: 'mirrorecma.application-validation/v2', application: app.folder,
+    suiteId: app.suite.id,
     tier: options.tracePaths ? 'fresh-deterministic-witness' : 'checked-deterministic-witness',
     generatedAt: new Date().toISOString(), node: process.version,
-    identities: { model: await sha256(app.config.specPath), implementation: await sha256(join(app.directory, 'service.mjs')),
-      harness: await sha256(fileURLToPath(import.meta.url)), interface: app.key.semanticDigest,
+    identities: {model: await sha256(app.config.specPath),
+      implementation: await sha256(join(app.directory, app.folder === 'work-queue' ? 'queue.ts' : 'service.mjs')),
+      harness: await sha256(fileURLToPath(import.meta.url)), interface: app.model.semanticDigest,
       applicationConfig: await sha256(join(app.directory, 'application.json')),
-      mirror: await sha256(mirror), trace: await sha256(options.tracePaths?.[0] ?? app.trace) },
-    measurements: { setupTime: 'not measured', diagnosisTime: 'not measured',
-      evaluationMs: results.reduce((sum, result) => sum + result.durationMs, 0) }, results };
+      mirror: await sha256(mirror), trace: await sha256(options.tracePaths?.[0] ?? app.trace)},
+    measurements: {setupTime: 'not measured', diagnosisTime: 'not measured',
+      evaluationMs: results.reduce((sum, result) => sum + result.durationMs, 0)}, results};
 }

@@ -276,3 +276,21 @@ export {
   type RegistryOptions,
   type RegistryConnectOptions,
 } from "./registry.js";
+
+export {
+  defineSuite, SuiteConfigurationError,
+  type SuiteDefinition, type SuiteModel, type SuiteBinding, type SuitePublicManifest,
+  type SuitePublicPort, type NativeSuiteAdapter, type ReplayPlan, type CorpusTrace,
+} from "./suite-definition.js";
+export {
+  evaluateAcceptance, validateAcceptanceRequirements, acceptancePairKey,
+  MAX_REQUIRED_ACTIONS, MAX_REQUIRED_PAIRS,
+  type AcceptanceRequirements, type AcceptanceAssessment, type SuiteEvidence,
+} from "./acceptance.js";
+export { preflightSuite, suiteSha256, type SuitePreflight } from "./suite-preflight.js";
+export {
+  runSuite, runSuiteWithFactory, DEFAULT_SUITE_TIMEOUTS,
+  type SuiteMirrorTarget, type SuiteRunContext, type SuiteRunOptions,
+  type SuiteTimeouts, type SuiteConstructionContext, type SuiteImplementation,
+} from "./suite-runner.js";
+export { type SuiteResult, type SuiteFailure, type SuiteCleanup } from "./suite-result.js";

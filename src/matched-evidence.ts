@@ -44,7 +44,8 @@ export class MatchedEvidenceTracker {
 
   constructor(descriptor: SemanticDescriptor,
     requirements: { readonly requiredActions: readonly string[]; readonly requiredPairs: readonly (readonly [string, string])[] },
-    traceStateCounts: readonly number[]) {
+    traceStateCounts: readonly number[],
+    private readonly options: { readonly strictAcknowledgements?: boolean; readonly expectedActions?: readonly (readonly string[])[] } = {}) {
     const parsed = decodeSemanticDescriptor(descriptor);
     if (traceStateCounts.length < 1 || traceStateCounts.length > 4096 ||
         traceStateCounts.some(n => !Number.isSafeInteger(n) || n < 1)) {
@@ -115,7 +116,8 @@ export class MatchedEvidenceTracker {
     if (this.active) this.fail("protocol", "new action before observation was reported");
     const action = this.labels.get(wireAction);
     if (!action || action.initial !== initial) this.fail("mapping", "unknown or wrong-phase action label");
-    // Serial advancement is an implicit acknowledgement in the legacy protocol.
+    // Suite evidence requires explicit acknowledgements; legacy tracker behavior remains available.
+    if (this.options.strictAcknowledgements && this.pending) this.fail("missing_ack", "new action before step_ok");
     this.commit();
     if (initial) {
       if (this.started > 0) this.finishTrace();
@@ -126,6 +128,8 @@ export class MatchedEvidenceTracker {
     } else if (this.started === 0 || this.currentMatched >= this.lengths[this.started - 1]!) {
       this.fail("protocol", "transition outside preflight trace bounds");
     }
+    const expected = this.options.expectedActions?.[this.started - 1]?.[this.currentMatched];
+    if (expected !== undefined && expected !== action.id) this.fail("protocol", "action disagrees with selected corpus occurrence");
     this.entered = true;
     this.active = action;
   }
@@ -144,6 +148,7 @@ export class MatchedEvidenceTracker {
   done(): void {
     this.requireOpen();
     if (this.active) this.fail("protocol", "terminal before observation report");
+    if (this.options.strictAcknowledgements && this.pending) this.fail("missing_ack", "terminal before final step_ok");
     this.commit();
     this.finishTrace();
     if (this.started !== this.lengths.length) this.fail("protocol", "terminal before all selected traces");

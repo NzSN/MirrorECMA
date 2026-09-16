@@ -1,8 +1,8 @@
 import { resolve } from "node:path";
 import { writeFile } from "node:fs/promises";
-import { runQueueAcceptance } from "./acceptance.js";
+import { pathToFileURL } from "node:url";
 
-function main(): void {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   let json = false, receiptPath: string | undefined, tracePath: string | undefined;
   for (let i = 0; i < args.length; i++) {
@@ -12,30 +12,27 @@ function main(): void {
     else throw new Error("Usage: acceptance-cli.js [--json] [--receipt NEW_FILE] [--trace ITF_FILE]");
   }
   const root = resolve(process.env.MIRRORECMA_ROOT ?? process.cwd());
-  runQueueAcceptance({
-    root,
-    mirrorBinary: process.env.MIRROR_BIN ? resolve(process.env.MIRROR_BIN) : undefined,
-    receiveTimeoutMs: 60_000,
-    tracePath,
-  }).then(async ({ scenarios, correctReport, receipt }) => {
-    const failed = scenarios.filter((scenario) => !scenario.accepted);
-    if (receiptPath) await writeFile(receiptPath, JSON.stringify(receipt, null, 2) + "\n", { flag: "wx", mode: 0o600 });
-    if (json) {
-      console.log(JSON.stringify(receipt, null, 2));
-    } else {
-      console.log(`correct implementation: ${correctReport.status} (${correctReport.statesMatched} states, ${correctReport.stepsCompleted} steps)`);
-      for (const scenario of scenarios) {
-        const failure = scenario.firstMismatch;
-        const detail = failure === null ? "not rejected" : `trace ${failure.traceIndex} state ${failure.stateIndex} action ${failure.action} (${failure.code})`;
-        console.log(`${scenario.accepted ? "rejected" : "MISSED  "} ${scenario.fault}: ${detail}`);
-      }
-      console.log(`cleanup: ${receipt.cleanup.remainingEntries.length === 0 ? "clean" : `${receipt.cleanup.remainingEntries.length} entries remain`}`);
-    }
-    if (failed.length > 0) process.exitCode = 1;
-  }).catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
+  const runnerUrl = pathToFileURL(resolve(root, "examples/application-validation/suite.mjs"));
+  const { loadApplication, runLocalAcceptance } = await import(runnerUrl.href);
+  const app = await loadApplication("work-queue");
+  const receipt = await runLocalAcceptance(app, {
+    ...(process.env.MIRROR_BIN ? { mirror: resolve(process.env.MIRROR_BIN) } : {}),
+    ...(tracePath ? { tracePaths: [tracePath, tracePath] } : {}),
   });
+  if (receiptPath) await writeFile(receiptPath, JSON.stringify(receipt, null, 2) + "\n", { flag: "wx", mode: 0o600 });
+  if (json) console.log(JSON.stringify(receipt, null, 2));
+  else {
+    for (const result of receipt.results) {
+      const failure = result.failure;
+      const detail = failure?.code === "replay_mismatch"
+        ? `trace ${failure.traceIndex} state ${failure.stateIndex} action ${failure.action}`
+        : `${result.suiteResult.evidence.transitionsMatched} matched transitions`;
+      console.log(`${result.variant}: ${result.classification}; ${detail}; cleanup ${result.cleanup.status}`);
+    }
+  }
 }
 
-main();
+main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});

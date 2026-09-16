@@ -5,5 +5,11 @@
   "license": "ISC",
   "type": "module",
   "main": "src/index.js",
-  "types": "src/index.d.ts"
+  "types": "src/index.d.ts",
+  "bin": { "mirrorecma": "./src/cli.js" },
+  "exports": {
+    ".": { "types": "./src/index.d.ts", "import": "./src/index.js" },
+    "./project": { "types": "./src/project.d.ts", "import": "./src/project.js" },
+    "./*": "./*"
+  }
 }

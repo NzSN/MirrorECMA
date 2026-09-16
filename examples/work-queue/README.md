@@ -145,6 +145,14 @@ progress, and cleanup status. The documented contract for this evidence shape
 and for the remaining applications is
 [`docs/acceptance-contract.md`](../../docs/acceptance-contract.md).
 
+The default acceptance command now uses [`suite.ts`](suite.ts) and the generated
+`WorkQueueModel` with [`native-adapter.ts`](native-adapter.ts). Build the shared
+application validation target first (`pnpm run build:application-validation`).
+The compiler owns native collection conversion; suite evidence counts only
+acknowledged matches. The table above retains the historical one-based trace
+coordinates: v2 compiled receipts use traces 0/1 for the same states/actions.
+The old `runQueueAcceptance` helper and its regression test remain for comparison.
+
 The mutations live in `acceptance.ts`; the seams they use are the small
 protected methods on `WorkQueue`. The adapter and the observation path are
 shared with the correct implementation, so a fault is detected through real
@@ -155,7 +163,7 @@ persisted state rather than through a fault-specific observer.
 pnpm run example:queue:acceptance
 
 # Same run with the full receipt:
-pnpm run build:examples && node dist-test/examples/work-queue/acceptance-cli.js --json
+pnpm run build:application-validation && node dist-test/examples/work-queue/acceptance-cli.js --json
 
 # Persist an exclusive owner-only receipt:
 node dist-test/examples/work-queue/acceptance-cli.js --receipt /private/new-queue-receipt.json

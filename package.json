@@ -7,6 +7,12 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": { "mirrorecma": "./dist/cli.js" },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./project": { "types": "./dist/project.d.ts", "import": "./dist/project.js" },
+    "./*": "./*"
+  },
   "files": [
     "dist"
   ],
@@ -27,7 +33,7 @@
     "example:queue": "pnpm run build:examples && node dist-test/examples/work-queue/run.js",
     "example:queue:broken": "pnpm run build:examples && node dist-test/examples/work-queue/run.js --broken",
     "example:queue:live": "pnpm run build:examples && node dist-test/examples/work-queue/run.js --live",
-    "example:queue:acceptance": "pnpm run build:examples && node dist-test/examples/work-queue/acceptance-cli.js",
+    "example:queue:acceptance": "pnpm run build:application-validation && node dist-test/examples/work-queue/acceptance-cli.js",
     "smoke:work-queue": "pnpm run build:examples && node dist-test/test/work-queue.smoke.js",
     "smoke:async-generated-counter": "pnpm run build:examples && node dist-test/test/async-generated-counter.smoke.js",
     "ci": "bash scripts/ci/check.sh",
@@ -36,7 +42,8 @@
     "test:mbt-counter": "NODE_OPTIONS=\"--experimental-vm-modules\" jest --runInBand test/mbt-counter.test.ts",
     "smoke:mbt-counter": "pnpm run build:examples && node dist-test/test/mbt-counter.smoke.js",
     "check:package-boundary": "pnpm run build && node scripts/check-package-boundary.mjs",
-    "build:application-validation": "pnpm run build && tsc -p tsconfig.application-validation.json",
+    "check:installed-suite": "node scripts/check-installed-suite.mjs",
+    "build:application-validation": "pnpm run build && tsc -p tsconfig.examples.json && tsc -p tsconfig.application-validation.json",
     "example:transfer:acceptance": "pnpm run build:application-validation && node examples/application-validation/run.mjs persistent-transfer",
     "example:lease:acceptance": "pnpm run build:application-validation && node examples/application-validation/run.mjs lease-service"
   },

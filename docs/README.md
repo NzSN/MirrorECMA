@@ -9,6 +9,7 @@ facade and optional peer; see the [migration guide](migration-v2.md).
 
 | Need | Read | Status |
 | --- | --- | --- |
+| Configure installed tools and run project doctor/check/replay | [Project tools](project-tools.md) | Declarative loader, CLI and installed acceptance gate |
 | Connect a local implementation to a generated model interface | [Generated Counter tutorial](../examples/generated-counter/README.md) | Runnable example |
 | Async operations, cancellation, reports, and binding lifetime | [Replay and async reference](replay-and-async.md), [work queue](../examples/work-queue/README.md) | Implemented APIs and runnable example |
 | Understand MirrorECMA/Gate ownership | [Implementation boundary](implementation-boundary-design.md) | 2.0 source boundary; package publication separate |

@@ -22,3 +22,9 @@ MirrorECMA root after the [shared build steps](../application-validation/README.
 Use `--live` and `--receipt NEW_FILE` as described there. These schedules exercise
 logical competing clients through serialized operations, not simultaneous
 threads, distributed clocks or arbitrary-interleaving linearizability.
+
+The application [`suite.ts`](suite.ts) imports the compiler's trusted model handle
+and declares replay/coverage once for local `runSuite` and Gate `evaluateSuite`.
+The native adapter stays in `service.mjs`; it performs real operations and reads
+real state. Generated bindings own representation conversion, while suite
+results retain acknowledged evidence and independent cleanup outcomes.

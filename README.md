@@ -5,6 +5,13 @@ conformance checker compatible with the ModelMirrors JSONL protocol. Connect a
 real implementation to a generated typed interface, replay TLA+ model traces,
 and let Mirrors compare the implementation's observations with the model.
 
+For a new application, use a generated suite model with `defineSuite` and
+`runSuite`, or the installed `mirrorecma init/doctor/generate/check/replay`
+commands. The [suite guide](docs/application-suites.md) covers deferred native
+adapters, matched coverage and cleanup; the [project guide](docs/project-tools.md)
+covers declarative configuration and prepared toolchains. The same suite can use
+Gate's optional `evaluateSuite` integration without adding Gate to local replay.
+
 The 2.0 source cutover keeps MirrorECMA focused on MBT against caller-supplied
 implementations. A user-started coordinator requests restricted authoring directly
 from MirrorGate; Gate's optional `mirrorgate-mirrorecma` integration supplies the

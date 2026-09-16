@@ -1,0 +1,974 @@
+{
+  "schema": "mirrorecma.application-suite-migration/v1",
+  "date": "2026-09-16",
+  "baselineRevision": "ff3a214",
+  "sourcePreservation": [
+    {
+      "path": "examples/work-queue/specs/WorkQueue.tla",
+      "sha256": "3262ae5cac7205a8f9ceee2f4fe1d59bf1b2b14d1e3533f700ed9ce68a5ae12d",
+      "matchesRecoveredBaseline": true
+    },
+    {
+      "path": "examples/work-queue/artifacts/witness.itf.json",
+      "sha256": "24df406764c8357cdba5f3062d5ac0092d0a1dfb974b2fb3eeb3887603d4918b",
+      "matchesRecoveredBaseline": true
+    },
+    {
+      "path": "examples/work-queue/queue.ts",
+      "sha256": "81d37262b5cbebc4e40d4a442449269db1036b0417f4572cc5e1345456fa0cbf",
+      "matchesRecoveredBaseline": true
+    },
+    {
+      "path": "examples/persistent-transfer/specs/PersistentTransfer.tla",
+      "sha256": "8afef873443447c74ab77fd639b9e8ac496a0649899ab73a41d73a3b065d3add",
+      "matchesRecoveredBaseline": true
+    },
+    {
+      "path": "examples/persistent-transfer/artifacts/witness.itf.json",
+      "sha256": "5142bd661c6887c1e1e3547cb14f349914e06d2d6fd0e5ea9bfab84c5149c326",
+      "matchesRecoveredBaseline": true
+    },
+    {
+      "path": "examples/persistent-transfer/service.mjs",
+      "sha256": "db9f39f1c1644ad3c981fb955378a2fb2cb643120ab40af5dce07f7e650cdd16",
+      "matchesRecoveredBaseline": true
+    },
+    {
+      "path": "examples/lease-service/specs/LeaseService.tla",
+      "sha256": "3769f84af6ba919a58e6eea773bcfee25eaf8eb7a93b3ee534bf6b2d211d6796",
+      "matchesRecoveredBaseline": true
+    },
+    {
+      "path": "examples/lease-service/artifacts/witness.itf.json",
+      "sha256": "aefc9b03f8a1ace167f327126e7dac92f67fe0538e1560f100bc88eb0e0b5433",
+      "matchesRecoveredBaseline": true
+    },
+    {
+      "path": "examples/lease-service/service.mjs",
+      "sha256": "9174cc458c21d310f913d547c9339cc3e6b933651f098144005e1c44e869e158",
+      "matchesRecoveredBaseline": true
+    }
+  ],
+  "implementation": {
+    "local": "runSuite with compiler-native bundle",
+    "gate": "evaluateSuite with same SuiteDefinition and node-esm/v1",
+    "localReceiptSchema": "mirrorecma.application-validation/v2",
+    "gateReceiptSchema": "mirrorgate.application-validation/v2",
+    "traceCoordinates": "zero-based in compiled suites; historical queue progress trace indices normalized by subtracting one",
+    "gateReceiptPersistence": "shared atomic owner-only no-overwrite writer"
+  },
+  "totals": {
+    "localCases": 29,
+    "behavioralMutants": 17,
+    "gateCases": 23,
+    "freshWitnessCases": 29
+  },
+  "freshWitnessGenerator": "Apalache 0.61.0; temporary separate output; checked corpus unchanged",
+  "applications": [
+    {
+      "application": "work-queue",
+      "suiteId": "work-queue.acceptance/v2",
+      "localCases": 13,
+      "behavioralMutants": 9,
+      "gateCases": 7,
+      "freshWitnessCases": 13,
+      "correctMatchedEvidence": {
+        "schema": "mirrorecma.suite-evidence/v1",
+        "enteredReplay": true,
+        "complete": true,
+        "exact": true,
+        "tracesExpected": 2,
+        "tracesCompleted": 2,
+        "initializationsMatched": "2",
+        "transitionsMatched": "30",
+        "actionCounts": {
+          "Complete": "6",
+          "Enqueue": "12",
+          "Fail": "2",
+          "Reset": "2",
+          "Retry": "2",
+          "Start": "6"
+        },
+        "pairCounts": {
+          "[\"Enqueue\",\"Enqueue\"]": "4",
+          "[\"Fail\",\"Retry\"]": "2",
+          "[\"Retry\",\"Complete\"]": "2",
+          "[\"Reset\",\"Enqueue\"]": "2"
+        }
+      },
+      "mutants": [
+        {
+          "variant": "duplicate-accepts",
+          "traceIndex": 0,
+          "stateIndex": 2,
+          "action": "enqueue",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "1",
+            "actionCounts": {
+              "Complete": "0",
+              "Enqueue": "1",
+              "Fail": "0",
+              "Reset": "0",
+              "Retry": "0",
+              "Start": "0"
+            },
+            "pairCounts": {
+              "[\"Enqueue\",\"Enqueue\"]": "0",
+              "[\"Fail\",\"Retry\"]": "0",
+              "[\"Retry\",\"Complete\"]": "0",
+              "[\"Reset\",\"Enqueue\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "enqueue-drops",
+          "traceIndex": 0,
+          "stateIndex": 1,
+          "action": "enqueue",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "0",
+            "actionCounts": {
+              "Complete": "0",
+              "Enqueue": "0",
+              "Fail": "0",
+              "Reset": "0",
+              "Retry": "0",
+              "Start": "0"
+            },
+            "pairCounts": {
+              "[\"Enqueue\",\"Enqueue\"]": "0",
+              "[\"Fail\",\"Retry\"]": "0",
+              "[\"Retry\",\"Complete\"]": "0",
+              "[\"Reset\",\"Enqueue\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "enqueue-in-flight",
+          "traceIndex": 0,
+          "stateIndex": 5,
+          "action": "enqueue",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "4",
+            "actionCounts": {
+              "Complete": "0",
+              "Enqueue": "3",
+              "Fail": "0",
+              "Reset": "0",
+              "Retry": "0",
+              "Start": "1"
+            },
+            "pairCounts": {
+              "[\"Enqueue\",\"Enqueue\"]": "2",
+              "[\"Fail\",\"Retry\"]": "0",
+              "[\"Retry\",\"Complete\"]": "0",
+              "[\"Reset\",\"Enqueue\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "start-stale",
+          "traceIndex": 0,
+          "stateIndex": 4,
+          "action": "start",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "3",
+            "actionCounts": {
+              "Complete": "0",
+              "Enqueue": "3",
+              "Fail": "0",
+              "Reset": "0",
+              "Retry": "0",
+              "Start": "0"
+            },
+            "pairCounts": {
+              "[\"Enqueue\",\"Enqueue\"]": "2",
+              "[\"Fail\",\"Retry\"]": "0",
+              "[\"Retry\",\"Complete\"]": "0",
+              "[\"Reset\",\"Enqueue\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "fail-does-not-mark",
+          "traceIndex": 0,
+          "stateIndex": 6,
+          "action": "fail",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "5",
+            "actionCounts": {
+              "Complete": "0",
+              "Enqueue": "4",
+              "Fail": "0",
+              "Reset": "0",
+              "Retry": "0",
+              "Start": "1"
+            },
+            "pairCounts": {
+              "[\"Enqueue\",\"Enqueue\"]": "2",
+              "[\"Fail\",\"Retry\"]": "0",
+              "[\"Retry\",\"Complete\"]": "0",
+              "[\"Reset\",\"Enqueue\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "retry-does-not-clear",
+          "traceIndex": 0,
+          "stateIndex": 7,
+          "action": "retry",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "6",
+            "actionCounts": {
+              "Complete": "0",
+              "Enqueue": "4",
+              "Fail": "1",
+              "Reset": "0",
+              "Retry": "0",
+              "Start": "1"
+            },
+            "pairCounts": {
+              "[\"Enqueue\",\"Enqueue\"]": "2",
+              "[\"Fail\",\"Retry\"]": "0",
+              "[\"Retry\",\"Complete\"]": "0",
+              "[\"Reset\",\"Enqueue\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "complete-keeps-in-flight",
+          "traceIndex": 0,
+          "stateIndex": 8,
+          "action": "complete",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "7",
+            "actionCounts": {
+              "Complete": "0",
+              "Enqueue": "4",
+              "Fail": "1",
+              "Reset": "0",
+              "Retry": "1",
+              "Start": "1"
+            },
+            "pairCounts": {
+              "[\"Enqueue\",\"Enqueue\"]": "2",
+              "[\"Fail\",\"Retry\"]": "1",
+              "[\"Retry\",\"Complete\"]": "0",
+              "[\"Reset\",\"Enqueue\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "complete-stale",
+          "traceIndex": 0,
+          "stateIndex": 8,
+          "action": "complete",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "7",
+            "actionCounts": {
+              "Complete": "0",
+              "Enqueue": "4",
+              "Fail": "1",
+              "Reset": "0",
+              "Retry": "1",
+              "Start": "1"
+            },
+            "pairCounts": {
+              "[\"Enqueue\",\"Enqueue\"]": "2",
+              "[\"Fail\",\"Retry\"]": "1",
+              "[\"Retry\",\"Complete\"]": "0",
+              "[\"Reset\",\"Enqueue\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "reset-leaves-state",
+          "traceIndex": 1,
+          "stateIndex": 0,
+          "action": "init",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 1,
+            "initializationsMatched": "1",
+            "transitionsMatched": "15",
+            "actionCounts": {
+              "Complete": "3",
+              "Enqueue": "6",
+              "Fail": "1",
+              "Reset": "1",
+              "Retry": "1",
+              "Start": "3"
+            },
+            "pairCounts": {
+              "[\"Enqueue\",\"Enqueue\"]": "2",
+              "[\"Fail\",\"Retry\"]": "1",
+              "[\"Retry\",\"Complete\"]": "1",
+              "[\"Reset\",\"Enqueue\"]": "1"
+            }
+          }
+        }
+      ],
+      "localControls": [
+        {
+          "variant": "crash",
+          "classification": "failed",
+          "cleanup": {
+            "kind": "local-resource-census",
+            "status": "confirmed",
+            "remainingEntries": []
+          }
+        },
+        {
+          "variant": "hang",
+          "classification": "timedOut",
+          "cleanup": {
+            "kind": "local-resource-census",
+            "status": "confirmed",
+            "remainingEntries": []
+          }
+        },
+        {
+          "variant": "cancel",
+          "classification": "cancelled",
+          "cleanup": {
+            "kind": "local-resource-census",
+            "status": "confirmed",
+            "remainingEntries": []
+          }
+        }
+      ],
+      "gateOutcomes": [
+        {
+          "variant": "correct",
+          "outcome": "passed",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "duplicate-accepts",
+          "outcome": "mismatch",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "enqueue-drops",
+          "outcome": "mismatch",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "retry-does-not-clear",
+          "outcome": "mismatch",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "crash",
+          "outcome": "failed",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "hang",
+          "outcome": "timedOut",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "cancel",
+          "outcome": "cancelled",
+          "physicalCleanup": "confirmed"
+        }
+      ],
+      "receipts": [
+        {
+          "name": "integration-suite-final-work-queue.json",
+          "sha256": "eff2c46a59703445528922419c164de5e5d7299fe09d1e5fefa97ffe95b6f4f9"
+        },
+        {
+          "name": "integration-suite-fresh-work-queue.json",
+          "sha256": "53c6f422317d7443f0dd749df54640c5d1fa307e75b5a4df706f2bca85efb711"
+        },
+        {
+          "name": "work-queue.json",
+          "sha256": "490a74dbec02cacc4af827e5f29a493afd3eebecedaaa2d1869e7639faef5133"
+        }
+      ],
+      "identities": {
+        "model": "3262ae5cac7205a8f9ceee2f4fe1d59bf1b2b14d1e3533f700ed9ce68a5ae12d",
+        "implementation": "81d37262b5cbebc4e40d4a442449269db1036b0417f4572cc5e1345456fa0cbf",
+        "harness": "127aee980b99a7c3c26f7770a01f3c8b10a8814c2d9cd7606a477ee6dfd46f51",
+        "interface": "3c646311c18341793bf7f09f0352b30c117fba8c424a0031e12bba4c77ebc2e2",
+        "applicationConfig": "68c41cc764f5c6226fc0e2d5d797eb9378964fcc58d11be74623be3e49dd6e7a",
+        "mirror": "90fc0370d955d61c16e3fbde779b25c226a5f6921a63792bb9c022e92e893808",
+        "trace": "24df406764c8357cdba5f3062d5ac0092d0a1dfb974b2fb3eeb3887603d4918b"
+      }
+    },
+    {
+      "application": "persistent-transfer",
+      "suiteId": "persistent-transfer.acceptance/v2",
+      "localCases": 8,
+      "behavioralMutants": 4,
+      "gateCases": 8,
+      "freshWitnessCases": 8,
+      "correctMatchedEvidence": {
+        "schema": "mirrorecma.suite-evidence/v1",
+        "enteredReplay": true,
+        "complete": true,
+        "exact": true,
+        "tracesExpected": 2,
+        "tracesCompleted": 2,
+        "initializationsMatched": "2",
+        "transitionsMatched": "30",
+        "actionCounts": {
+          "Begin": "4",
+          "Cancel": "4",
+          "Chunk": "10",
+          "Commit": "4",
+          "Pause": "2",
+          "Restart": "4",
+          "Resume": "2"
+        },
+        "pairCounts": {
+          "[\"Chunk\",\"Chunk\"]": "4",
+          "[\"Pause\",\"Restart\"]": "2",
+          "[\"Cancel\",\"Begin\"]": "2"
+        }
+      },
+      "mutants": [
+        {
+          "variant": "premature-success",
+          "traceIndex": 0,
+          "stateIndex": 3,
+          "action": "commit",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "2",
+            "actionCounts": {
+              "Begin": "1",
+              "Cancel": "0",
+              "Chunk": "1",
+              "Commit": "0",
+              "Pause": "0",
+              "Restart": "0",
+              "Resume": "0"
+            },
+            "pairCounts": {
+              "[\"Chunk\",\"Chunk\"]": "0",
+              "[\"Pause\",\"Restart\"]": "0",
+              "[\"Cancel\",\"Begin\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "duplicate-retry",
+          "traceIndex": 0,
+          "stateIndex": 7,
+          "action": "chunk",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "6",
+            "actionCounts": {
+              "Begin": "1",
+              "Cancel": "0",
+              "Chunk": "1",
+              "Commit": "1",
+              "Pause": "1",
+              "Restart": "1",
+              "Resume": "1"
+            },
+            "pairCounts": {
+              "[\"Chunk\",\"Chunk\"]": "0",
+              "[\"Pause\",\"Restart\"]": "1",
+              "[\"Cancel\",\"Begin\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "stale-session",
+          "traceIndex": 0,
+          "stateIndex": 13,
+          "action": "chunk",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "12",
+            "actionCounts": {
+              "Begin": "2",
+              "Cancel": "1",
+              "Chunk": "3",
+              "Commit": "2",
+              "Pause": "1",
+              "Restart": "2",
+              "Resume": "1"
+            },
+            "pairCounts": {
+              "[\"Chunk\",\"Chunk\"]": "1",
+              "[\"Pause\",\"Restart\"]": "1",
+              "[\"Cancel\",\"Begin\"]": "1"
+            }
+          }
+        },
+        {
+          "variant": "corrupt-content",
+          "traceIndex": 0,
+          "stateIndex": 2,
+          "action": "chunk",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "1",
+            "actionCounts": {
+              "Begin": "1",
+              "Cancel": "0",
+              "Chunk": "0",
+              "Commit": "0",
+              "Pause": "0",
+              "Restart": "0",
+              "Resume": "0"
+            },
+            "pairCounts": {
+              "[\"Chunk\",\"Chunk\"]": "0",
+              "[\"Pause\",\"Restart\"]": "0",
+              "[\"Cancel\",\"Begin\"]": "0"
+            }
+          }
+        }
+      ],
+      "localControls": [
+        {
+          "variant": "crash",
+          "classification": "failed",
+          "cleanup": {
+            "kind": "local-resource-census",
+            "status": "confirmed",
+            "remainingEntries": []
+          }
+        },
+        {
+          "variant": "hang",
+          "classification": "timedOut",
+          "cleanup": {
+            "kind": "local-resource-census",
+            "status": "confirmed",
+            "remainingEntries": []
+          }
+        },
+        {
+          "variant": "cancel",
+          "classification": "cancelled",
+          "cleanup": {
+            "kind": "local-resource-census",
+            "status": "confirmed",
+            "remainingEntries": []
+          }
+        }
+      ],
+      "gateOutcomes": [
+        {
+          "variant": "correct",
+          "outcome": "passed",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "premature-success",
+          "outcome": "mismatch",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "duplicate-retry",
+          "outcome": "mismatch",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "stale-session",
+          "outcome": "mismatch",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "corrupt-content",
+          "outcome": "mismatch",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "crash",
+          "outcome": "failed",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "hang",
+          "outcome": "timedOut",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "cancel",
+          "outcome": "cancelled",
+          "physicalCleanup": "confirmed"
+        }
+      ],
+      "receipts": [
+        {
+          "name": "integration-suite-final-persistent-transfer.json",
+          "sha256": "ee759993f19bcd562b9ab57f1a6362f680eedaffba023b08ed4717c8347f7b5c"
+        },
+        {
+          "name": "integration-suite-fresh-persistent-transfer.json",
+          "sha256": "bea8a89c21667bd40333684be8c88c7d9b98cf4f0a67cacd1c4e0c1d2d73a39b"
+        },
+        {
+          "name": "persistent-transfer.json",
+          "sha256": "6ada598553f142ccf14bcac228e2691610aca756d6d6d87885f693133eb2fc5d"
+        }
+      ],
+      "identities": {
+        "model": "8afef873443447c74ab77fd639b9e8ac496a0649899ab73a41d73a3b065d3add",
+        "implementation": "db9f39f1c1644ad3c981fb955378a2fb2cb643120ab40af5dce07f7e650cdd16",
+        "harness": "127aee980b99a7c3c26f7770a01f3c8b10a8814c2d9cd7606a477ee6dfd46f51",
+        "interface": "a7e8d817de406553962d544a928dacdc92645761fd1bfd9c1a7db147340ca006",
+        "applicationConfig": "e51d3bc247fe81690c60214e0c33d6703dd652972c5c45a875ad07382ccd38db",
+        "mirror": "90fc0370d955d61c16e3fbde779b25c226a5f6921a63792bb9c022e92e893808",
+        "trace": "5142bd661c6887c1e1e3547cb14f349914e06d2d6fd0e5ea9bfab84c5149c326"
+      }
+    },
+    {
+      "application": "lease-service",
+      "suiteId": "lease-service.acceptance/v2",
+      "localCases": 8,
+      "behavioralMutants": 4,
+      "gateCases": 8,
+      "freshWitnessCases": 8,
+      "correctMatchedEvidence": {
+        "schema": "mirrorecma.suite-evidence/v1",
+        "enteredReplay": true,
+        "complete": true,
+        "exact": true,
+        "tracesExpected": 2,
+        "tracesCompleted": 2,
+        "initializationsMatched": "2",
+        "transitionsMatched": "20",
+        "actionCounts": {
+          "Acquire": "6",
+          "Advance": "2",
+          "Release": "4",
+          "Renew": "4",
+          "Write": "4"
+        },
+        "pairCounts": {
+          "[\"Acquire\",\"Acquire\"]": "2",
+          "[\"Advance\",\"Write\"]": "2",
+          "[\"Release\",\"Renew\"]": "2"
+        }
+      },
+      "mutants": [
+        {
+          "variant": "overlapping-ownership",
+          "traceIndex": 0,
+          "stateIndex": 2,
+          "action": "acquire",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "1",
+            "actionCounts": {
+              "Acquire": "1",
+              "Advance": "0",
+              "Release": "0",
+              "Renew": "0",
+              "Write": "0"
+            },
+            "pairCounts": {
+              "[\"Acquire\",\"Acquire\"]": "0",
+              "[\"Advance\",\"Write\"]": "0",
+              "[\"Release\",\"Renew\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "expired-token",
+          "traceIndex": 0,
+          "stateIndex": 5,
+          "action": "write",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "4",
+            "actionCounts": {
+              "Acquire": "2",
+              "Advance": "1",
+              "Release": "0",
+              "Renew": "1",
+              "Write": "0"
+            },
+            "pairCounts": {
+              "[\"Acquire\",\"Acquire\"]": "1",
+              "[\"Advance\",\"Write\"]": "0",
+              "[\"Release\",\"Renew\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "stale-release",
+          "traceIndex": 0,
+          "stateIndex": 7,
+          "action": "release",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "6",
+            "actionCounts": {
+              "Acquire": "3",
+              "Advance": "1",
+              "Release": "0",
+              "Renew": "1",
+              "Write": "1"
+            },
+            "pairCounts": {
+              "[\"Acquire\",\"Acquire\"]": "1",
+              "[\"Advance\",\"Write\"]": "1",
+              "[\"Release\",\"Renew\"]": "0"
+            }
+          }
+        },
+        {
+          "variant": "invalid-renewal",
+          "traceIndex": 0,
+          "stateIndex": 8,
+          "action": "renew",
+          "baselineCoordinatesPreserved": true,
+          "matchedPrefix": {
+            "schema": "mirrorecma.suite-evidence/v1",
+            "enteredReplay": true,
+            "complete": false,
+            "exact": true,
+            "tracesExpected": 2,
+            "tracesCompleted": 0,
+            "initializationsMatched": "1",
+            "transitionsMatched": "7",
+            "actionCounts": {
+              "Acquire": "3",
+              "Advance": "1",
+              "Release": "1",
+              "Renew": "1",
+              "Write": "1"
+            },
+            "pairCounts": {
+              "[\"Acquire\",\"Acquire\"]": "1",
+              "[\"Advance\",\"Write\"]": "1",
+              "[\"Release\",\"Renew\"]": "0"
+            }
+          }
+        }
+      ],
+      "localControls": [
+        {
+          "variant": "crash",
+          "classification": "failed",
+          "cleanup": {
+            "kind": "local-resource-census",
+            "status": "confirmed",
+            "remainingEntries": []
+          }
+        },
+        {
+          "variant": "hang",
+          "classification": "timedOut",
+          "cleanup": {
+            "kind": "local-resource-census",
+            "status": "confirmed",
+            "remainingEntries": []
+          }
+        },
+        {
+          "variant": "cancel",
+          "classification": "cancelled",
+          "cleanup": {
+            "kind": "local-resource-census",
+            "status": "confirmed",
+            "remainingEntries": []
+          }
+        }
+      ],
+      "gateOutcomes": [
+        {
+          "variant": "correct",
+          "outcome": "passed",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "overlapping-ownership",
+          "outcome": "mismatch",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "expired-token",
+          "outcome": "mismatch",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "stale-release",
+          "outcome": "mismatch",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "invalid-renewal",
+          "outcome": "mismatch",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "crash",
+          "outcome": "failed",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "hang",
+          "outcome": "timedOut",
+          "physicalCleanup": "confirmed"
+        },
+        {
+          "variant": "cancel",
+          "outcome": "cancelled",
+          "physicalCleanup": "confirmed"
+        }
+      ],
+      "receipts": [
+        {
+          "name": "integration-suite-final-lease-service.json",
+          "sha256": "28bf396aaaa470107f6a96fdd063460ad95dfdaae0e887d517fc99937fcfaef9"
+        },
+        {
+          "name": "integration-suite-fresh-lease-service.json",
+          "sha256": "f860b94c43f52b90bdd9c3ba3f3ca2e8930ac50a2cfe52a39be034d30cc248a9"
+        },
+        {
+          "name": "lease-service.json",
+          "sha256": "ce2f20be146425ee72e23ebb4b9f14318e84d716bdb43eef1ac43e5bb60ed57c"
+        }
+      ],
+      "identities": {
+        "model": "3769f84af6ba919a58e6eea773bcfee25eaf8eb7a93b3ee534bf6b2d211d6796",
+        "implementation": "9174cc458c21d310f913d547c9339cc3e6b933651f098144005e1c44e869e158",
+        "harness": "127aee980b99a7c3c26f7770a01f3c8b10a8814c2d9cd7606a477ee6dfd46f51",
+        "interface": "a0d5d0fa70f0d62dd55965407a9503b4d220ebcfdc62c0f36d46be0a837b3643",
+        "applicationConfig": "d7a5d530e607d0c7a2aed7a3a7e0dcfa8bbf228d77ba54516cc1121b34901647",
+        "mirror": "90fc0370d955d61c16e3fbde779b25c226a5f6921a63792bb9c022e92e893808",
+        "trace": "aefc9b03f8a1ace167f327126e7dac92f67fe0538e1560f100bc88eb0e0b5433"
+      }
+    }
+  ],
+  "notExercised": [
+    "new actual Gate-hosted restricted author; requires approved operator profile",
+    "independent onboarding participant and setup/diagnosis time study"
+  ],
+  "limits": [
+    "repeating deterministic WitnessNext twice tests reset, not schedule diversity",
+    "application source harness remains repository-local; independent installed package acceptance is a separate gate",
+    "historical source baseline and receipts preserved; WorkQueue dynamic acceptance helper retained outside default CLI; obsolete legacy-suite.mjs removed after installed consumer acceptance"
+  ]
+}

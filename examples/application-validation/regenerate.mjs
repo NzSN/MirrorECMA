@@ -41,6 +41,9 @@ export async function generate(folder, destination) {
     run(compiler, ['generate', '--lock', lock, '--target', 'mirrorecma-async-v1', '--out', join(artifacts, 'generated')]);
     run(compiler, ['check', '--spec', spec, '--contract', contract, '--evidence', trace,
       '--param-var', 'parameters', '--lock', lock, '--target', 'mirrorecma-async-v1', '--out', join(artifacts, 'generated')]);
+    run(compiler, ['bundle', '--lock', lock, '--target', 'mirrorecma-async-v1', '--out', join(artifacts, 'bundle')]);
+    run(compiler, ['check-bundle', '--spec', spec, '--contract', contract, '--evidence', trace,
+      '--param-var', 'parameters', '--lock', lock, '--target', 'mirrorecma-async-v1', '--out', join(artifacts, 'bundle')]);
     run(compiler, ['preflight', '--lock', lock, '--trace', trace, '--require-all-actions']);
     const states = JSON.parse(await readFile(trace, 'utf8')).states.length;
     assert.equal(states, app.length + 1);

@@ -420,6 +420,20 @@ function projectInputs(
   return Object.freeze(inputs);
 }
 
+/** Internal suite preflight: validate selected input and observation shapes without invoking handlers. */
+export function validateDescriptorTraceState(
+  descriptor: SemanticDescriptor, action: ResolvedAction, state: State,
+): void {
+  const payload = action.phase === "initialize" ? state : Object.fromEntries(
+    Object.entries(state).filter(([name]) => descriptor.runProfile.effectiveParamVars.includes(name)),
+  );
+  projectInputs(action, payload, descriptor);
+  for (const observation of descriptor.observations) {
+    if (!Object.hasOwn(state, observation.wireName)) throw new Error("trace observation is missing");
+    decodeNative(snapshotItfValue(state[observation.wireName]), observation.type, observation.id);
+  }
+}
+
 function prepareBinding<H extends Function, O extends Function>(
   value: SemanticDescriptor,
   registry: {

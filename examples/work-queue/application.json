@@ -4,8 +4,56 @@
   "length": 15,
   "generatedDirectory": "generated-async",
   "faults": {
-    "duplicate-accepts": { "action": "enqueue", "step": 2 },
-    "enqueue-drops": { "action": "enqueue", "step": 1 },
-    "retry-does-not-clear": { "action": "retry", "step": 7 }
+    "duplicate-accepts": {
+      "action": "enqueue",
+      "step": 2
+    },
+    "enqueue-drops": {
+      "action": "enqueue",
+      "step": 1
+    },
+    "retry-does-not-clear": {
+      "action": "retry",
+      "step": 7
+    }
+  },
+  "localFaults": {
+    "duplicate-accepts": {
+      "action": "enqueue",
+      "step": 2
+    },
+    "enqueue-drops": {
+      "action": "enqueue",
+      "step": 1
+    },
+    "enqueue-in-flight": {
+      "action": "enqueue",
+      "step": 5
+    },
+    "start-stale": {
+      "action": "start",
+      "step": 4
+    },
+    "fail-does-not-mark": {
+      "action": "fail",
+      "step": 6
+    },
+    "retry-does-not-clear": {
+      "action": "retry",
+      "step": 7
+    },
+    "complete-keeps-in-flight": {
+      "action": "complete",
+      "step": 8
+    },
+    "complete-stale": {
+      "action": "complete",
+      "step": 8
+    },
+    "reset-leaves-state": {
+      "action": "init",
+      "step": 0,
+      "trace": 1
+    }
   }
 }
