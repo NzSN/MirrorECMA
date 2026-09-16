@@ -1,3 +1,4 @@
+import type { MatchedEvidenceTracker } from "./matched-evidence.js";
 import {
   decodeMirrorMessage,
   encodeState,
@@ -81,6 +82,7 @@ export function asynchronousReplayExecution(
 }
 
 export interface ReplayCoreOptions {
+  readonly matchedEvidence?: MatchedEvidenceTracker;
   readonly structuredMismatch?: boolean;
   readonly progress?: { readonly recorder: ReplayRecorder; readonly assertActive: () => void };
   readonly signal?: AbortSignal;
@@ -95,6 +97,7 @@ export async function replayCore(
   options: ReplayCoreOptions = {},
 ): Promise<ReplayReport> {
   const receive = options.receive ?? (() => receiveReplayMessage(it));
+  try {
   let msg = await receive();
   let state: State = {};
   let lastParam: State = {};
@@ -107,6 +110,7 @@ export async function replayCore(
     throwIfReplayCancelled(options.signal);
     switch (msg.proto_step) {
       case "initial_state": {
+        options.matchedEvidence?.begin(true, msg.action);
         options.progress?.recorder.begin(true);
         lastAction = msg.action;
         traceIndex += 1;
@@ -123,16 +127,20 @@ export async function replayCore(
           options.progress?.assertActive();
           t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
         }
+        options.matchedEvidence?.reported();
         options.progress?.recorder.reported(msg.action);
         acceptedTraces += 1;
         break;
       }
       case "step_ok":
+        options.matchedEvidence?.acknowledge();
         options.progress?.recorder.acknowledge();
         break;
       case "all_steps_done":
+        options.matchedEvidence?.done();
         return replayReport(acceptedTraces, acceptedSteps);
       case "next_step": {
+        options.matchedEvidence?.begin(false, msg.action);
         options.progress?.recorder.begin(false);
         lastAction = msg.action;
         stepIndex += 1;
@@ -148,11 +156,13 @@ export async function replayCore(
           options.progress?.assertActive();
           t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
         }
+        options.matchedEvidence?.reported();
         options.progress?.recorder.reported(msg.action);
         acceptedSteps += 1;
         break;
       }
       case "step_mismatch": {
+        options.matchedEvidence?.interrupt(true);
         const action = msg.action ?? lastAction;
         if (options.progress) {
           const position = options.progress.recorder.position;
@@ -184,5 +194,9 @@ export async function replayCore(
         throw new Error(`unexpected message: ${msg.proto_step}`);
     }
     msg = await receive();
+  }
+  } catch (error) {
+    options.matchedEvidence?.interrupt();
+    throw error;
   }
 }

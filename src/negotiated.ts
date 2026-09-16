@@ -1,3 +1,4 @@
+import type { MatchedEvidenceTracker } from "./matched-evidence.js";
 import { spawnMirror, type Transport } from "./transport.js";
 import {
   type ApalacheConfig,
@@ -189,6 +190,8 @@ export type CompiledExecutionSelection =
   | AsyncCompiledExecutionSelection;
 
 export interface NegotiatedReportRunOptions extends NegotiatedRunOptions {
+  /** Trusted matched-evidence collector; no effect on existing report semantics. */
+  readonly matchedEvidence?: MatchedEvidenceTracker;
   readonly signal?: AbortSignal;
   readonly deadlines?: Partial<ReplayDeadlines>;
 }
@@ -889,6 +892,7 @@ async function runCompiledReportReplay(
       }
       validateBinding(binding, expected, label, apalacheConfig);
       report = await replayCore(t, it, synchronousReplayExecution(binding.computer), {
+        matchedEvidence: options.matchedEvidence,
         structuredMismatch: true,
         signal: options.signal,
         receive,
@@ -960,7 +964,7 @@ async function runCompiledReportReplay(
           options.signal,
           deadlines.stepMs,
         ),
-        { structuredMismatch: true, signal: options.signal, receive },
+        { structuredMismatch: true, signal: options.signal, receive, matchedEvidence: options.matchedEvidence },
       );
     }
     const coverageFn = binding.coverage;
