@@ -1,0 +1,698 @@
+{
+  "schema": "mirrors.application-program-evidence/v1",
+  "date": "2026-09-16",
+  "startingRevisions": {
+    "Mirrors": "da521d0",
+    "MirrorECMA": "257ead0",
+    "MirrorGate": "40f3f5e"
+  },
+  "scope": "Local Linux/Bubblewrap checkout validation; not package publication or hosted CI",
+  "toolchain": {
+    "node": "24.15.0",
+    "apalache": "0.61.0",
+    "gateRust": "1.96.0",
+    "managedAgent": "codex-cli 0.153.4",
+    "managedModel": "gpt-5.6-sol"
+  },
+  "measurements": {
+    "setupTime": "not measured",
+    "diagnosisTime": "not measured",
+    "lineCounting": "physical lines; generated outputs and data fixtures excluded"
+  },
+  "applications": [
+    {
+      "application": "work-queue",
+      "modelSha256": "3262ae5cac7205a8f9ceee2f4fe1d59bf1b2b14d1e3533f700ed9ce68a5ae12d",
+      "implementationSha256": "81d37262b5cbebc4e40d4a442449269db1036b0417f4572cc5e1345456fa0cbf",
+      "handwrittenLines": {
+        "sut": 177,
+        "applicationIntegration": 461,
+        "model": 97
+      },
+      "local": {
+        "correctTraces": 2,
+        "correctTransitions": 30,
+        "actionCounts": {
+          "init": 2,
+          "enqueue": 12,
+          "start": 6,
+          "fail": 2,
+          "retry": 2,
+          "complete": 6,
+          "reset": 2
+        },
+        "sequenceCounts": [
+          {
+            "from": "init",
+            "to": "enqueue",
+            "count": 2
+          },
+          {
+            "from": "enqueue",
+            "to": "enqueue",
+            "count": 4
+          },
+          {
+            "from": "enqueue",
+            "to": "start",
+            "count": 6
+          },
+          {
+            "from": "start",
+            "to": "enqueue",
+            "count": 2
+          },
+          {
+            "from": "enqueue",
+            "to": "fail",
+            "count": 2
+          },
+          {
+            "from": "fail",
+            "to": "retry",
+            "count": 2
+          },
+          {
+            "from": "retry",
+            "to": "complete",
+            "count": 2
+          },
+          {
+            "from": "complete",
+            "to": "enqueue",
+            "count": 2
+          },
+          {
+            "from": "start",
+            "to": "complete",
+            "count": 4
+          },
+          {
+            "from": "complete",
+            "to": "reset",
+            "count": 2
+          },
+          {
+            "from": "reset",
+            "to": "enqueue",
+            "count": 2
+          }
+        ],
+        "mutants": [
+          {
+            "name": "duplicate-accepts",
+            "detected": true,
+            "firstMismatch": {
+              "code": "step_mismatch",
+              "traceIndex": 1,
+              "stateIndex": 2,
+              "action": "enqueue"
+            }
+          },
+          {
+            "name": "enqueue-drops",
+            "detected": true,
+            "firstMismatch": {
+              "code": "step_mismatch",
+              "traceIndex": 1,
+              "stateIndex": 1,
+              "action": "enqueue"
+            }
+          },
+          {
+            "name": "enqueue-in-flight",
+            "detected": true,
+            "firstMismatch": {
+              "code": "step_mismatch",
+              "traceIndex": 1,
+              "stateIndex": 5,
+              "action": "enqueue"
+            }
+          },
+          {
+            "name": "start-stale",
+            "detected": true,
+            "firstMismatch": {
+              "code": "step_mismatch",
+              "traceIndex": 1,
+              "stateIndex": 4,
+              "action": "start"
+            }
+          },
+          {
+            "name": "fail-does-not-mark",
+            "detected": true,
+            "firstMismatch": {
+              "code": "step_mismatch",
+              "traceIndex": 1,
+              "stateIndex": 6,
+              "action": "fail"
+            }
+          },
+          {
+            "name": "retry-does-not-clear",
+            "detected": true,
+            "firstMismatch": {
+              "code": "step_mismatch",
+              "traceIndex": 1,
+              "stateIndex": 7,
+              "action": "retry"
+            }
+          },
+          {
+            "name": "complete-keeps-in-flight",
+            "detected": true,
+            "firstMismatch": {
+              "code": "step_mismatch",
+              "traceIndex": 1,
+              "stateIndex": 8,
+              "action": "complete"
+            }
+          },
+          {
+            "name": "complete-stale",
+            "detected": true,
+            "firstMismatch": {
+              "code": "step_mismatch",
+              "traceIndex": 1,
+              "stateIndex": 8,
+              "action": "complete"
+            }
+          },
+          {
+            "name": "reset-leaves-state",
+            "detected": true,
+            "firstMismatch": {
+              "code": "step_mismatch",
+              "traceIndex": 2,
+              "stateIndex": 0,
+              "action": "init"
+            }
+          }
+        ],
+        "controls": [
+          {
+            "variant": "crash",
+            "code": "adapter_failure"
+          },
+          {
+            "variant": "hang",
+            "code": "action_timeout"
+          },
+          {
+            "variant": "cancel",
+            "code": "replay_aborted"
+          }
+        ],
+        "recordedEvaluationMs": 1307.7955430000002,
+        "durationScope": "queue: replay durations only; others: entire scenario including cleanup"
+      },
+      "freshWitnessMatrix": "passed",
+      "relocatedSourceMatrix": "passed; reused installed dependencies and toolchain",
+      "gateSourceCases": [
+        {
+          "variant": "correct",
+          "status": "passed",
+          "cleanup": "confirmed",
+          "durationMs": 601.477001,
+          "sourceHash": "b41baec7e38fcc6f450b4bdfffab9008770f4892a9c554139aed9528a84fd7a9",
+          "artifactHash": "4185335d1eafe216715f88163353e2eb3b567b35d8a62151af4aed9b7ebae22e"
+        },
+        {
+          "variant": "duplicate-accepts",
+          "status": "mismatch",
+          "cleanup": "confirmed",
+          "durationMs": 458.47480700000006,
+          "sourceHash": "d292bb2388890a4caaf4a67b0294aefe331f69a33c6e1c8515de21619f33975c",
+          "artifactHash": "d6b0751c9ead3155ed451cb69bfaf0e136a5772d82caf5efbefa4ca3f871d745"
+        },
+        {
+          "variant": "enqueue-drops",
+          "status": "mismatch",
+          "cleanup": "confirmed",
+          "durationMs": 453.755811,
+          "sourceHash": "cbeb17c010789fdd3b0cb31bf436a091294f6c776370a1b3a2fb4a10fe69b4ce",
+          "artifactHash": "757611e0968462210b04ed95809a75cc853d593f8ce066280995d40018cb6375"
+        },
+        {
+          "variant": "retry-does-not-clear",
+          "status": "mismatch",
+          "cleanup": "confirmed",
+          "durationMs": 493.78544799999986,
+          "sourceHash": "7553b9276bcea2337af9f8496d9bba5af15e08a7f813e6ceb92cf54712d96404",
+          "artifactHash": "3bf015efddc0ef7477a5a5a2cd8b5202491cc9495fc366dfbd452d40ba281b3e"
+        },
+        {
+          "variant": "crash",
+          "status": "failed",
+          "cleanup": "confirmed",
+          "durationMs": 455.25447499999973,
+          "sourceHash": "fafb7dfa1a499824d7f76b419f50fe08b16f1e1156c892d4729d0f0d168f6c5f",
+          "artifactHash": "8bb91adf63e0df81e95138b0fdc31d656bd802d057521ddf21064d190fce3b8b"
+        },
+        {
+          "variant": "hang",
+          "status": "timedOut",
+          "cleanup": "confirmed",
+          "durationMs": 636.4402540000001,
+          "sourceHash": "25667db13ce91eb91888e20007e7c8e744291b16be47745934ff81ca7c489a91",
+          "artifactHash": "630ecdacf4ddda8385610ecb01ae6955ba363e30902f252a128d73ccaa105217"
+        },
+        {
+          "variant": "cancel",
+          "status": "cancelled",
+          "cleanup": "confirmed",
+          "durationMs": 446.32843600000024,
+          "sourceHash": "25667db13ce91eb91888e20007e7c8e744291b16be47745934ff81ca7c489a91",
+          "artifactHash": "630ecdacf4ddda8385610ecb01ae6955ba363e30902f252a128d73ccaa105217"
+        }
+      ],
+      "restrictedAuthor": {
+        "status": "passed",
+        "cleanup": "confirmed",
+        "submission": {
+          "submissionId": "57278df8bc81a6cacadf9a4e276b7ac6",
+          "sourceHash": "11b557b2152ae496f3f04eb2c973460cb56f8faca5660ccde105ac0b0871569d",
+          "sourceRevision": 1
+        },
+        "implementation": {
+          "preparedRevision": 1,
+          "artifactId": "f2d3b773aaf6ccb9755bb33c0d9f0f0f",
+          "artifactHash": "2645a8c1fca92d48f8be4597371259280befd73622176a046bb25838128ce1c2",
+          "manifestHash": "fb326f4abb38f1d9c3cbc67d4c31dd2cdad65dd17774d1494dbdae9e806c488b",
+          "runtime": "node-v1",
+          "policyId": "work-queue",
+          "sourceHash": "11b557b2152ae496f3f04eb2c973460cb56f8faca5660ccde105ac0b0871569d"
+        },
+        "acceptedTraces": 2,
+        "acceptedSteps": 30,
+        "durationMs": 64289.950291999994,
+        "runnerSha256": "a338b7f2f0c484d46c52434894fe664dcd700102395658f40105bfe5818c5f20"
+      },
+      "rawReceiptSha256": {
+        "local": "cc3656f4da6e42e16e3991ac5c4f8d2811402afb18abf91c08e53db5f79de8b0",
+        "fresh": "9daa933d755c5ce506184bd82a1be35132a33706fb6e58817a62f6276a83a5fa",
+        "gate": "b6b5f2582440ce61091c9a1d98f394162235d14748b55f3b310f51e61ce542b5",
+        "restrictedAuthor": "ea37bddbe844387c375279b4c31a07c1b461073d9d20d4829b65ed31b896bac7"
+      }
+    },
+    {
+      "application": "persistent-transfer",
+      "modelSha256": "8afef873443447c74ab77fd639b9e8ac496a0649899ab73a41d73a3b065d3add",
+      "implementationSha256": "db9f39f1c1644ad3c981fb955378a2fb2cb643120ab40af5dce07f7e650cdd16",
+      "handwrittenLines": {
+        "sut": 74,
+        "applicationIntegration": 0,
+        "model": 64
+      },
+      "local": {
+        "correctTraces": 2,
+        "correctTransitions": 30,
+        "actionCounts": {
+          "Initialize": 2,
+          "Begin": 4,
+          "Chunk": 10,
+          "Commit": 4,
+          "Pause": 2,
+          "Restart": 4,
+          "Resume": 2,
+          "Cancel": 4
+        },
+        "sequenceCounts": {
+          "Initialize->Begin": 2,
+          "Begin->Chunk": 4,
+          "Chunk->Commit": 4,
+          "Commit->Pause": 2,
+          "Pause->Restart": 2,
+          "Restart->Resume": 2,
+          "Resume->Chunk": 2,
+          "Chunk->Chunk": 4,
+          "Commit->Restart": 2,
+          "Restart->Cancel": 2,
+          "Cancel->Begin": 2,
+          "Chunk->Cancel": 2
+        },
+        "mutants": [
+          {
+            "name": "premature-success",
+            "detected": true,
+            "firstMismatch": {
+              "code": "replay_mismatch",
+              "traceIndex": 0,
+              "stateIndex": 3,
+              "action": "commit"
+            }
+          },
+          {
+            "name": "duplicate-retry",
+            "detected": true,
+            "firstMismatch": {
+              "code": "replay_mismatch",
+              "traceIndex": 0,
+              "stateIndex": 7,
+              "action": "chunk"
+            }
+          },
+          {
+            "name": "stale-session",
+            "detected": true,
+            "firstMismatch": {
+              "code": "replay_mismatch",
+              "traceIndex": 0,
+              "stateIndex": 13,
+              "action": "chunk"
+            }
+          },
+          {
+            "name": "corrupt-content",
+            "detected": true,
+            "firstMismatch": {
+              "code": "replay_mismatch",
+              "traceIndex": 0,
+              "stateIndex": 2,
+              "action": "chunk"
+            }
+          }
+        ],
+        "controls": [
+          {
+            "variant": "crash",
+            "classification": "infrastructure-error"
+          },
+          {
+            "variant": "hang",
+            "classification": "timeout"
+          },
+          {
+            "variant": "cancel",
+            "classification": "cancelled"
+          }
+        ],
+        "recordedEvaluationMs": 681.7106979999999,
+        "durationScope": "queue: replay durations only; others: entire scenario including cleanup"
+      },
+      "freshWitnessMatrix": "passed",
+      "relocatedSourceMatrix": "passed; reused installed dependencies and toolchain",
+      "gateSourceCases": [
+        {
+          "variant": "correct",
+          "status": "passed",
+          "cleanup": "confirmed",
+          "durationMs": 617.426796,
+          "sourceHash": "2f4c70ce169cb5737b74a6d52954d51812ca74bd189dc1bac71c6fefe3572ee5",
+          "artifactHash": "899df72127c5c416ee3feed168657859b03d8de27de0796aa042c92568fefae7"
+        },
+        {
+          "variant": "premature-success",
+          "status": "mismatch",
+          "cleanup": "confirmed",
+          "durationMs": 511.57809299999997,
+          "sourceHash": "06ba8a17b553e3ac7dc3240640857be6c22ae591d432234c8137f84517e8b5d3",
+          "artifactHash": "108efcbb8cd0391299cd2e397a09f2af2e1146519ec7d7bff8b33beb68f3de4d"
+        },
+        {
+          "variant": "duplicate-retry",
+          "status": "mismatch",
+          "cleanup": "confirmed",
+          "durationMs": 492.929934,
+          "sourceHash": "d8ced5311f2e3596b74045cd013fb1c569a733786efbf400692c43d1683b5a86",
+          "artifactHash": "2fe6c5775d74ea7d57cc94251f8d400b5584bd6c309c9a20177403c9672f0e88"
+        },
+        {
+          "variant": "stale-session",
+          "status": "mismatch",
+          "cleanup": "confirmed",
+          "durationMs": 515.6779750000001,
+          "sourceHash": "36923b6afd17bcd46bb425e5ce427baff41dbed80229f779dc172e163a5376d9",
+          "artifactHash": "9d6daade8c13fa6e4bcdade56f275e48c0def6d9746b0f20f9cb83476cad75da"
+        },
+        {
+          "variant": "corrupt-content",
+          "status": "mismatch",
+          "cleanup": "confirmed",
+          "durationMs": 456.52328499999976,
+          "sourceHash": "d68f3f2c6efba951f0c4a57ab46d998621ab00504d74667f37e5a2057a2c9ee1",
+          "artifactHash": "c3b0b783b9d43fc06031e9c83f754dff61fa4e9ad4701924cd5a179af1d4c286"
+        },
+        {
+          "variant": "crash",
+          "status": "failed",
+          "cleanup": "confirmed",
+          "durationMs": 458.0351179999998,
+          "sourceHash": "d9634ca151f86d8385b0763011a0cf3d3494a542c27c97c066fe26cba8283670",
+          "artifactHash": "7d766ed813494aa90552e281bf3afc9b19d18eccb0d31d0cb9863b253afde9f7"
+        },
+        {
+          "variant": "hang",
+          "status": "timedOut",
+          "cleanup": "confirmed",
+          "durationMs": 666.7226009999999,
+          "sourceHash": "4709902ff6ae383ef6e724b7111b5dc44d6516a8082a8546c5d642a144930e25",
+          "artifactHash": "aab01af2dd87258bf699c15a896ac204774f774eac5534e59e97f8d315b9e8a4"
+        },
+        {
+          "variant": "cancel",
+          "status": "cancelled",
+          "cleanup": "confirmed",
+          "durationMs": 701.0169140000003,
+          "sourceHash": "4709902ff6ae383ef6e724b7111b5dc44d6516a8082a8546c5d642a144930e25",
+          "artifactHash": "aab01af2dd87258bf699c15a896ac204774f774eac5534e59e97f8d315b9e8a4"
+        }
+      ],
+      "restrictedAuthor": {
+        "status": "passed",
+        "cleanup": "confirmed",
+        "submission": {
+          "submissionId": "cb04d3e331219bebd959aa08e4bb5987",
+          "sourceHash": "172d107a2cdd4e3c72e44a02fe0c1153c1ab993731b828e4f87eaff2e38791e9",
+          "sourceRevision": 1
+        },
+        "implementation": {
+          "preparedRevision": 1,
+          "artifactId": "6010a8133d87848473ee6285715a2077",
+          "artifactHash": "70c7be5962849997fce96fa0366c61d252f8af6b2e5901db719c5fd3546ab4e7",
+          "manifestHash": "a49d00d2b5db1225d67fe6a919e45c36cd5f6d2cf255769f6fea02560b1b80a0",
+          "runtime": "node-v1",
+          "policyId": "persistent-transfer",
+          "sourceHash": "172d107a2cdd4e3c72e44a02fe0c1153c1ab993731b828e4f87eaff2e38791e9"
+        },
+        "acceptedTraces": 2,
+        "acceptedSteps": 30,
+        "durationMs": 116409.208805,
+        "runnerSha256": "a338b7f2f0c484d46c52434894fe664dcd700102395658f40105bfe5818c5f20"
+      },
+      "rawReceiptSha256": {
+        "local": "499de08328189bc4674085c245e4c20d2827f958f4235b936569b3f8cc3e486f",
+        "fresh": "c09e05a4bbd52085a03fbd71b9bca7370bc841eb120ab3932916fd0b424b213c",
+        "gate": "211fd12599f547659037aca656f0dcfd3587d3ab6291762ee79c9678629a8d0b",
+        "restrictedAuthor": "003907674199cf3c26ec80c7cc7f53d7dc2176f055fbce5d469f92f2a56d9a52"
+      }
+    },
+    {
+      "application": "lease-service",
+      "modelSha256": "3769f84af6ba919a58e6eea773bcfee25eaf8eb7a93b3ee534bf6b2d211d6796",
+      "implementationSha256": "9174cc458c21d310f913d547c9339cc3e6b933651f098144005e1c44e869e158",
+      "handwrittenLines": {
+        "sut": 55,
+        "applicationIntegration": 0,
+        "model": 65
+      },
+      "local": {
+        "correctTraces": 2,
+        "correctTransitions": 20,
+        "actionCounts": {
+          "Initialize": 2,
+          "Acquire": 6,
+          "Renew": 4,
+          "Advance": 2,
+          "Write": 4,
+          "Release": 4
+        },
+        "sequenceCounts": {
+          "Initialize->Acquire": 2,
+          "Acquire->Acquire": 2,
+          "Acquire->Renew": 2,
+          "Renew->Advance": 2,
+          "Advance->Write": 2,
+          "Write->Acquire": 2,
+          "Acquire->Release": 2,
+          "Release->Renew": 2,
+          "Renew->Write": 2,
+          "Write->Release": 2
+        },
+        "mutants": [
+          {
+            "name": "overlapping-ownership",
+            "detected": true,
+            "firstMismatch": {
+              "code": "replay_mismatch",
+              "traceIndex": 0,
+              "stateIndex": 2,
+              "action": "acquire"
+            }
+          },
+          {
+            "name": "expired-token",
+            "detected": true,
+            "firstMismatch": {
+              "code": "replay_mismatch",
+              "traceIndex": 0,
+              "stateIndex": 5,
+              "action": "write"
+            }
+          },
+          {
+            "name": "stale-release",
+            "detected": true,
+            "firstMismatch": {
+              "code": "replay_mismatch",
+              "traceIndex": 0,
+              "stateIndex": 7,
+              "action": "release"
+            }
+          },
+          {
+            "name": "invalid-renewal",
+            "detected": true,
+            "firstMismatch": {
+              "code": "replay_mismatch",
+              "traceIndex": 0,
+              "stateIndex": 8,
+              "action": "renew"
+            }
+          }
+        ],
+        "controls": [
+          {
+            "variant": "crash",
+            "classification": "infrastructure-error"
+          },
+          {
+            "variant": "hang",
+            "classification": "timeout"
+          },
+          {
+            "variant": "cancel",
+            "classification": "cancelled"
+          }
+        ],
+        "recordedEvaluationMs": 605.3615130000001,
+        "durationScope": "queue: replay durations only; others: entire scenario including cleanup"
+      },
+      "freshWitnessMatrix": "passed",
+      "relocatedSourceMatrix": "passed; reused installed dependencies and toolchain",
+      "gateSourceCases": [
+        {
+          "variant": "correct",
+          "status": "passed",
+          "cleanup": "confirmed",
+          "durationMs": 575.66601,
+          "sourceHash": "8f986d6ac8363fa11f4da138c7142be28c4c3d435d464935bc1c84d38626cd12",
+          "artifactHash": "57107e2d06dab4ed4e3a0c086300a151aaaab3866d6b03d7c49ce73de28f5d03"
+        },
+        {
+          "variant": "overlapping-ownership",
+          "status": "mismatch",
+          "cleanup": "confirmed",
+          "durationMs": 477.8226010000001,
+          "sourceHash": "cd5d652f4dfe1cc3b941698fc6ec1b68d79541386c7b92ac6bea4a44a92647ab",
+          "artifactHash": "d50b6f54ac54d7886c2f89f1c5681521ff9949b98fcf7614eed013b3a07baad7"
+        },
+        {
+          "variant": "expired-token",
+          "status": "mismatch",
+          "cleanup": "confirmed",
+          "durationMs": 500.80752699999994,
+          "sourceHash": "ffb41744715c3ec85a65c9f1dbecfae9fc4b66adff20e10c9558355252cb86cc",
+          "artifactHash": "bd7066d54941858c21127c6222425109983297ea1e3dde0e720c2b14a4fbb52c"
+        },
+        {
+          "variant": "stale-release",
+          "status": "mismatch",
+          "cleanup": "confirmed",
+          "durationMs": 518.1517059999999,
+          "sourceHash": "cdc9ce156cc094285febf63690cc243eee12950ea52659bfff624b9af886f633",
+          "artifactHash": "d95eb4bca91ade6908cd1ed40f60f98ea1e50d0877a740d5de4989397786be7b"
+        },
+        {
+          "variant": "invalid-renewal",
+          "status": "mismatch",
+          "cleanup": "confirmed",
+          "durationMs": 508.4175949999999,
+          "sourceHash": "95a3185a427b83b85dc4ae6e736330fd1e55bebd29d2cd6912c56a05b34de97e",
+          "artifactHash": "6b2d03515a52d66f45cac0b850cdc083760e9ae385edd4821b98b723d7f2da52"
+        },
+        {
+          "variant": "crash",
+          "status": "failed",
+          "cleanup": "confirmed",
+          "durationMs": 448.4480530000001,
+          "sourceHash": "2d977d361a0386ad299b0c7aa69689cbd317ecfac0610f3657f5fdb0fbee85df",
+          "artifactHash": "e563b9f32bbb88687f555d7b70fe23dc905c445a1e4c6a50d18ba5faf4cafa14"
+        },
+        {
+          "variant": "hang",
+          "status": "timedOut",
+          "cleanup": "confirmed",
+          "durationMs": 659.9142360000001,
+          "sourceHash": "88d4999f182edb91c56639d0f841c65d7a8152c667fb1c15162676b721871e6e",
+          "artifactHash": "2c0cfd17be6e64465b6c9eab583f328e6f7a27447c6cfa9552a949eca1729a68"
+        },
+        {
+          "variant": "cancel",
+          "status": "cancelled",
+          "cleanup": "confirmed",
+          "durationMs": 481.3375619999997,
+          "sourceHash": "88d4999f182edb91c56639d0f841c65d7a8152c667fb1c15162676b721871e6e",
+          "artifactHash": "2c0cfd17be6e64465b6c9eab583f328e6f7a27447c6cfa9552a949eca1729a68"
+        }
+      ],
+      "restrictedAuthor": {
+        "status": "passed",
+        "cleanup": "confirmed",
+        "submission": {
+          "submissionId": "5e449a0147efb3de8f97d7de4522ece9",
+          "sourceHash": "576ee356f94d6573817c86614585a661bcf6434c24535bc353f5550c6e23a92d",
+          "sourceRevision": 1
+        },
+        "implementation": {
+          "preparedRevision": 1,
+          "artifactId": "5593226735251d92464f3e6c69dd8f4e",
+          "artifactHash": "5051272680bc65acde5494b70fbc2ca90e0e58c2978558aedfb42ca01dec07a0",
+          "manifestHash": "1a547b009e3454c39112e84f6a2c357c2c0a82b795ea7599f6355f12271396db",
+          "runtime": "node-v1",
+          "policyId": "lease-service",
+          "sourceHash": "576ee356f94d6573817c86614585a661bcf6434c24535bc353f5550c6e23a92d"
+        },
+        "acceptedTraces": 2,
+        "acceptedSteps": 20,
+        "durationMs": 46324.599745,
+        "runnerSha256": "a338b7f2f0c484d46c52434894fe664dcd700102395658f40105bfe5818c5f20"
+      },
+      "rawReceiptSha256": {
+        "local": "015a5da2d68eda8c1bb706948388e2eda7ab8c932b1254c36a46e22a31912145",
+        "fresh": "28d71f8427039decd36b55d278efce5368d2d87e392bee00a5c292d2f1b5ee67",
+        "gate": "7b9de9e2031e5096ea709b5ac5452f10c6df018d988ea54fea51e3c17e5f6050",
+        "restrictedAuthor": "a06210bed5f77cb86156ec14f104895a11ce1331c09b8ca655527b4ed77ce5f1"
+      }
+    }
+  ],
+  "sharedHandwrittenLines": {
+    "localSuite": 147,
+    "localCli": 24,
+    "generation": 61,
+    "gateRunner": 139
+  },
+  "validation": {
+    "typescript": "core/examples/new generated bindings passed",
+    "mirrorECMAJest": {
+      "passed": 444,
+      "skipped": 4,
+      "reason": "opt-in TG4 trace-generation transport environment not supplied"
+    },
+    "gateRequiredBackend": "passed: 244 Python, 221 Node, 3 integration, 3 CTest, Rust and real Node/Rust lifecycle/conformance",
+    "newModelSafety": "LeaseService and PersistentTransfer Next / Safety passed through length 5",
+    "workQueueSmokeLive": "passed",
+    "mirrorsCore": "not rerun; no compiler/runtime changes, artifact check and preflight passed"
+  }
+}

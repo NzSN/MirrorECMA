@@ -1,0 +1,23 @@
+{
+  "module": "LeaseService",
+  "folder": "lease-service",
+  "length": 10,
+  "faults": {
+    "overlapping-ownership": {
+      "action": "acquire",
+      "step": 2
+    },
+    "expired-token": {
+      "action": "write",
+      "step": 5
+    },
+    "stale-release": {
+      "action": "release",
+      "step": 7
+    },
+    "invalid-renewal": {
+      "action": "renew",
+      "step": 8
+    }
+  }
+}

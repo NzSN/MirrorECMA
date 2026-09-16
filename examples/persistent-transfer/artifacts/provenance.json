@@ -1,0 +1,22 @@
+{
+  "schema": "mirrorecma.application-witness/v1",
+  "generator": "Apalache",
+  "version": "0.57.0",
+  "arguments": [
+    "check",
+    "--init=Init",
+    "--next=WitnessNext",
+    "--inv=TraceComplete",
+    "--length=15",
+    "--view=View",
+    "/home/nzsn/Repos/MirrorECMA/examples/persistent-transfer/specs/PersistentTransfer.tla"
+  ],
+  "expectedExitCode": 12,
+  "purpose": "TraceComplete deliberately requests the deterministic witness",
+  "modelSha256": "8afef873443447c74ab77fd639b9e8ac496a0649899ab73a41d73a3b065d3add",
+  "traceSha256": "5142bd661c6887c1e1e3547cb14f349914e06d2d6fd0e5ea9bfab84c5149c326",
+  "contractSha256": "40d99dd49dfb0db9e76be2083cad183e00ed29f3af26ce0b2c7d1436907a2795",
+  "compilerSha256": "624cc9a6ceb4b5eb1849281bbfb20ab60a33a595fa463c0d66e60b4f3b085f82",
+  "states": 16,
+  "transitions": 15
+}

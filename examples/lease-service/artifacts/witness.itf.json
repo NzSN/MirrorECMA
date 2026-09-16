@@ -1,0 +1,461 @@
+{
+  "#meta": {
+    "format": "ITF",
+    "varTypes": {
+      "now": "Int",
+      "epoch": "Int",
+      "expires": "Int",
+      "owners": "Set(Int)",
+      "accepted": "Bool",
+      "parameters": "{ amount: Int, client: Int, step: Int, token: Int }",
+      "action_taken": "Str",
+      "writes": "Int"
+    },
+    "format-description": "https://apalache-mc.org/docs/adr/015adr-trace.html",
+    "description": "Created by Apalache on Wed Sep 16 12:29:17 CST 2026"
+  },
+  "vars": [
+    "now",
+    "epoch",
+    "expires",
+    "owners",
+    "accepted",
+    "parameters",
+    "action_taken",
+    "writes"
+  ],
+  "states": [
+    {
+      "#meta": {
+        "index": 0
+      },
+      "accepted": false,
+      "action_taken": "init",
+      "epoch": {
+        "#bigint": "0"
+      },
+      "expires": {
+        "#bigint": "0"
+      },
+      "now": {
+        "#bigint": "0"
+      },
+      "owners": {
+        "#set": []
+      },
+      "parameters": {
+        "amount": {
+          "#bigint": "0"
+        },
+        "client": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "0"
+        },
+        "token": {
+          "#bigint": "0"
+        }
+      },
+      "writes": {
+        "#bigint": "0"
+      }
+    },
+    {
+      "#meta": {
+        "index": 1
+      },
+      "accepted": true,
+      "action_taken": "acquire",
+      "epoch": {
+        "#bigint": "1"
+      },
+      "expires": {
+        "#bigint": "3"
+      },
+      "now": {
+        "#bigint": "0"
+      },
+      "owners": {
+        "#set": [
+          {
+            "#bigint": "1"
+          }
+        ]
+      },
+      "parameters": {
+        "amount": {
+          "#bigint": "0"
+        },
+        "client": {
+          "#bigint": "1"
+        },
+        "step": {
+          "#bigint": "1"
+        },
+        "token": {
+          "#bigint": "0"
+        }
+      },
+      "writes": {
+        "#bigint": "0"
+      }
+    },
+    {
+      "#meta": {
+        "index": 2
+      },
+      "accepted": false,
+      "action_taken": "acquire",
+      "epoch": {
+        "#bigint": "1"
+      },
+      "expires": {
+        "#bigint": "3"
+      },
+      "now": {
+        "#bigint": "0"
+      },
+      "owners": {
+        "#set": [
+          {
+            "#bigint": "1"
+          }
+        ]
+      },
+      "parameters": {
+        "amount": {
+          "#bigint": "0"
+        },
+        "client": {
+          "#bigint": "2"
+        },
+        "step": {
+          "#bigint": "2"
+        },
+        "token": {
+          "#bigint": "0"
+        }
+      },
+      "writes": {
+        "#bigint": "0"
+      }
+    },
+    {
+      "#meta": {
+        "index": 3
+      },
+      "accepted": true,
+      "action_taken": "renew",
+      "epoch": {
+        "#bigint": "1"
+      },
+      "expires": {
+        "#bigint": "3"
+      },
+      "now": {
+        "#bigint": "0"
+      },
+      "owners": {
+        "#set": [
+          {
+            "#bigint": "1"
+          }
+        ]
+      },
+      "parameters": {
+        "amount": {
+          "#bigint": "0"
+        },
+        "client": {
+          "#bigint": "1"
+        },
+        "step": {
+          "#bigint": "3"
+        },
+        "token": {
+          "#bigint": "1"
+        }
+      },
+      "writes": {
+        "#bigint": "0"
+      }
+    },
+    {
+      "#meta": {
+        "index": 4
+      },
+      "accepted": true,
+      "action_taken": "advance",
+      "epoch": {
+        "#bigint": "1"
+      },
+      "expires": {
+        "#bigint": "3"
+      },
+      "now": {
+        "#bigint": "3"
+      },
+      "owners": {
+        "#set": [
+          {
+            "#bigint": "1"
+          }
+        ]
+      },
+      "parameters": {
+        "amount": {
+          "#bigint": "3"
+        },
+        "client": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "4"
+        },
+        "token": {
+          "#bigint": "0"
+        }
+      },
+      "writes": {
+        "#bigint": "0"
+      }
+    },
+    {
+      "#meta": {
+        "index": 5
+      },
+      "accepted": false,
+      "action_taken": "write",
+      "epoch": {
+        "#bigint": "1"
+      },
+      "expires": {
+        "#bigint": "3"
+      },
+      "now": {
+        "#bigint": "3"
+      },
+      "owners": {
+        "#set": [
+          {
+            "#bigint": "1"
+          }
+        ]
+      },
+      "parameters": {
+        "amount": {
+          "#bigint": "0"
+        },
+        "client": {
+          "#bigint": "1"
+        },
+        "step": {
+          "#bigint": "5"
+        },
+        "token": {
+          "#bigint": "1"
+        }
+      },
+      "writes": {
+        "#bigint": "0"
+      }
+    },
+    {
+      "#meta": {
+        "index": 6
+      },
+      "accepted": true,
+      "action_taken": "acquire",
+      "epoch": {
+        "#bigint": "2"
+      },
+      "expires": {
+        "#bigint": "6"
+      },
+      "now": {
+        "#bigint": "3"
+      },
+      "owners": {
+        "#set": [
+          {
+            "#bigint": "2"
+          }
+        ]
+      },
+      "parameters": {
+        "amount": {
+          "#bigint": "0"
+        },
+        "client": {
+          "#bigint": "2"
+        },
+        "step": {
+          "#bigint": "6"
+        },
+        "token": {
+          "#bigint": "0"
+        }
+      },
+      "writes": {
+        "#bigint": "0"
+      }
+    },
+    {
+      "#meta": {
+        "index": 7
+      },
+      "accepted": false,
+      "action_taken": "release",
+      "epoch": {
+        "#bigint": "2"
+      },
+      "expires": {
+        "#bigint": "6"
+      },
+      "now": {
+        "#bigint": "3"
+      },
+      "owners": {
+        "#set": [
+          {
+            "#bigint": "2"
+          }
+        ]
+      },
+      "parameters": {
+        "amount": {
+          "#bigint": "0"
+        },
+        "client": {
+          "#bigint": "1"
+        },
+        "step": {
+          "#bigint": "7"
+        },
+        "token": {
+          "#bigint": "1"
+        }
+      },
+      "writes": {
+        "#bigint": "0"
+      }
+    },
+    {
+      "#meta": {
+        "index": 8
+      },
+      "accepted": false,
+      "action_taken": "renew",
+      "epoch": {
+        "#bigint": "2"
+      },
+      "expires": {
+        "#bigint": "6"
+      },
+      "now": {
+        "#bigint": "3"
+      },
+      "owners": {
+        "#set": [
+          {
+            "#bigint": "2"
+          }
+        ]
+      },
+      "parameters": {
+        "amount": {
+          "#bigint": "0"
+        },
+        "client": {
+          "#bigint": "1"
+        },
+        "step": {
+          "#bigint": "8"
+        },
+        "token": {
+          "#bigint": "1"
+        }
+      },
+      "writes": {
+        "#bigint": "0"
+      }
+    },
+    {
+      "#meta": {
+        "index": 9
+      },
+      "accepted": true,
+      "action_taken": "write",
+      "epoch": {
+        "#bigint": "2"
+      },
+      "expires": {
+        "#bigint": "6"
+      },
+      "now": {
+        "#bigint": "3"
+      },
+      "owners": {
+        "#set": [
+          {
+            "#bigint": "2"
+          }
+        ]
+      },
+      "parameters": {
+        "amount": {
+          "#bigint": "0"
+        },
+        "client": {
+          "#bigint": "2"
+        },
+        "step": {
+          "#bigint": "9"
+        },
+        "token": {
+          "#bigint": "2"
+        }
+      },
+      "writes": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 10
+      },
+      "accepted": true,
+      "action_taken": "release",
+      "epoch": {
+        "#bigint": "2"
+      },
+      "expires": {
+        "#bigint": "6"
+      },
+      "now": {
+        "#bigint": "3"
+      },
+      "owners": {
+        "#set": []
+      },
+      "parameters": {
+        "amount": {
+          "#bigint": "0"
+        },
+        "client": {
+          "#bigint": "2"
+        },
+        "step": {
+          "#bigint": "10"
+        },
+        "token": {
+          "#bigint": "2"
+        }
+      },
+      "writes": {
+        "#bigint": "1"
+      }
+    }
+  ]
+}

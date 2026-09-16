@@ -1,0 +1,22 @@
+{
+  "schema": "mirrorecma.application-witness/v1",
+  "generator": "Apalache",
+  "version": "0.57.0",
+  "arguments": [
+    "check",
+    "--init=Init",
+    "--next=WitnessNext",
+    "--inv=TraceComplete",
+    "--length=10",
+    "--view=View",
+    "/home/nzsn/Repos/MirrorECMA/examples/lease-service/specs/LeaseService.tla"
+  ],
+  "expectedExitCode": 12,
+  "purpose": "TraceComplete deliberately requests the deterministic witness",
+  "modelSha256": "3769f84af6ba919a58e6eea773bcfee25eaf8eb7a93b3ee534bf6b2d211d6796",
+  "traceSha256": "aefc9b03f8a1ace167f327126e7dac92f67fe0538e1560f100bc88eb0e0b5433",
+  "contractSha256": "dffb33621dfb62ad41d440676fd66055bdd1cc6649aad1d81afb23782c5748d2",
+  "compilerSha256": "624cc9a6ceb4b5eb1849281bbfb20ab60a33a595fa463c0d66e60b4f3b085f82",
+  "states": 11,
+  "transitions": 10
+}

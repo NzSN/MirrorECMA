@@ -186,6 +186,9 @@ show which handlers ran.
 
 Next, the [asynchronous work queue](examples/work-queue/README.md) exercises
 multiple actions, failures, retries, and reset through a real implementation.
+The [three-application validation program](examples/application-validation/README.md)
+adds persistent transfers and controlled-clock leases, pinned fault matrices,
+fresh model witnesses, private receipts, and real Gate worker/authoring checks.
 [Reports and asynchronous replay](docs/replay-and-async.md) explain structured
 failures, cancellation, generated async ports, and dynamic factory ownership.
 

@@ -1,0 +1,134 @@
+{
+  "schema": "mirrors.model-interface/v1",
+  "interfaceVersion": "1.0.0",
+  "model": {
+    "module": "PersistentTransfer",
+    "source": "examples/persistent-transfer/specs/PersistentTransfer.tla"
+  },
+  "wire": {
+    "actionVariable": "action_taken",
+    "parameterVariable": "parameters"
+  },
+  "initializers": [
+    {
+      "id": "Initialize",
+      "wireAction": "init",
+      "wireAliases": [],
+      "inputs": []
+    }
+  ],
+  "actions": [
+    {
+      "id": "Begin",
+      "wireAction": "begin",
+      "wireAliases": [],
+      "inputs": []
+    },
+    {
+      "id": "Chunk",
+      "wireAction": "chunk",
+      "wireAliases": [],
+      "inputs": [
+        {
+          "id": "Token",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              {
+                "field": "parameters"
+              },
+              {
+                "field": "token"
+              }
+            ]
+          }
+        },
+        {
+          "id": "Offset",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              {
+                "field": "parameters"
+              },
+              {
+                "field": "offset"
+              }
+            ]
+          }
+        },
+        {
+          "id": "Value",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              {
+                "field": "parameters"
+              },
+              {
+                "field": "value"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Pause",
+      "wireAction": "pause",
+      "wireAliases": [],
+      "inputs": []
+    },
+    {
+      "id": "Resume",
+      "wireAction": "resume",
+      "wireAliases": [],
+      "inputs": []
+    },
+    {
+      "id": "Restart",
+      "wireAction": "restart",
+      "wireAliases": [],
+      "inputs": []
+    },
+    {
+      "id": "Commit",
+      "wireAction": "commit",
+      "wireAliases": [],
+      "inputs": []
+    },
+    {
+      "id": "Cancel",
+      "wireAction": "cancel",
+      "wireAliases": [],
+      "inputs": []
+    }
+  ],
+  "observations": [
+    {
+      "id": "Session",
+      "wireName": "session",
+      "provenance": "implementation"
+    },
+    {
+      "id": "Phase",
+      "wireName": "phase",
+      "provenance": "implementation"
+    },
+    {
+      "id": "Data",
+      "wireName": "data",
+      "provenance": "implementation"
+    },
+    {
+      "id": "Committed",
+      "wireName": "committed",
+      "provenance": "implementation"
+    },
+    {
+      "id": "Accepted",
+      "wireName": "accepted",
+      "provenance": "implementation"
+    }
+  ]
+}

@@ -117,6 +117,53 @@ intentionally exits 1.
 These assertions describe the exercised witness. They do not establish
 exhaustive state-space or concurrency coverage.
 
+## Seeded-fault acceptance
+
+`pnpm run example:queue:acceptance` extends the single `BrokenWorkQueue`
+demonstration into a small fault matrix. It first replays the checked witness
+against the correct implementation, then replays the same witness, adapter,
+and observers against nine deliberately faulty implementations. Each fault is
+rejected only when the reported first mismatch matches its pinned expectation
+(trace, state, action, `step_mismatch`), so a change that hides a fault or
+turns it into an action error fails the run.
+
+| Fault | Mutation | Pinned first mismatch |
+| --- | --- | --- |
+| `duplicate-accepts` | repeated Enqueue is appended | trace 1, state 2, `enqueue` |
+| `enqueue-drops` | first Enqueue stores nothing | trace 1, state 1, `enqueue` |
+| `enqueue-in-flight` | an in-flight job is also left pending | trace 1, state 5, `enqueue` |
+| `start-stale` | Start marks job 2 though job 1 was queued | trace 1, state 4, `start` |
+| `fail-does-not-mark` | Fail leaves the failed flag false | trace 1, state 6, `fail` |
+| `retry-does-not-clear` | Retry keeps the job failed | trace 1, state 7, `retry` |
+| `complete-keeps-in-flight` | Complete records the job but keeps it in flight | trace 1, state 8, `complete` |
+| `complete-stale` | Complete records job 9 instead of the running job | trace 1, state 8, `complete` |
+| `reset-leaves-state` | Initialize keeps the previous trace's state | trace 2, state 0, `init` |
+
+`--json` prints the machine-readable receipt: model and witness digests, the
+runner and runtime identities, correct-run coverage, separate crash/hang/cancel controls, per-fault expected/observed mismatches, replay
+progress, and cleanup status. The documented contract for this evidence shape
+and for the remaining applications is
+[`docs/acceptance-contract.md`](../../docs/acceptance-contract.md).
+
+The mutations live in `acceptance.ts`; the seams they use are the small
+protected methods on `WorkQueue`. The adapter and the observation path are
+shared with the correct implementation, so a fault is detected through real
+persisted state rather than through a fault-specific observer.
+
+```bash
+# Human-readable fault matrix, exit 1 if any fault is missed:
+pnpm run example:queue:acceptance
+
+# Same run with the full receipt:
+pnpm run build:examples && node dist-test/examples/work-queue/acceptance-cli.js --json
+
+# Persist an exclusive owner-only receipt:
+node dist-test/examples/work-queue/acceptance-cli.js --receipt /private/new-queue-receipt.json
+
+# Focused in-process acceptance test:
+NODE_OPTIONS="--experimental-vm-modules" node node_modules/jest/bin/jest.js test/work-queue.acceptance.test.ts --runInBand
+```
+
 ## Checking and regenerating artifacts
 
 The checked [witness](artifacts/witness.itf.json) retains Apalache's original
@@ -144,3 +191,7 @@ The smoke harness runs compiler `check` without repairs, checks model/trace
 provenance, confirms negotiation rejection allocates no store, and confirms
 cleanup after passing and mismatched runs. `MODEL_INTERFACE_GEN` can override
 the compiler executable.
+
+The [three-application runner guide](../application-validation/README.md) adds
+fresh-witness fault matrices and real Gate worker/authoring acceptance. The
+WorkQueue model observes retry state, not a numeric retry counter.

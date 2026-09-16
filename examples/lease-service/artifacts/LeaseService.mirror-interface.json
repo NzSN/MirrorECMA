@@ -1,0 +1,201 @@
+{
+  "schema": "mirrors.model-interface/v1",
+  "interfaceVersion": "1.0.0",
+  "model": {
+    "module": "LeaseService",
+    "source": "examples/lease-service/specs/LeaseService.tla"
+  },
+  "wire": {
+    "actionVariable": "action_taken",
+    "parameterVariable": "parameters"
+  },
+  "initializers": [
+    {
+      "id": "Initialize",
+      "wireAction": "init",
+      "wireAliases": [],
+      "inputs": []
+    }
+  ],
+  "actions": [
+    {
+      "id": "Acquire",
+      "wireAction": "acquire",
+      "wireAliases": [],
+      "inputs": [
+        {
+          "id": "Client",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              {
+                "field": "parameters"
+              },
+              {
+                "field": "client"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Renew",
+      "wireAction": "renew",
+      "wireAliases": [],
+      "inputs": [
+        {
+          "id": "Client",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              {
+                "field": "parameters"
+              },
+              {
+                "field": "client"
+              }
+            ]
+          }
+        },
+        {
+          "id": "Token",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              {
+                "field": "parameters"
+              },
+              {
+                "field": "token"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Release",
+      "wireAction": "release",
+      "wireAliases": [],
+      "inputs": [
+        {
+          "id": "Client",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              {
+                "field": "parameters"
+              },
+              {
+                "field": "client"
+              }
+            ]
+          }
+        },
+        {
+          "id": "Token",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              {
+                "field": "parameters"
+              },
+              {
+                "field": "token"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Write",
+      "wireAction": "write",
+      "wireAliases": [],
+      "inputs": [
+        {
+          "id": "Client",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              {
+                "field": "parameters"
+              },
+              {
+                "field": "client"
+              }
+            ]
+          }
+        },
+        {
+          "id": "Token",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              {
+                "field": "parameters"
+              },
+              {
+                "field": "token"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Advance",
+      "wireAction": "advance",
+      "wireAliases": [],
+      "inputs": [
+        {
+          "id": "Amount",
+          "from": {
+            "root": "stepParameters",
+            "path": [
+              {
+                "field": "parameters"
+              },
+              {
+                "field": "amount"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "id": "Owners",
+      "wireName": "owners",
+      "provenance": "implementation"
+    },
+    {
+      "id": "Epoch",
+      "wireName": "epoch",
+      "provenance": "implementation"
+    },
+    {
+      "id": "Expires",
+      "wireName": "expires",
+      "provenance": "implementation"
+    },
+    {
+      "id": "Now",
+      "wireName": "now",
+      "provenance": "implementation"
+    },
+    {
+      "id": "Accepted",
+      "wireName": "accepted",
+      "provenance": "implementation"
+    },
+    {
+      "id": "Writes",
+      "wireName": "writes",
+      "provenance": "implementation"
+    }
+  ]
+}

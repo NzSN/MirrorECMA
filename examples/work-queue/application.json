@@ -1,0 +1,11 @@
+{
+  "module": "WorkQueue",
+  "folder": "work-queue",
+  "length": 15,
+  "generatedDirectory": "generated-async",
+  "faults": {
+    "duplicate-accepts": { "action": "enqueue", "step": 2 },
+    "enqueue-drops": { "action": "enqueue", "step": 1 },
+    "retry-does-not-clear": { "action": "retry", "step": 7 }
+  }
+}

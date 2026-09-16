@@ -1,0 +1,508 @@
+{
+  "#meta": {
+    "format": "ITF",
+    "varTypes": {
+      "session": "Int",
+      "committed": "Bool",
+      "phase": "Str",
+      "accepted": "Bool",
+      "parameters": "{ offset: Int, step: Int, token: Int, value: Int }",
+      "data": "Seq(Int)",
+      "action_taken": "Str"
+    },
+    "format-description": "https://apalache-mc.org/docs/adr/015adr-trace.html",
+    "description": "Created by Apalache on Wed Sep 16 12:29:12 CST 2026"
+  },
+  "vars": [
+    "session",
+    "committed",
+    "phase",
+    "accepted",
+    "parameters",
+    "data",
+    "action_taken"
+  ],
+  "states": [
+    {
+      "#meta": {
+        "index": 0
+      },
+      "accepted": false,
+      "action_taken": "init",
+      "committed": false,
+      "data": [],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "0"
+        },
+        "token": {
+          "#bigint": "0"
+        },
+        "value": {
+          "#bigint": "0"
+        }
+      },
+      "phase": "idle",
+      "session": {
+        "#bigint": "0"
+      }
+    },
+    {
+      "#meta": {
+        "index": 1
+      },
+      "accepted": true,
+      "action_taken": "begin",
+      "committed": false,
+      "data": [],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "1"
+        },
+        "token": {
+          "#bigint": "0"
+        },
+        "value": {
+          "#bigint": "0"
+        }
+      },
+      "phase": "open",
+      "session": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 2
+      },
+      "accepted": true,
+      "action_taken": "chunk",
+      "committed": false,
+      "data": [
+        {
+          "#bigint": "11"
+        }
+      ],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "2"
+        },
+        "token": {
+          "#bigint": "1"
+        },
+        "value": {
+          "#bigint": "11"
+        }
+      },
+      "phase": "open",
+      "session": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 3
+      },
+      "accepted": false,
+      "action_taken": "commit",
+      "committed": false,
+      "data": [
+        {
+          "#bigint": "11"
+        }
+      ],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "3"
+        },
+        "token": {
+          "#bigint": "0"
+        },
+        "value": {
+          "#bigint": "0"
+        }
+      },
+      "phase": "open",
+      "session": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 4
+      },
+      "accepted": false,
+      "action_taken": "pause",
+      "committed": false,
+      "data": [
+        {
+          "#bigint": "11"
+        }
+      ],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "4"
+        },
+        "token": {
+          "#bigint": "0"
+        },
+        "value": {
+          "#bigint": "0"
+        }
+      },
+      "phase": "paused",
+      "session": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 5
+      },
+      "accepted": false,
+      "action_taken": "restart",
+      "committed": false,
+      "data": [
+        {
+          "#bigint": "11"
+        }
+      ],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "5"
+        },
+        "token": {
+          "#bigint": "0"
+        },
+        "value": {
+          "#bigint": "0"
+        }
+      },
+      "phase": "paused",
+      "session": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 6
+      },
+      "accepted": false,
+      "action_taken": "resume",
+      "committed": false,
+      "data": [
+        {
+          "#bigint": "11"
+        }
+      ],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "6"
+        },
+        "token": {
+          "#bigint": "0"
+        },
+        "value": {
+          "#bigint": "0"
+        }
+      },
+      "phase": "open",
+      "session": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 7
+      },
+      "accepted": true,
+      "action_taken": "chunk",
+      "committed": false,
+      "data": [
+        {
+          "#bigint": "11"
+        }
+      ],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "7"
+        },
+        "token": {
+          "#bigint": "1"
+        },
+        "value": {
+          "#bigint": "11"
+        }
+      },
+      "phase": "open",
+      "session": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 8
+      },
+      "accepted": true,
+      "action_taken": "chunk",
+      "committed": false,
+      "data": [
+        {
+          "#bigint": "11"
+        },
+        {
+          "#bigint": "22"
+        }
+      ],
+      "parameters": {
+        "offset": {
+          "#bigint": "1"
+        },
+        "step": {
+          "#bigint": "8"
+        },
+        "token": {
+          "#bigint": "1"
+        },
+        "value": {
+          "#bigint": "22"
+        }
+      },
+      "phase": "open",
+      "session": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 9
+      },
+      "accepted": true,
+      "action_taken": "commit",
+      "committed": true,
+      "data": [
+        {
+          "#bigint": "11"
+        },
+        {
+          "#bigint": "22"
+        }
+      ],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "9"
+        },
+        "token": {
+          "#bigint": "0"
+        },
+        "value": {
+          "#bigint": "0"
+        }
+      },
+      "phase": "done",
+      "session": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 10
+      },
+      "accepted": true,
+      "action_taken": "restart",
+      "committed": true,
+      "data": [
+        {
+          "#bigint": "11"
+        },
+        {
+          "#bigint": "22"
+        }
+      ],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "10"
+        },
+        "token": {
+          "#bigint": "0"
+        },
+        "value": {
+          "#bigint": "0"
+        }
+      },
+      "phase": "done",
+      "session": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 11
+      },
+      "accepted": true,
+      "action_taken": "cancel",
+      "committed": false,
+      "data": [],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "11"
+        },
+        "token": {
+          "#bigint": "0"
+        },
+        "value": {
+          "#bigint": "0"
+        }
+      },
+      "phase": "cancelled",
+      "session": {
+        "#bigint": "1"
+      }
+    },
+    {
+      "#meta": {
+        "index": 12
+      },
+      "accepted": true,
+      "action_taken": "begin",
+      "committed": false,
+      "data": [],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "12"
+        },
+        "token": {
+          "#bigint": "0"
+        },
+        "value": {
+          "#bigint": "0"
+        }
+      },
+      "phase": "open",
+      "session": {
+        "#bigint": "2"
+      }
+    },
+    {
+      "#meta": {
+        "index": 13
+      },
+      "accepted": false,
+      "action_taken": "chunk",
+      "committed": false,
+      "data": [],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "13"
+        },
+        "token": {
+          "#bigint": "1"
+        },
+        "value": {
+          "#bigint": "11"
+        }
+      },
+      "phase": "open",
+      "session": {
+        "#bigint": "2"
+      }
+    },
+    {
+      "#meta": {
+        "index": 14
+      },
+      "accepted": true,
+      "action_taken": "chunk",
+      "committed": false,
+      "data": [
+        {
+          "#bigint": "11"
+        }
+      ],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "14"
+        },
+        "token": {
+          "#bigint": "2"
+        },
+        "value": {
+          "#bigint": "11"
+        }
+      },
+      "phase": "open",
+      "session": {
+        "#bigint": "2"
+      }
+    },
+    {
+      "#meta": {
+        "index": 15
+      },
+      "accepted": true,
+      "action_taken": "cancel",
+      "committed": false,
+      "data": [],
+      "parameters": {
+        "offset": {
+          "#bigint": "0"
+        },
+        "step": {
+          "#bigint": "15"
+        },
+        "token": {
+          "#bigint": "0"
+        },
+        "value": {
+          "#bigint": "0"
+        }
+      },
+      "phase": "cancelled",
+      "session": {
+        "#bigint": "2"
+      }
+    }
+  ]
+}

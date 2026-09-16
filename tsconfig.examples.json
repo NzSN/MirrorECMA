@@ -17,6 +17,7 @@
     "test/generated-counter.smoke.ts",
     "test/fixtures/model-interface/counter/generated/**/*.ts",
     "examples/work-queue/**/*.ts",
+    "test/work-queue.acceptance.test.ts",
     "test/work-queue.smoke.ts",
     "test/async-generated-counter.smoke.ts",
     "test/fixtures/model-interface/counter/generated-async/**/*.ts",

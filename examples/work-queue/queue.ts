@@ -27,7 +27,7 @@ export class WorkQueue {
   protected constructor(readonly directory: string) {}
 
   static async create(parentDirectory = tmpdir()): Promise<WorkQueue> {
-    return new WorkQueue(await mkdtemp(join(parentDirectory, "mirrorecma-queue-")));
+    return new this(await mkdtemp(join(parentDirectory, "mirrorecma-queue-")));
   }
 
   private active(signal?: AbortSignal): void {
@@ -84,42 +84,68 @@ export class WorkQueue {
     return !state.pending.includes(item) && state.inFlight !== item && !state.completed.has(item);
   }
 
+  /** Seam for behavioral variants; a null result keeps the queue unchanged. */
+  protected admitEnqueue(item: bigint, state: QueueSnapshot): bigint | null {
+    return this.accepts(item, state) ? item : null;
+  }
+
+  /** Seam for behavioral variants; the base mutation is idle-check, pop, clear-failure. */
+  protected beginWork(state: MutableQueue): void {
+    if (state.inFlight !== 0n || state.pending.length === 0) {
+      throw new Error("Start requires an idle worker and a pending job");
+    }
+    state.inFlight = state.pending.shift()!;
+    state.failed = false;
+  }
+
+  /** Seam for behavioral variants; the boolean is the failed flag that is stored. */
+  protected markFailed(_state: MutableQueue): boolean {
+    return true;
+  }
+
+  /** Seam for behavioral variants; the boolean is the failed flag that is stored. */
+  protected clearFailed(_state: MutableQueue): boolean {
+    return false;
+  }
+
+  /** Seam for behavioral variants; the base mutation records and frees the worker. */
+  protected finishWork(state: MutableQueue): void {
+    if (state.inFlight === 0n || state.failed) throw new Error("Complete requires a running job");
+    state.completed.add(state.inFlight);
+    state.inFlight = 0n;
+  }
+
   async enqueue(item: bigint, signal?: AbortSignal): Promise<void> {
     if (item <= 0n) throw new RangeError("Job IDs must be positive; zero denotes no in-flight job");
     await this.update((state) => {
-      if (this.accepts(item, state)) state.pending.push(item);
+      const admitted = this.admitEnqueue(item, state);
+      if (admitted !== null) state.pending.push(admitted);
     }, signal);
   }
 
   async start(signal?: AbortSignal): Promise<void> {
     await this.update((state) => {
-      if (state.inFlight !== 0n || state.pending.length === 0) {
-        throw new Error("Start requires an idle worker and a pending job");
-      }
-      state.inFlight = state.pending.shift()!;
-      state.failed = false;
+      this.beginWork(state);
     }, signal);
   }
 
   async fail(signal?: AbortSignal): Promise<void> {
     await this.update((state) => {
       if (state.inFlight === 0n || state.failed) throw new Error("Fail requires a running job");
-      state.failed = true;
+      state.failed = this.markFailed(state);
     }, signal);
   }
 
   async retry(signal?: AbortSignal): Promise<void> {
     await this.update((state) => {
       if (state.inFlight === 0n || !state.failed) throw new Error("Retry requires a failed job");
-      state.failed = false;
+      state.failed = this.clearFailed(state);
     }, signal);
   }
 
   async complete(signal?: AbortSignal): Promise<void> {
     await this.update((state) => {
-      if (state.inFlight === 0n || state.failed) throw new Error("Complete requires a running job");
-      state.completed.add(state.inFlight);
-      state.inFlight = 0n;
+      this.finishWork(state);
     }, signal);
   }
 

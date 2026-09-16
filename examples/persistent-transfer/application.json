@@ -1,0 +1,23 @@
+{
+  "module": "PersistentTransfer",
+  "folder": "persistent-transfer",
+  "length": 15,
+  "faults": {
+    "premature-success": {
+      "action": "commit",
+      "step": 3
+    },
+    "duplicate-retry": {
+      "action": "chunk",
+      "step": 7
+    },
+    "stale-session": {
+      "action": "chunk",
+      "step": 13
+    },
+    "corrupt-content": {
+      "action": "chunk",
+      "step": 2
+    }
+  }
+}
