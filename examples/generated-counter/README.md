@@ -1,5 +1,12 @@
 # Connect a real Counter to Mirrors
 
+Status: **lower-level synchronous compatibility tutorial.** New applications
+should use a compiler-owned async suite bundle with `defineSuite` / `runSuite` or
+the installed project commands. See the
+[suite guide](../../docs/application-suites.md),
+[project guide](../../docs/project-tools.md), and
+[application-validation examples](../application-validation/README.md).
+
 This tutorial connects an ordinary TypeScript implementation to a generated
 model interface. Mirrors replays a model trace, the adapter invokes real
 operations and observes real state, and Mirrors compares those observations
@@ -10,7 +17,8 @@ host or evaluation service. To structure the same MBT logic as a reusable module
 called from source-code tests, CLI, or a service wrapper, see the
 [harness design](../../docs/mbt-harness-design.md) and implemented
 [reusable Counter suite](../mbt-counter/README.md). Gate's optional evaluation
-service invokes the same suite; this tutorial's commands remain current.
+service invokes a suite; this tutorial's commands remain valid for the retained
+synchronous registry path.
 
 ## 1. Start with the implementation
 

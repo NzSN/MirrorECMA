@@ -37,7 +37,35 @@ current APIs, completed migration, implemented hosting/service interfaces, and
 historical design records. [Final coordinated validation](https://github.com/NzSN/MirrorGate/blob/main/docs/managed-workflow-validation.md)
 records destination tests, full interop, and the real Codex-to-Gate MCP workflow.
 
-## Optional restricted evaluation integration
+## New application quick start
+
+Initialize a declarative project, select the reviewed model/contract/corpus and
+pin compatible installed tools, then generate, compile, check, and replay:
+
+```bash
+mirrorecma init ./mbt
+mirrorecma generate --project ./mbt/mirror.project.json
+# Compile the generated <Model>.suite.ts during application preparation.
+mirrorecma doctor --project ./mbt/mirror.project.json
+mirrorecma check --project ./mbt/mirror.project.json
+mirrorecma replay --project ./mbt/mirror.project.json
+```
+
+The application implements only the generated native `actions`, `observe`, and
+optional domain disposer. The framework derives registry identity, checks the
+ordered corpus, defers construction until required match, evaluates matched
+action/pair coverage, and joins cleanup. Read the
+[project guide](docs/project-tools.md), [suite guide](docs/application-suites.md),
+and [application-validation suites](examples/application-validation/README.md).
+The complete end-to-end tutorial lives in
+[Mirrors](https://github.com/NzSN/Mirrors/blob/main/Docs/mirrorecma-typescript-mbt-user-manual.md).
+
+## Legacy restricted-evaluation migration
+
+This section exists for consumers of the former MirrorECMA sandbox facade. New
+Gate-backed applications use the same `SuiteDefinition` through Gate-owned
+`evaluateSuite`; see the
+[Gate integration guide](https://github.com/NzSN/MirrorGate/blob/main/integrations/mirrorecma/README.md).
 
 Gate-aware callers migrate their imports to the separate Gate-owned package:
 
@@ -53,8 +81,8 @@ cleanup semantics; MirrorECMA does not forward these imports or depend on the
 integration. Install compatible locally packed packages according to the
 [Gate integration guide](https://github.com/NzSN/MirrorGate/blob/main/integrations/mirrorecma/README.md).
 The Gate package and integration may be private; no registry availability is
-implied. New managed authoring uses Gate directly and supplies a deferred factory
-to the ordinary MBT suite.
+implied. New managed authoring uses Gate-owned `evaluateSuite`, which supplies
+the deferred provider to the ordinary MirrorECMA suite after model admission.
 
 The former sandbox tests and 42-row TypeScript/C++ acceptance driver now live
 with the Gate integration. Their Node/Rust, owned/attached, required-match,
@@ -97,7 +125,7 @@ Ordinary `pnpm run check` and client tests remain independent of these prepared
 backend prerequisites. A local green run does not create a hosted-CI or release
 support claim; the acceptance ledger records each evidence class separately.
 
-## Quick Start
+## Low-level synchronous generated-binding example
 
 The [runnable Counter tutorial](examples/generated-counter/README.md) starts
 with an ordinary implementation. It uses `bigint` and has no protocol dependency:
@@ -198,6 +226,9 @@ adds persistent transfers and controlled-clock leases, pinned fault matrices,
 fresh model witnesses, private receipts, and real Gate worker/authoring checks.
 [Reports and asynchronous replay](docs/replay-and-async.md) explain structured
 failures, cancellation, generated async ports, and dynamic factory ownership.
+
+This example is retained for synchronous-profile compatibility and for callers
+that need direct registry control. It is not the default new-application path.
 
 Advanced paths remain available below: [compiled and dynamic bindings](#verified-generated-bindings),
 [low-level customization](#low-level-customization),

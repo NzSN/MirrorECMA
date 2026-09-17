@@ -36,20 +36,23 @@ public libraries. Neither core library needs the other's internal modules.
 1. The user and coordinating agent develop behavior and invariant specifications.
    Model checking evaluates the invariants against that behavior under the
    selected configuration. This is distinct from testing the later implementation.
-2. The model-interface compiler produces the typed implementation port and
-   trusted binding. It does not generate the SUT or its implementation-specific
-   adapter. Full model-facing bindings stay in trusted evaluation; approved port
-   declarations and sufficient behavior requirements can be sent to the author.
-3. The coordinator calls Gate's hosting interface with an approved public brief,
+2. The model-interface compiler publishes the trusted async suite model and
+   native application port. It does not generate the SUT or its
+   implementation-specific adapter. Full model-facing bindings stay in trusted
+   evaluation; approved port declarations and sufficient behavior requirements
+   can be sent to the author.
+3. The evaluator declares an immutable MirrorECMA suite with its checked corpus
+   and matched-coverage requirements. The coordinator calls Gate's hosting interface with an approved public brief,
    port declarations, and a permitted profile. This is a Gate tool/SDK request,
    not a MirrorECMA authoring option. The coordinator also writes the MBT harness.
 4. Gate launches a fresh restricted implementer, mediates its development tools,
    and accepts its explicit submission. Gate quiesces writers, freezes source,
    performs restricted build/preparation, and freezes the artifact.
-5. The trusted integration supplies an implementation factory to MirrorECMA's
-   ordinary negotiated MBT runner, using the existing Mirrors server transport.
+5. Local callers use `runSuite`; the Gate-owned integration runs the same
+   definition through `evaluateSuite` and the existing Mirrors server transport.
    Required model matching occurs before Gate authorizes/acquires the evaluation
-   worker. The factory provides a generated binding over the external proxy.
+   worker. The integration supplies the generated public-port binding over the
+   external proxy.
 6. MirrorECMA replays actions and reports actual observations to Mirrors. The
    external integration maps calls/disposal to the proxy and awaits Gate cleanup.
    Model conformance and sandbox cleanup remain separate outcomes.
@@ -61,8 +64,8 @@ flowchart TD
     Hosting --> Host["MirrorGate agent host"]
     Host --> Author["Restricted implementer"]
     Author -->|"Submission"| Prepared["Gate: freeze source, restricted build, freeze artifact"]
-    Coordinator -->|"Write MBT harness"| Integration["Separate trusted evaluation integration"]
-    Integration -->|"Implementation factory / generated binding"| ECMA["MirrorECMA: MBT semantics"]
+    Coordinator -->|"Declare checked suite"| Integration["Separate trusted evaluation integration"]
+    Integration -->|"evaluateSuite / generated binding"| ECMA["MirrorECMA: MBT semantics"]
     ECMA <-->|"Model protocol"| Mirror["Existing Mirrors server + Apalache"]
     Integration -->|"Owned session, matched admission, cleanup"| Prepared
     Prepared --> Worker["Gate-restricted worker: adapter + actual SUT"]

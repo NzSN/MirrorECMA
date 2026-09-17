@@ -4,10 +4,16 @@
 
 ESM TypeScript client for [Mirrors](https://github.com/NzSN/Mirrors), compatible with the ModelMirrors JSONL protocol. Replays TLA+ traces against a state machine. Single-package library, no monorepo. Package manager: **pnpm**.
 
-For generated-adapter onboarding or tutorial changes, read
-[`examples/generated-counter/README.md`](examples/generated-counter/README.md).
-The primary path is compiled negotiation followed by local trace replay; create
-the SUT and generated binding inside the matched registry factory.
+For new application onboarding, suite APIs, or project-command changes, read
+[`docs/application-suites.md`](docs/application-suites.md),
+[`docs/project-tools.md`](docs/project-tools.md), and
+[`examples/application-validation/README.md`](examples/application-validation/README.md).
+The primary path is a compiler-owned async suite model plus `defineSuite` /
+`runSuite`, or the equivalent `mirrorecma init/generate/check/replay` commands.
+Construct the SUT inside the deferred implementation factory after required
+model admission. Read
+[`examples/generated-counter/README.md`](examples/generated-counter/README.md)
+only for the lower-level synchronous generated-binding compatibility path.
 For run reports, asynchronous SUTs, cancellation, dynamic scope ownership, or
 opaque descriptor values, read [`docs/replay-and-async.md`](docs/replay-and-async.md).
 For the queue example, read [`examples/work-queue/README.md`](examples/work-queue/README.md).
@@ -44,6 +50,10 @@ bazel test //:smoke     # hermetic smoke test (builds ModelMirros via Bazel)
 - `src/transport.ts` — `spawnMirror()`: spawns a compatible mirror binary over stdio; `connectMirror(host, port)`: TCP transport for a mirror daemon (`ModelMirrors --serve <port>`); `connectTlsMirror(host, port, opts)`: TLS 1.3 mTLS transport for a mirror server (`ModelMirrors --server <port> --tls ...`). All expose the same async-iterable JSON-lines `Transport`
 - `src/registry.ts` — `discoverMirrors(registryUrl)`: Consul-compatible `/v1/health/service/modelmirrors` discovery (fail closed to `[]`); `connectMirrorFromRegistry(registryUrl, tls)` connects to the first usable candidate. Parsing + pin-override live here; it knows nothing about the session protocol
 - `src/index.ts` — public API barrel, re-exports all symbols
+- `src/suite-definition.ts` / `src/suite-runner.ts` — immutable suite validation,
+  checked-corpus replay, matched acceptance, normalized results, and local cleanup.
+- `src/project.ts` / `src/project-config.ts` / `src/cli.ts` — installed project
+  initialization, tool pinning, bundle generation/check, doctor, and replay.
 - `examples/generated-counter/` — real Counter, typed port adapter, and negotiated replay/live runner. Reuses the contract, evidence, lock, and compiler-owned output in `test/fixtures/model-interface/counter/`. Its model copy must match `../Mirrors/specs/Counter.tla`; the root client Counter model differs.
 - `specs/Counter.tla`, `specs/HourClock.tla`, `specs/ExtMain.tla`+`specs/ExtDep.tla` — TLA+ specs for testing (HourClock: explorer flows; Ext*: multi-module inline-spec flow)
 - `specs/traces/` — pre-generated ITF JSON traces
@@ -72,6 +82,9 @@ bazel test //:smoke     # hermetic smoke test (builds ModelMirros via Bazel)
 - **`.js` import extensions apply everywhere**: `registry.ts` imports `./transport.js` (not `./transport`) exactly like the rest of the package.
 - **Bazel smoke skips TLS/registry**: the commit pinned in `MODULE.bazel` (9cffb8a) is the newest ModelMirros commit that still has a Bazel build, and it compiles a TLS **stub** that exits "TLS is not available in the Bazel build (cabal-only)". So `//:smoke` runs the stdio + TCP scenarios only (see the `RUNFILES` skip), while the full TLS/registry smoke path runs against a cabal-built binary via `MIRROR_BIN` outside Bazel.
 - **Bazel build is ESM**: `ts_project(transpiler = "tsc")` emits ESM (`module: "node16"` under the execroot's `type: "module"` package.json), and `package.bazel.json` declares `"type": "module"` to match — the Bazel build and `//:smoke` are self-consistent. README "Known Issues" documents the history and the legacy consuming workaround for pinned builds.
-- **Generated targets**: keep `mirrorecma-v1` output stable; async ports use `mirrorecma-async-v1` and `mirrors.async-state-computer/v1` in the exact registry key. Regenerate through a matching Mirrors compiler and run `check`; the focused CI baseline validates the synchronous target.
+- **Generated targets**: keep `mirrorecma-v1` output stable; new application
+  suites publish `mirrorecma-async-v1` through compiler-owned `bundle` /
+  `check-bundle`. Regenerate through a matching Mirrors compiler and use project
+  `check`; never hand-edit the generated suite model or ownership manifests.
 - **Smoke tests are standalone**: `test/smoke.test.ts`, `test/model-interface-counter.smoke.ts`, and `test/generated-counter.smoke.ts` run through their package scripts, outside Jest. The generated tutorial gate checks model provenance and compiler freshness as well as correct/faulty replay.
 - **Smoke test RUNFILES**: when run under Bazel, the `RUNFILES` env var is used to resolve `MIRROR_BIN` and trace paths.
