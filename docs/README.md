@@ -5,6 +5,14 @@ caller. The current generic negotiation, generated-binding, replay, report, and
 disposal APIs are the foundation. The 2.0 source cutover removes the Gate-aware
 facade and optional peer; see the [migration guide](migration-v2.md).
 
+Application-integration acceptance completed on 2026-09-16–17, including
+relocated offline consumers, the three application matrices, actual restricted
+authors and an automated fresh-evaluator onboarding study. The
+[execution record](https://github.com/NzSN/Mirrors/blob/main/Docs/application-integration-progress.md)
+distinguishes those results from earlier workflow gates, lists skipped tiers,
+and records retained evidence and temporary-log availability. Publication and
+human usability remain separate claims.
+
 ## Choose an entry point
 
 | Need | Read | Status |

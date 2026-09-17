@@ -425,7 +425,7 @@ descriptor delivery additionally requires `--model-interface-descriptor-read`.
 
 Implement `StateComputer` directly when the callback itself is your state
 machine, or when you need to own dispatch and state encoding. For an existing
-application, start with the [generated adapter](#quick-start) so that operations
+application, start with the [application suite](#new-application-quick-start) so that operations
 reach the implementation and observations report its actual state.
 
 This lower-level example uses the separate root `specs/Counter.tla` model:

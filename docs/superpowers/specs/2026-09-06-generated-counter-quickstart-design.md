@@ -12,7 +12,7 @@ Implementation plan: [task sequence](../plans/2026-09-06-generated-counter-quick
 
 ## Problem and intended outcome
 
-The current [quick start](../../../README.md#quick-start) asks readers to compute
+The current [quick start](../../../README.md#low-level-synchronous-generated-binding-example) asks readers to compute
 the next reported state from `action`, `params`, and `prev`. That is valid when
 the callback itself is the implementation being tested. For an existing
 application, it can encourage writing a second implementation inside the test

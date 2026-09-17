@@ -226,7 +226,9 @@ following ownership rules:
 
 The proposed Gate-side work and disclosure limits are tracked in the
 [restricted workflow follow-ups](https://github.com/NzSN/MirrorGate/blob/main/docs/sandbox/restricted-workflow-followups.md).
-No listed proposal is implemented merely by this application result.
+This historical application result alone did not establish those proposals.
+Subsequent application integration delivered G1, G2, G5 and G7 on
+2026-09-16–17; G3, G4 and G6 remain separate follow-ups in that ledger.
 
 ## Acceptance
 
