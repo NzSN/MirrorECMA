@@ -1,5 +1,7 @@
 # MirrorECMA documentation
 
+Remote model-server connections, concurrent jobs and suite file placement: [remote server usage](remote-server.md).
+
 MirrorECMA performs model-based testing against an implementation supplied by the
 caller. The current generic negotiation, generated-binding, replay, report, and
 disposal APIs are the foundation. The 2.0 source cutover removes the Gate-aware

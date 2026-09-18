@@ -16,7 +16,7 @@ and release evidence is tracked separately in
 [the acceptance ledger](shared-orchestration-acceptance.md); this design alone
 is not a support claim.
 This document implements
-[client guide §13](https://github.com/NzSN/Mirrors/blob/main/Docs/client-implementation-guide.md#13-shared-sandbox-orchestration-experimental-profile)
+[client guide §13](https://github.com/NzSN/Mirrors/blob/main/Docs/client-implementation-guide.md#13-shared-sandbox-orchestration-profile)
 through the proposed
 [MirrorGate control v1 contract](https://github.com/NzSN/MirrorGate/blob/main/docs/orchestration-control-v1.md).
 Behavioral explanations use

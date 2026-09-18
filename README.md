@@ -1,5 +1,8 @@
 # MirrorECMA
 
+For the complete framework map, start with the [application integration guide](../Mirrors/Docs/application-integration-guide.md).
+For remote model servers and concurrent jobs, see [remote server usage](docs/remote-server.md).
+
 TypeScript client for [Mirrors](https://github.com/NzSN/Mirrors), the Lean 4
 conformance checker compatible with the ModelMirrors JSONL protocol. Connect a
 real implementation to a generated typed interface, replay TLA+ model traces,

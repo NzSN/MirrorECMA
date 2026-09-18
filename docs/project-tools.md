@@ -1,5 +1,7 @@
 # Project tools
 
+For remote endpoint setup and the distinction between inline validation and suite replay, see [remote server usage](remote-server.md).
+
 The evaluator owns the model, reviewed interface contract, corpus, acceptance
 requirements and toolchain selection. `mirrorecma/project` reads this declarative
 configuration without importing an application adapter. MirrorECMA remains

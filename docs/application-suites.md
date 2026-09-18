@@ -1,5 +1,7 @@
 # Checked application suites
 
+For deployment across machines, see the [remote model-server guide](remote-server.md).
+
 The additive suite API composes generated async model handles, checked trace
 corpora, required negotiation, explicit matched evidence, and bounded local
 cleanup. Existing replay APIs and both low-level report schemas retain their

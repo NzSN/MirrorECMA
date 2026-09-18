@@ -1,5 +1,8 @@
 # Reports, asynchronous replay, and binding ownership
 
+For concurrent validation/trace-generation jobs on a remote model server, see [remote server usage](remote-server.md).
+Server jobs are separate from the asynchronous implementation operations described here.
+
 Start with the [generated Counter](../examples/generated-counter/README.md).
 Use these APIs when an application needs machine-readable results, asynchronous
 operations, or explicit resource lifetime. The [work queue](../examples/work-queue/README.md)
