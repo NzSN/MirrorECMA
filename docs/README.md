@@ -1,5 +1,8 @@
 # MirrorECMA documentation
 
+For other clients and evaluator-versus-worker support, use the
+[framework map](../../Mirrors/Docs/framework-map.md).
+
 Remote model-server connections, concurrent jobs and suite file placement: [remote server usage](remote-server.md).
 
 MirrorECMA performs model-based testing against an implementation supplied by the

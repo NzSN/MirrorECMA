@@ -1,5 +1,9 @@
 # Shared orchestration implementation and acceptance
 
+The later [Rust evaluator acceptance](../../MirrorGate/docs/rust-evaluator-sdk-status.md)
+adds native Rust cases compared with C++/TypeScript reference outcomes. Dated
+results below remain evidence for their original revisions.
+
 The 2.0 source cutover moves the Gate-specific facade and TypeScript acceptance
 consumer to `MirrorGate/integrations/mirrorecma/`; see [migration-v2.md](migration-v2.md).
 The earlier placement, commands and dated results below are historical. The

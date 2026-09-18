@@ -1,5 +1,9 @@
 # MirrorECMA
 
+Compare language and worker capabilities in the
+[framework map](../Mirrors/Docs/framework-map.md). MirrorECMA remains the Node
+application client; native C++/Rust Gate evaluators do not require it at runtime.
+
 For the complete framework map, start with the [application integration guide](../Mirrors/Docs/application-integration-guide.md).
 For remote model servers and concurrent jobs, see [remote server usage](docs/remote-server.md).
 
