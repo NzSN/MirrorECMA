@@ -1,0 +1,103 @@
+{
+  "schema": "mirrorecma.reproduction-bundle/v1",
+  "evidenceLinks": {
+    "runRef": {
+      "schemaVersion": "mirrors.evidence-envelope/v1.0",
+      "runId": "run-private-canary",
+      "envelopeSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "projectionKind": "private"
+    },
+    "componentRefs": [
+      {
+        "componentId": "mirrors",
+        "repository": "https://github.com/NzSN/Mirrors",
+        "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "dirty": false
+      },
+      {
+        "componentId": "mirrorecma",
+        "repository": "https://github.com/NzSN/MirrorECMA",
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "dirty": false
+      }
+    ],
+    "artifactRefs": [
+      {
+        "artifactId": "artifact-private-canary",
+        "mediaType": "application/json",
+        "role": "reproduction-input",
+        "bytes": 23,
+        "sha256": "01b76068c357682ebe6ff8d5a3842c0e5b40e91aa3d8c394a82f22a820182247",
+        "visibility": "private",
+        "requirement": "required",
+        "location": {
+          "kind": "bundle",
+          "path": "captures/external-private-canary"
+        }
+      }
+    ],
+    "catalogSelectionRef": {
+      "schemaVersion": "mirrors.framework-catalog/v1",
+      "selectionKind": "sha256",
+      "selectionValue": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  },
+  "identities": {
+    "suite": {
+      "id": "fixture-suite/v1",
+      "definitionSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "model": {
+      "sourceClosureSha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "corpus": {
+      "orderedOccurrencesSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "traceCount": 1
+    },
+    "generatedInterface": {
+      "semanticDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+      "moduleSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+      "targetProfile": "mirrorecma-async-v1",
+      "stateComputerContractVersion": "mirrors.async-state-computer/v1"
+    },
+    "implementation": {
+      "admissionId": "fixture-implementation/v1",
+      "closureSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+    },
+    "executionProfile": {
+      "id": "fixture-local/v1",
+      "sha256": "9999999999999999999999999999999999999999999999999999999999999999"
+    }
+  },
+  "signature": {
+    "primary": null,
+    "cleanup": {
+      "status": "failed",
+      "code": "resource_census_nonempty"
+    }
+  },
+  "captures": [
+    {
+      "role": "inline-private-canary",
+      "kind": "inline",
+      "mediaType": "text/plain",
+      "bytes": 14,
+      "sha256": "91ee946d788b84c47496573bb2bf6b36aeb03606f88e291b082c1ebddd550619",
+      "base64": "UFJJVkFURV9DQU5BUlk="
+    },
+    {
+      "role": "external-private-canary",
+      "kind": "external",
+      "type": "evidence-blob/v1",
+      "sha256": "01b76068c357682ebe6ff8d5a3842c0e5b40e91aa3d8c394a82f22a820182247",
+      "resolver": "fixture-private-store/v1"
+    }
+  ],
+  "handling": {
+    "consentPolicyId": "fixture-consent/v1",
+    "redactionProfileId": "fixture-redaction/v1",
+    "accessPolicyId": "fixture-access/v1",
+    "retentionUntil": "2026-10-22T00:00:00Z",
+    "deletionPolicyId": "fixture-delete/v1"
+  }
+}

@@ -55,5 +55,175 @@
       "step": 0,
       "trace": 1
     }
+  },
+  "mutationCampaign": {
+    "schema": "mirrorecma.mutation-campaign-declaration/v1",
+    "id": "work-queue.fixed-baseline/v1",
+    "revision": 2,
+    "denominator": 9,
+    "mutants": [
+      {
+        "id": "duplicate-accepts",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 2,
+          "action": "enqueue"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "enqueue-drops",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 1,
+          "action": "enqueue"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "enqueue-in-flight",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 5,
+          "action": "enqueue"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "start-stale",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 4,
+          "action": "start"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "fail-does-not-mark",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 6,
+          "action": "fail"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "retry-does-not-clear",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 7,
+          "action": "retry"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "complete-keeps-in-flight",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 8,
+          "action": "complete"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "complete-stale",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 8,
+          "action": "complete"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "reset-leaves-state",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 1,
+          "stateIndex": 0,
+          "action": "init"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      }
+    ]
   }
 }

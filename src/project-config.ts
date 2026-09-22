@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { access, readFile, realpath, stat } from "node:fs/promises";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { access, open, readFile, readdir, realpath, stat, lstat } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connectMirror, connectTlsMirror, type TlsOptions, type Transport } from "./transport.js";
 import { validateAcceptanceRequirements, type AcceptanceRequirements } from "./acceptance.js";
@@ -48,6 +48,8 @@ export type ProjectEndpoint = { readonly kind: "local" } | {
 };
 export interface ProjectDeclaration {
   readonly schema: "mirrorecma.project/v1";
+  /** Reference installed profiles require explicit C5 catalog admission. */
+  readonly frameworkAdmission?: "required";
   readonly suiteId: string;
   readonly model: {
     readonly source: string;
@@ -131,8 +133,10 @@ export function immutable<T>(value: T): T {
   return value;
 }
 export function parseProject(input: unknown): ProjectDeclaration {
-  const p = record(input, "project", ["schema","suiteId","model","implementation","replay","acceptance","execution","toolchainLock"]);
+  const p = record(input, "project", ["schema","suiteId","model","implementation","replay","acceptance","execution","toolchainLock","frameworkAdmission"], ["schema","suiteId","model","implementation","replay","acceptance","execution","toolchainLock"]);
   if (p.schema !== "mirrorecma.project/v1") throw new ProjectError("schema_unsupported", "unsupported project schema");
+  if (p.frameworkAdmission !== undefined && p.frameworkAdmission !== "required")
+    throw new ProjectError("configuration_invalid", "frameworkAdmission must be required when present");
   nonempty(p.suiteId,"suiteId"); nonempty(p.toolchainLock,"toolchainLock");
   const modelFields=["source","contract","evidence","lock","target","generatedDirectory","module","export"];
   const model = record(p.model,"model",[...modelFields,"moduleSha256"],modelFields);
@@ -199,7 +203,39 @@ export async function readJson(path: string): Promise<unknown> {
     throw new ProjectError("configuration_unavailable",`cannot read valid JSON: ${path}`,{cause});
   }
 }
-export async function fileSha256(path: string): Promise<string> { return createHash("sha256").update(await readFile(path)).digest("hex"); }
+export async function fileSha256(path: string): Promise<string> {
+  const handle=await open(path,constants.O_RDONLY|(constants.O_NOFOLLOW??0));
+  try {
+    const before=await handle.stat({bigint:true});
+    if(!before.isFile()||before.size>BigInt(512*1024*1024))throw new ProjectError("identity_unavailable",`${path} must be a bounded regular non-symlink file`);
+    const digest=createHash("sha256");let total=0;
+    while(true){const chunk=Buffer.alloc(Math.min(4*1024*1024,512*1024*1024+1-total));const {bytesRead}=await handle.read(chunk,0,chunk.length,null);if(bytesRead===0)break;total+=bytesRead;if(total>512*1024*1024)throw new ProjectError("identity_unavailable",`${path} exceeds identity bound`);digest.update(chunk.subarray(0,bytesRead));}
+    const after=await handle.stat({bigint:true});
+    if(before.dev!==after.dev||before.ino!==after.ino||before.size!==after.size||before.mtimeNs!==after.mtimeNs||before.ctimeNs!==after.ctimeNs||BigInt(total)!==after.size)throw new ProjectError("identity_unavailable",`${path} changed while hashing`);
+    return digest.digest("hex");
+  } finally {await handle.close();}
+}
+export interface RuntimeTreeIdentity {
+  readonly algorithm:"mirrors-runtime-tree-v1";
+  readonly digest:string;
+  readonly entryCount:number;
+  readonly bytes:number;
+}
+export async function runtimeTreeIdentity(root:string):Promise<RuntimeTreeIdentity>{
+  const canonical=await realpath(root),files:string[]=[];
+  const walk=async(directory:string):Promise<void>=>{
+    for(const entry of await readdir(directory,{withFileTypes:true})){
+      const path=join(directory,entry.name),info=await lstat(path);
+      if(info.isSymbolicLink()||(!info.isDirectory()&&!info.isFile()))throw new ProjectError("runtime_identity_mismatch",`unsupported tree entry: ${path}`);
+      if(info.isDirectory())await walk(path);else {files.push(path);if(files.length>100000||info.size>512*1024*1024)throw new ProjectError("runtime_identity_mismatch",`tree bound exceeded: ${canonical}`);}
+    }
+  };
+  await walk(canonical);
+  files.sort((left,right)=>Buffer.from(relative(canonical,left).split(sep).join("/")).compare(Buffer.from(relative(canonical,right).split(sep).join("/"))));
+  const digest=createHash("sha256").update("mirrors-runtime-tree-v1\0");let bytes=0;
+  for(const path of files){const info=await stat(path),name=relative(canonical,path).split(sep).join("/"),encoded=Buffer.from(name),header=Buffer.alloc(4),size=Buffer.alloc(8);header.writeUInt32BE(encoded.length);size.writeBigUInt64BE(BigInt(info.size));digest.update(header).update(encoded).update(Buffer.from([0,102,105,108,101,0,info.mode&constants.S_IXUSR?1:0])).update(size).update(Buffer.from(await fileSha256(path),"hex"));bytes+=info.size;if(bytes>2*1024*1024*1024)throw new ProjectError("runtime_identity_mismatch",`tree bound exceeded: ${canonical}`);}
+  return Object.freeze({algorithm:"mirrors-runtime-tree-v1",digest:digest.digest("hex"),entryCount:files.length,bytes});
+}
 export function parseToolchainLock(input: unknown): ToolchainLock {
   const lock=record(input,"toolchain",["schema","tools","packages"],["schema","tools"]);
   if (lock.schema !== "mirrorecma.toolchain/v1") throw new ProjectError("schema_unsupported","unsupported toolchain schema");

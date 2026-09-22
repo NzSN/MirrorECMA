@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mirrors.invalid/schemas/mutation-campaign-v1.schema.json",
+  "title": "MirrorECMA fixed-baseline mutation campaign v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "revision", "evidenceLinks", "denominator", "protected", "mutants"],
+  "properties": {
+    "schema": {"const": "mirrorecma.mutation-campaign/v1"},
+    "id": {"$ref": "#/$defs/stableId"},
+    "revision": {"type": "integer", "minimum": 1},
+    "evidenceLinks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["catalogSelectionRef"],
+      "properties": {
+        "catalogSelectionRef": {"type": "object", "minProperties": 1, "maxProperties": 16},
+        "runRef": {"type": "object", "minProperties": 1, "maxProperties": 16},
+        "artifactRefs": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"type": "object", "minProperties": 1, "maxProperties": 16}}
+      }
+    },
+    "denominator": {"type": "integer", "minimum": 1, "maximum": 256},
+    "protected": {"$ref": "#/$defs/protected"},
+    "mutants": {"type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/mutant"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "stableId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"},
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "sha256"],
+      "properties": {"id": {"$ref": "#/$defs/stableId"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "protected": {
+      "type": "object", "additionalProperties": false,
+      "required": ["suite", "model", "generatedInterface", "corpus", "acceptance", "observer", "correctImplementation", "probes", "executionProfiles"],
+      "properties": {
+        "suite": {"$ref": "#/$defs/identity"}, "model": {"$ref": "#/$defs/identity"},
+        "generatedInterface": {"$ref": "#/$defs/identity"}, "corpus": {"$ref": "#/$defs/identity"},
+        "acceptance": {"$ref": "#/$defs/identity"}, "observer": {"$ref": "#/$defs/identity"},
+        "correctImplementation": {"$ref": "#/$defs/identity"},
+        "probes": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/identity"}},
+        "executionProfiles": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "#/$defs/identity"}}
+      }
+    },
+    "path": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["support"], "properties": {"support": {"enum": ["required", "optional"]}}},
+        {"type": "object", "additionalProperties": false, "required": ["support", "reason"], "properties": {"support": {"const": "unsupported"}, "reason": {"type": "string", "minLength": 1, "maxLength": 512}}}
+      ]
+    },
+    "mutant": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "implementation", "expected", "resetPlanId", "probeIds", "paths"],
+      "properties": {
+        "id": {"$ref": "#/$defs/stableId"},
+        "implementation": {"$ref": "#/$defs/identity"},
+        "expected": {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "code", "traceIndex", "stateIndex", "action"],
+          "properties": {
+            "kind": {"const": "behavioral_mismatch"}, "code": {"const": "replay_mismatch"},
+            "traceIndex": {"type": "integer", "minimum": 0}, "stateIndex": {"type": "integer", "minimum": 0},
+            "action": {"$ref": "#/$defs/stableId"}
+          }
+        },
+        "resetPlanId": {"$ref": "#/$defs/stableId"},
+        "probeIds": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/stableId"}},
+        "paths": {
+          "type": "object", "additionalProperties": false,
+          "required": ["local", "gate"],
+          "properties": {"local": {"$ref": "#/$defs/path"}, "gate": {"$ref": "#/$defs/path"}}
+        }
+      }
+    }
+  }
+}

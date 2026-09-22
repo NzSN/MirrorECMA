@@ -15,6 +15,7 @@ references through `mirrorgate-mirrorecma`.
 | `mirrorecma generate --project FILE` | Resolve an already reviewed v1 contract, emit its suite bundle and check it. Compiler proposals are not automatically approved. |
 | `mirrorecma check --project FILE` | Run compiler freshness/preflight checks and verify the owned bundle and corpus. Never repair or regenerate files. |
 | `mirrorecma replay --project FILE` | Check the prepared artifacts, load the trusted generated model, negotiate, then import and construct the implementation. Join its registered disposer. |
+| `mirrorecma reproduce --project FILE ...` | Validate a private reproduction bundle, exact installed framework selection, evidence envelope and external captures before importing the pinned model/implementation; replay once and compare the complete normalized signature. |
 
 Compile the generated TypeScript companion and install dependencies during
 explicit application preparation. Replay performs no package installation,
@@ -145,6 +146,62 @@ configuration/tool selection from generation, checks and replay; timeout and
 cancellation retain their own outcomes. Compiler subprocesses are bounded by
 time and output limits and joined after interruption. Existing low-level runner
 and command exit semantics remain unchanged.
+
+`reproduce` is a separate result contract: exit 0 means the declared failure
+signature reproduced exactly, exit 1 means replay completed without that exact
+signature, and exit 2 means configuration, identity, evidence, compatibility,
+resolution, or execution failed. It does not change `replay` exits.
+
+```bash
+mirrorecma reproduce \
+  --project mirror.project.json \
+  --bundle private-reproduction.json \
+  --framework-input installed-framework.json \
+  --combination candidate.local-node-checked \
+  --evidence-envelope evidence/private-envelope.json \
+  --artifact-store evidence/artifacts \
+  --output-root evidence/new-reproduction-output
+```
+
+`installed-framework.json` is a closed wrapper with `catalogRaw`, the exact
+`selectionRef`, `observed`, `installation`, and an optional trusted E4
+`approval`. `observed` is C5's
+`InstalledFrameworkObservation`: finalized I2
+distribution-manifest/cache bytes, exact component refs, installed
+package/executable/runtime-tree identities, platform, and admission policy. The
+pure C5 preflight validates the canonical catalog digest and supported exact
+combination without executing a binary. The evidence envelope bytes must match
+the bundle `runRef`; referenced artifacts must agree by ID, role, size and digest.
+The optional store uses filenames equal to lower-case SHA-256 and supports only
+the explicitly admitted `evidence-envelope/v1` resolver. No URL, `PATH`, sibling
+checkout, package install or download fallback is used.
+For `support-required` admission of candidate catalog A, `approval` must bind a
+later approval catalog B to the same A selection, combination, canonical
+distribution-manifest digest, raw cache-index SHA-256 and public E1 run reference.
+Qualification mode may omit it but remains explicitly unqualified.
+The output directory must already be owner-only mode `0700`; reproduction
+creates the fixed `reproduction-result.json` and `reproduction-cleanup.json`
+files exclusively.
+
+`installation` uses `mirrorecma.installed-framework-binding/v1`. It binds every
+admitted executable to current file bytes, every extracted package to its
+admitted source archive, manifest, and `mirrors-runtime-tree-v1` identity, and
+every runtime to its admitted source artifact and remeasured local tree.
+Project-selected compiler/server/package pins must be the same bytes and
+manifests. The current Node executable must reside in the admitted Node tree.
+Distribution build provenance admits each package tree; a self-declared
+extracted-tree digest is insufficient.
+
+Installed `doctor`, `check`, and `replay` accept the same explicit
+`--framework-input FILE --combination ID` pair. Catalog preflight is pure and
+runs before compiler execution, generated-module import, adapter import, factory
+construction, or Gate acquisition. `doctor` only reads and hashes bounded local
+metadata; it reports catalog, component, package, executable, runtime-tree, and
+platform identities separately and never executes a tool.
+Reference installed projects declare `"frameworkAdmission":"required"`.
+Omitting either framework flag then refuses before tool execution or module,
+adapter, provider, session, worker, or factory acquisition. Projects without the
+marker retain legacy optional behavior.
 
 Run `pnpm run check:installed-suite` for the installed local acceptance gate. It
 prepares once, relocates the application, hides source checkouts, disables

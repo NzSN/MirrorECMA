@@ -19,5 +19,85 @@
       "action": "chunk",
       "step": 2
     }
+  },
+  "mutationCampaign": {
+    "schema": "mirrorecma.mutation-campaign-declaration/v1",
+    "id": "persistent-transfer.fixed-baseline/v1",
+    "revision": 1,
+    "denominator": 4,
+    "mutants": [
+      {
+        "id": "premature-success",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 3,
+          "action": "commit"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "duplicate-retry",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 7,
+          "action": "chunk"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "stale-session",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 13,
+          "action": "chunk"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "corrupt-content",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 2,
+          "action": "chunk"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      }
+    ]
   }
 }

@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mirrors.invalid/schemas/reproduction-bundle-v1.schema.json",
+  "title": "MirrorECMA private reproduction bundle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "evidenceLinks", "identities", "signature", "captures", "handling"],
+  "properties": {
+    "schema": {"const": "mirrorecma.reproduction-bundle/v1"},
+    "evidenceLinks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runRef", "componentRefs", "artifactRefs", "catalogSelectionRef"],
+      "properties": {
+        "runRef": {"$ref": "#/$defs/opaqueOwnedReference"},
+        "componentRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaqueOwnedReference"}
+        },
+        "artifactRefs": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaqueOwnedReference"}
+        },
+        "catalogSelectionRef": {"$ref": "#/$defs/opaqueOwnedReference"}
+      }
+    },
+    "identities": {"$ref": "#/$defs/identities"},
+    "signature": {"$ref": "#/$defs/signature"},
+    "captures": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/capture"}
+    },
+    "handling": {"$ref": "#/$defs/handling"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "stableId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"},
+    "opaqueOwnedReference": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 16
+    },
+    "contentIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {"sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "identities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suite", "model", "corpus", "generatedInterface", "implementation", "executionProfile"],
+      "properties": {
+        "suite": {
+          "type": "object", "additionalProperties": false,
+          "required": ["id", "definitionSha256"],
+          "properties": {"id": {"$ref": "#/$defs/stableId"}, "definitionSha256": {"$ref": "#/$defs/sha256"}}
+        },
+        "model": {
+          "type": "object", "additionalProperties": false,
+          "required": ["sourceClosureSha256"],
+          "properties": {"sourceClosureSha256": {"$ref": "#/$defs/sha256"}}
+        },
+        "corpus": {
+          "type": "object", "additionalProperties": false,
+          "required": ["orderedOccurrencesSha256", "traceCount"],
+          "properties": {
+            "orderedOccurrencesSha256": {"$ref": "#/$defs/sha256"},
+            "traceCount": {"type": "integer", "minimum": 1, "maximum": 4096}
+          }
+        },
+        "generatedInterface": {
+          "type": "object", "additionalProperties": false,
+          "required": ["semanticDigest", "moduleSha256", "targetProfile", "stateComputerContractVersion"],
+          "properties": {
+            "semanticDigest": {"$ref": "#/$defs/sha256"},
+            "moduleSha256": {"$ref": "#/$defs/sha256"},
+            "targetProfile": {"$ref": "#/$defs/stableId"},
+            "stateComputerContractVersion": {"$ref": "#/$defs/stableId"}
+          }
+        },
+        "implementation": {
+          "type": "object", "additionalProperties": false,
+          "required": ["admissionId", "closureSha256"],
+          "properties": {"admissionId": {"$ref": "#/$defs/stableId"}, "closureSha256": {"$ref": "#/$defs/sha256"}}
+        },
+        "executionProfile": {
+          "type": "object", "additionalProperties": false,
+          "required": ["id", "sha256"],
+          "properties": {"id": {"$ref": "#/$defs/stableId"}, "sha256": {"$ref": "#/$defs/sha256"}}
+        }
+      }
+    },
+    "primarySignature": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "code", "traceIndex", "stateIndex", "action"],
+          "properties": {
+            "kind": {"const": "behavioral_mismatch"}, "code": {"const": "replay_mismatch"},
+            "traceIndex": {"type": "integer", "minimum": 0}, "stateIndex": {"type": "integer", "minimum": 0},
+            "action": {"$ref": "#/$defs/stableId"}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "stage", "budgetMs"],
+          "properties": {"kind": {"const": "timeout"}, "stage": {"enum": ["registration", "factory", "action", "receive", "cleanup"]}, "budgetMs": {"type": "integer", "minimum": 1, "maximum": 2147483647}}
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "origin", "stage", "code"],
+          "properties": {"kind": {"const": "execution_error"}, "origin": {"enum": ["observer", "implementation"]}, "stage": {"enum": ["factory", "action", "observation"]}, "code": {"$ref": "#/$defs/stableId"}}
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "stage", "code"],
+          "properties": {"kind": {"const": "codec_error"}, "stage": {"enum": ["input", "observation", "protocol"]}, "code": {"$ref": "#/$defs/stableId"}}
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "requirements"],
+          "properties": {"kind": {"const": "coverage_unmet"}, "requirements": {"type": "array", "minItems": 1, "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/stableId"}}}
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "stage", "code"],
+          "properties": {"kind": {"const": "cancellation"}, "stage": {"enum": ["registration", "factory", "action", "receive", "cleanup"]}, "code": {"$ref": "#/$defs/stableId"}}
+        }
+      ]
+    },
+    "cleanupSignature": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["status"], "properties": {"status": {"const": "succeeded"}}},
+        {"type": "object", "additionalProperties": false, "required": ["status", "code"], "properties": {"status": {"enum": ["failed", "unconfirmed"]}, "code": {"$ref": "#/$defs/stableId"}}}
+      ]
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "cleanup"],
+      "properties": {"primary": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/primarySignature"}]}, "cleanup": {"$ref": "#/$defs/cleanupSignature"}},
+      "oneOf": [
+        {"properties": {"primary": {"$ref": "#/$defs/primarySignature"}}},
+        {"properties": {"primary": {"type": "null"}, "cleanup": {
+          "type": "object", "additionalProperties": false, "required": ["status", "code"],
+          "properties": {"status": {"enum": ["failed", "unconfirmed"]}, "code": {"$ref": "#/$defs/stableId"}}
+        }}}
+      ]
+    },
+    "capture": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["role", "kind", "mediaType", "bytes", "sha256", "base64"],
+          "properties": {
+            "role": {"$ref": "#/$defs/stableId"}, "kind": {"const": "inline"},
+            "mediaType": {"type": "string", "minLength": 1, "maxLength": 128},
+            "bytes": {"type": "integer", "minimum": 0, "maximum": 262144},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "base64": {"type": "string", "maxLength": 349528, "pattern": "^[A-Za-z0-9+/]*={0,2}$"}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["role", "kind", "type", "sha256", "resolver"],
+          "properties": {
+            "role": {"$ref": "#/$defs/stableId"}, "kind": {"const": "external"},
+            "type": {"$ref": "#/$defs/stableId"}, "sha256": {"$ref": "#/$defs/sha256"},
+            "resolver": {"$ref": "#/$defs/stableId"}
+          }
+        }
+      ]
+    },
+    "handling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["consentPolicyId", "redactionProfileId", "accessPolicyId", "retentionUntil", "deletionPolicyId"],
+      "properties": {
+        "consentPolicyId": {"$ref": "#/$defs/stableId"},
+        "redactionProfileId": {"$ref": "#/$defs/stableId"},
+        "accessPolicyId": {"$ref": "#/$defs/stableId"},
+        "retentionUntil": {"type": "string", "format": "date-time", "maxLength": 64},
+        "deletionPolicyId": {"$ref": "#/$defs/stableId"}
+      }
+    }
+  }
+}

@@ -65,6 +65,45 @@ operation, and caller cancellation. These must classify as failure, timeout and
 cancellation rather than behavioral defect detection. Local cleanup uses a
 temporary-directory census after disposal; it is not a Gate isolation claim.
 
+The runner declares one fixed-baseline `mirrorecma.mutation-campaign/v1` from
+each `application.json` matrix and executes it through the public
+`runMutationCampaign` helper. Its execution status and acceptance verdict are
+separate: all required local rows must be exact behavioral kills for acceptance
+to be `met`. The complete 17-row denominator is WorkQueue 9, Persistent
+transfer 4 and Lease service 4 on both local and Gate paths. Every row is named
+and required; absence cannot count as success.
+
+`node examples/application-validation/run.mjs all` runs the three local
+campaigns sequentially and emits
+`mirrorecma.application-campaign-aggregate/v1`: denominator 17, campaign
+acceptance, and 29 per-case local-cooperative cleanup results. An installed run
+adds `--prevalidated-registry FILE --receipt NEW_FILE`; it remeasures the
+admitted application and Node trees, validates registry/framework byte identity,
+and skips compiler execution because preparation already sealed the bundles.
+The installed aggregate needs no checkout-derived environment variables:
+`INSTALLED_NODE applications/examples/application-validation/run.mjs all
+--prevalidated-registry RUNTIME/installed-registry.json --receipt
+PRIVATE_OUTPUT/local-application-campaigns.json`. It reads admitted catalog bytes
+from the framework input and checks their selection digest. The receipt is its
+only new output.
+
+The installed project wrapper is
+`applications/examples/application-validation/installed-project-replay.mjs`.
+It accepts exactly `correct|faulty OUTPUT_ROOT`, derives the relocated registry
+and CLI, and exclusively creates `replay-correct.json` or
+`replay-faulty.json`. Distribution construction supplies the sealed
+`reference-project/mirror.correct.project.json` and
+`reference-project/mirror.faulty.project.json`; the latter is the WorkQueue
+`enqueue-drops` implementation and must retain mismatch coordinate trace 0,
+state 1.
+
+Before each adapter is disposed, a bounded trusted probe captures facts outside
+the observer path: queue JSON, transfer payload plus journal, or lease private
+ownership/token/write fields. The aggregate receipt records probe status and
+facts separately from replay. Focused negative controls also cover an observer
+exception, invalid observation and a shadow observer that can pass reported-state
+replay while an independent probe exposes faulty real state.
+
 Each application now has one [`suite.ts`](../work-queue/suite.ts) declaration
 using its static generated `SuiteModel`. The declaration is identical for local
 `runSuite` and Gate `evaluateSuite`. Local adapters expose native operations and
@@ -100,11 +139,11 @@ profile requirements. Its source tier prepares exact approved files using `node-
 application build scripts, imports or dependency installation. It checks model
 and canary paths are inaccessible during execution, runs the identical declared
 suite, and checks physical cleanup independently. General custom-build isolation
-remains covered by the backend gates. There are 7 queue cases and
-8 cases for each other application: correct, selected behavioral mutants,
-actual worker exit, non-cooperative hang and cancellation. Queue's Gate subset
-contains duplicate admission, dropped enqueue and stuck retry; its local matrix
-contains all nine mutants.
+remains covered by the backend gates. The standard matrix has 13 WorkQueue cases
+and 8 cases for each other application: correct, every declared behavioral
+mutant, actual worker exit, non-cooperative hang and cancellation. Lease adds
+four real Gate observer controls: shadow replay without enforcement, the same
+actual-facts comparison enforced, observer exception and invalid observation.
 
 `--host-profile` instead starts a fresh actual managed implementer with an empty
 source directory and only the application's `PUBLIC-CONTRACT.md`, compiler-emitted
@@ -115,9 +154,11 @@ development subagent is not counted as this acceptance.
 
 ## Evidence and limits
 
-The [suite migration summary](results/2026-09-16-suite-migration.json) records the
-new 29-case local and 23-case Gate matrices and fresh-witness checks. Independent
-onboarding measurements and a new restricted managed author were not exercised.
+The [suite migration summary](results/2026-09-16-suite-migration.json) is
+historical. Current qualification requires the 29-case local aggregate, the
+29-case standard Gate matrix, four lease fidelity controls, and fresh-witness
+checks. Independent onboarding measurements and a new restricted managed author
+remain separate evidence tiers.
 The historical [recorded summary](results/2026-09-16.json) contains observed outcomes,
 content identities, durations and source-line counts. The framework
 [execution record](../../../Mirrors/Docs/application-validation-program.md)

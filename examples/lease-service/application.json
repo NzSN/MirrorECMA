@@ -19,5 +19,85 @@
       "action": "renew",
       "step": 8
     }
+  },
+  "mutationCampaign": {
+    "schema": "mirrorecma.mutation-campaign-declaration/v1",
+    "id": "lease-service.fixed-baseline/v1",
+    "revision": 1,
+    "denominator": 4,
+    "mutants": [
+      {
+        "id": "overlapping-ownership",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 2,
+          "action": "acquire"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "expired-token",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 5,
+          "action": "write"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "stale-release",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 7,
+          "action": "release"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      },
+      {
+        "id": "invalid-renewal",
+        "expected": {
+          "kind": "behavioral_mismatch",
+          "code": "replay_mismatch",
+          "traceIndex": 0,
+          "stateIndex": 8,
+          "action": "renew"
+        },
+        "paths": {
+          "local": {
+            "support": "required"
+          },
+          "gate": {
+            "support": "required"
+          }
+        }
+      }
+    ]
   }
 }

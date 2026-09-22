@@ -1,8 +1,9 @@
-import { mkdtemp, readFile, rm, writeFile, chmod } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile, chmod, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { fileSha256, initProject, loadProject, parseProject, parseToolchainLock, checkProject, doctorProject,
-  projectFailure, ProjectError, type ProjectDeclaration } from "../src/project.js";
+import { fileSha256, initProject, loadProject, parseProject, parseToolchainLock, checkProject, doctorProject, replayProject,
+  projectFailure, ProjectError, type ProjectDeclaration, type ProjectFrameworkSelection } from "../src/project.js";
+import { frameworkCatalogDigest } from "../src/framework-catalog.js";
 
 let directory:string;
 let project:ProjectDeclaration;
@@ -13,8 +14,19 @@ beforeEach(async()=>{
   await writeFile(join(directory,"mirror.toolchain.json"),JSON.stringify({schema:"mirrorecma.toolchain/v1",tools:{
     server:{path:process.execPath,sha256:await fileSha256(process.execPath),version:process.version,capabilities:["model-interface-v1","checked-replay-v1"]},
   }}));
-});
+},30_000);
 afterEach(async()=>{await rm(directory,{recursive:true,force:true});});
+async function mismatchedFramework(serverPath:string):Promise<ProjectFrameworkSelection>{
+  const componentRef={componentId:"mirrorecma",repository:"https://example.invalid/MirrorECMA.git",revision:"1".repeat(40),dirty:false};
+  const platform={os:"linux",osRelease:"test",architecture:"x86_64",backend:"local-process"};
+  const catalog={schemaVersion:"mirrors.framework-catalog/v1",catalogId:"project-binding",visibility:"public",components:[{componentRef,product:{name:"mirrorecma",version:"2.0.0"},records:[{recordId:"package",path:"package.json",recordKind:"manifest"}]}],evidenceRefs:[{evidenceId:"accepted",runRef:{schemaVersion:"mirrors.evidence-public-summary/v1.0",runId:"test",envelopeSha256:"9".repeat(64),projectionKind:"public"}}],capabilities:[{capabilityId:"cap.server",ownerComponentId:"mirrorecma",description:"test",declaration:{state:"available",constraints:[]},sourceImplementation:{state:"present",locations:[{path:"src/project.ts",symbol:"replayProject"}]},observations:{sourceTested:{state:"unknown"},locallyAccepted:{state:"unknown"},installedConsumerAccepted:{state:"accepted",evidenceId:"accepted"},hostedCiAccepted:{state:"notRun"},published:{state:"unknown"}}}],distributionProfiles:[{profileId:"catalog.local",platform,requiredCapabilityIds:["cap.server"],optionalCapabilityIds:[],requiredObservationDimensions:["installedConsumerAccepted"],dependencies:[]}],combinations:[{combinationId:"supported-local",componentIds:["mirrorecma"],platform,capabilityIds:["cap.server"],distributionProfileIds:["catalog.local"],declaredState:"supported",evidenceIds:["accepted"]}]};
+  const selectionRef={schemaVersion:"mirrors.framework-catalog/v1" as const,selectionKind:"sha256" as const,selectionValue:frameworkCatalogDigest(catalog)};
+  const serverSha=await fileSha256(serverPath);
+  const manifest={schemaVersion:"mirrors.reference-distribution-manifest/v1",distributionId:"test",catalogSelectionRef:selectionRef,profileId:"checked",componentRefs:[componentRef],buildInputs:[{inputId:"profiles-lock",path:"profiles",bytes:1,sha256:"1".repeat(64)},{inputId:"component-lock",path:"components",bytes:1,sha256:"2".repeat(64)},{inputId:"dependency-lock",path:"dependencies",bytes:1,sha256:"3".repeat(64)}],buildProvenance:{snapshotIndexSha256:"4".repeat(64),tools:[{toolId:"node",version:"test",bytes:1,sha256:"5".repeat(64)}],trees:[{inputId:"runtime",algorithm:"mirrors-runtime-tree-v1",digest:"6".repeat(64),entryCount:1,bytes:1}]},artifacts:[{artifactId:"mirror-server",path:"bin/mirror",kind:"file",mediaType:"application/octet-stream",bytes:1,sha256:serverSha,mode:"0755",source:{kind:"component-build",id:"mirror-server"},dynamicLibraries:[{soname:"libssl.so.3",path:"/usr/lib/libssl.so.3",sha256:"c".repeat(64)}]},{artifactId:"mirrorecma-package",path:"packages/mirrorecma.tgz",kind:"archive",mediaType:"application/gzip",bytes:1,sha256:"7".repeat(64),mode:"0644",source:{kind:"component-build",id:"mirrorecma-package"}},{artifactId:"node-runtime",path:"runtimes/node.tar.xz",kind:"archive",mediaType:"application/x-xz",bytes:1,sha256:"8".repeat(64),mode:"0644",source:{kind:"dependency-lock",id:"node-runtime"}}],runtimeTrees:[{treeId:"node-runtime",sourceArtifactId:"node-runtime",selectionId:"node",path:"runtimes/node",algorithm:"mirrors-runtime-tree-v1",digest:"a".repeat(64),entryCount:1,bytes:1}],hostRequirements:[],publication:"unclaimed"};
+  manifest.artifacts=manifest.artifacts.slice(0,1);manifest.runtimeTrees=[];
+  const distributionManifestRaw=JSON.stringify(manifest),cache={schemaVersion:"mirrors.reference-cache-index/v1",profileId:"checked",catalogSelectionRef:selectionRef,distributionManifestSha256:frameworkCatalogDigest(manifest),entries:manifest.artifacts.map(({artifactId,path,bytes,sha256,mode})=>({artifactId,path,bytes,sha256,mode}))};
+  return {catalogRaw:JSON.stringify(catalog),selectionRef,combinationId:"supported-local",observed:{distributionManifestRaw,cacheIndexRaw:JSON.stringify(cache),componentRefs:[componentRef],packages:[],executables:[{role:"mirror-server",artifactId:"mirror-server",sha256:serverSha,capabilityIds:["cap.server"]}],runtimeTrees:[],platform,policy:{admission:"support-required",manifestProfileId:"checked",catalogProfileId:"catalog.local",packages:[],executables:[{role:"mirror-server",artifactId:"mirror-server",requiredCapabilityIds:["cap.server"]}],runtimeTrees:[]}},installation:{schema:"mirrorecma.installed-framework-binding/v1",executables:[{role:"mirror-server",artifactId:"mirror-server",path:serverPath,sha256:serverSha}],packages:[],runtimeTrees:[]}};
+}
 test("init seeds a complete strict project without overwriting edited input",async()=>{
   expect(parseProject(project).suiteId).toBe("example/v1");
   await writeFile(join(directory,"mirror.project.json"),"authored");
@@ -63,11 +75,58 @@ test("doctor keeps configuration, missing tools, namespace and audit evidence se
   const checks=await doctorProject(join(directory,"mirror.project.json"));
   expect(checks).toEqual(expect.arrayContaining([
     expect.objectContaining({check:"configuration",status:"passed"}),
+    expect.objectContaining({check:"catalog.selection",status:"not_checked"}),
     expect.objectContaining({check:"executable.compiler",status:"failed"}),
     expect.objectContaining({check:"executable.server",status:"passed"}),
     expect.objectContaining({check:"capabilities.server",status:"not_checked"}),
     expect.objectContaining({check:"namespace-admission",status:"not_checked"}),
     expect.objectContaining({check:"hosted-agent-audit",status:"not_checked"}),
+  ]));
+});
+test("catalog refusal precedes tool execution, generated imports, adapter imports and factories",async()=>{
+  const generated=join(directory,"generated/Example.suite.js");
+  const adapter=join(directory,"adapter.mjs");
+  await writeFile(adapter,"import {appendFileSync} from 'node:fs';appendFileSync('adapter-effects.log','import\\n');export function createAdapter(){appendFileSync('adapter-effects.log','factory\\n');throw new Error('must not run');}\n");
+  const framework:any={
+    catalogRaw:JSON.stringify({schemaVersion:"mirrors.framework-catalog/v999"}),
+    selectionRef:{schemaVersion:"mirrors.framework-catalog/v1",selectionKind:"sha256",selectionValue:"0".repeat(64)},
+    combinationId:"candidate.local-node-checked",
+    observed:{},
+  };
+  const diagnosed=await doctorProject(join(directory,"mirror.project.json"),{framework});
+  expect(diagnosed).toEqual([
+    expect.objectContaining({check:"catalog.selection",status:"failed"}),
+    expect.objectContaining({check:"configuration",status:"not_checked"}),
+  ]);
+  await expect(replayProject(join(directory,"mirror.project.json"),{framework})).rejects.toMatchObject({code:"catalog_invalid"});
+  await expect(stat(join(directory,"adapter-effects.log"))).rejects.toMatchObject({code:"ENOENT"});
+  await expect(stat(generated)).rejects.toMatchObject({code:"ENOENT"});
+});
+test("reference installed project requires catalog selection before any import or factory",async()=>{
+  project={...project,frameworkAdmission:"required"};
+  await writeFile(join(directory,"mirror.project.json"),JSON.stringify(project));
+  await writeFile(join(directory,"adapter.mjs"),"import {appendFileSync} from 'node:fs';appendFileSync('required-effects.log','import\\n');export function createAdapter(){appendFileSync('required-effects.log','factory\\n');}\n");
+  expect(await doctorProject(join(directory,"mirror.project.json"))).toEqual([
+    expect.objectContaining({check:"catalog.selection",status:"failed",detail:expect.stringContaining("requires --framework-input")}),
+    expect.objectContaining({check:"configuration",status:"not_checked"}),
+  ]);
+  await expect(replayProject(join(directory,"mirror.project.json"))).rejects.toMatchObject({code:"catalog_selection_required"});
+  const loaded=await loadProject(join(directory,"mirror.project.json"));
+  await expect(replayProject(loaded)).rejects.toMatchObject({code:"catalog_selection_required"});
+  await expect(stat(join(directory,"required-effects.log"))).rejects.toMatchObject({code:"ENOENT"});
+});
+test("catalog admission and a different individually valid project executable cannot split",async()=>{
+  const admitted=join(directory,"admitted-server"),selected=join(directory,"selected-server");
+  await writeFile(admitted,"#!/bin/sh\nexit 0\n");await chmod(admitted,0o700);
+  await writeFile(selected,"#!/bin/sh\nexit 0\n# different\n");await chmod(selected,0o700);
+  const lock=JSON.parse(await readFile(join(directory,"mirror.toolchain.json"),"utf8"));
+  lock.tools.server={path:selected,sha256:await fileSha256(selected),version:"valid-but-different",capabilities:["model-interface-v1","checked-replay-v1"]};
+  await writeFile(join(directory,"mirror.toolchain.json"),JSON.stringify(lock));
+  const checks=await doctorProject(join(directory,"mirror.project.json"),{framework:await mismatchedFramework(admitted)});
+  expect(checks).toEqual(expect.arrayContaining([
+    expect.objectContaining({check:"catalog.selection",status:"passed"}),
+    expect.objectContaining({check:"executable.server",status:"passed"}),
+    expect.objectContaining({check:"catalog.filesystem-binding",status:"failed",detail:expect.stringContaining("project-selected server")}),
   ]));
 });
 test("optional package pins verify installed metadata without executing the package",async()=>{

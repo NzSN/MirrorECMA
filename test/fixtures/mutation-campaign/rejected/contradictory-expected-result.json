@@ -1,0 +1,512 @@
+{
+  "schema": "mirrorecma.mutation-campaign/v1",
+  "id": "application-validation.fixed-baseline/v1",
+  "revision": 1,
+  "evidenceLinks": {
+    "catalogSelectionRef": {
+      "schemaVersion": "mirrors.framework-catalog/v1",
+      "selectionKind": "sha256",
+      "selectionValue": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  },
+  "denominator": 17,
+  "protected": {
+    "suite": {
+      "id": "application-validation.suite/v1",
+      "sha256": "c26155e1aee9ada0176c65f5a6e75dc311b8ff6531a1340971050868aa2bb1e2"
+    },
+    "model": {
+      "id": "application-validation.models/v1",
+      "sha256": "3f3401c514c362b059f2b41fc53bb59a471e19c840be1798af2638c2c9a1eb52"
+    },
+    "generatedInterface": {
+      "id": "application-validation.interfaces/v1",
+      "sha256": "fce0af3da1e0e0d5db8b3586e833ce1ffb90fd237c5672edf0080f795218274c"
+    },
+    "corpus": {
+      "id": "application-validation.ordered-corpora/v1",
+      "sha256": "a8abeb245cc674c71db9bcab02d55af417816da859a3ed6bd7af687d105f2815"
+    },
+    "acceptance": {
+      "id": "application-validation.acceptance/v1",
+      "sha256": "63145a719b30ce4e3d1023a7d315fb129e26a339e61160ce5f671e8063650b13"
+    },
+    "observer": {
+      "id": "application-validation.observers/v1",
+      "sha256": "de278818ef42ff98e69c2cf7550822877ab41bc39326bcb622d6b57c4f3315cc"
+    },
+    "correctImplementation": {
+      "id": "application-validation.correct-implementations/v1",
+      "sha256": "f694076d56bb0951bdf764338a03530f0942f5529e1364ba178860cc328be7ad"
+    },
+    "probes": [
+      {
+        "id": "persisted-queue-json/v1",
+        "sha256": "c8addd3e0026c0357ec79c2f1b753c84c57ea620661705277586a7bc9368f453"
+      },
+      {
+        "id": "transfer-payload-journal/v1",
+        "sha256": "840d7c377b6e42c7fd95d230f4ad4aa70089a4c06e425ce9642c49736440d5fc"
+      },
+      {
+        "id": "lease-ownership-token-writes/v1",
+        "sha256": "1cae103a079bfe3f2998beef2ba7db17fea42dff6a2ca4e6c14579794ccc2bff"
+      }
+    ],
+    "executionProfiles": [
+      {
+        "id": "local-suite/v1",
+        "sha256": "ddad53978d3ac4d456720a80024e86885561894a2317d6dab34f551f3e68e522"
+      },
+      {
+        "id": "gate-node-esm/v1",
+        "sha256": "b9868c66cf5c0e7f90bffdc21e4e16dc52de5cca36db37c7a33368c2eaeefd03"
+      }
+    ]
+  },
+  "mutants": [
+    {
+      "id": "work-queue/duplicate-accepts",
+      "implementation": {
+        "id": "work-queue/duplicate-accepts",
+        "sha256": "e1a9fb25aecd7fa75539fcb5702209266c52d9eb93f527a9f57c5457974b4c41"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 2,
+        "action": "enqueue",
+        "result": "survived"
+      },
+      "resetPlanId": "work-queue.fresh-factory/v1",
+      "probeIds": [
+        "persisted-queue-json/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "work-queue/enqueue-drops",
+      "implementation": {
+        "id": "work-queue/enqueue-drops",
+        "sha256": "e282262b0cc69c81fc33054c34a10c466706ebd0327b6daa06cbae23bc938714"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 1,
+        "action": "enqueue"
+      },
+      "resetPlanId": "work-queue.fresh-factory/v1",
+      "probeIds": [
+        "persisted-queue-json/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "work-queue/enqueue-in-flight",
+      "implementation": {
+        "id": "work-queue/enqueue-in-flight",
+        "sha256": "1efee289aa9feccffd90d88a00685853854b9d00ed4229233f4557598b066fc9"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 5,
+        "action": "enqueue"
+      },
+      "resetPlanId": "work-queue.fresh-factory/v1",
+      "probeIds": [
+        "persisted-queue-json/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "work-queue/start-stale",
+      "implementation": {
+        "id": "work-queue/start-stale",
+        "sha256": "6faf6e028632d98c1f31976b85c5165cb51e41f663611478033277ca581ff63c"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 4,
+        "action": "start"
+      },
+      "resetPlanId": "work-queue.fresh-factory/v1",
+      "probeIds": [
+        "persisted-queue-json/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "work-queue/fail-does-not-mark",
+      "implementation": {
+        "id": "work-queue/fail-does-not-mark",
+        "sha256": "594c32d4616f9bcbd7f797835a932b133f9901e4f852d33f0ee1d640c34d09bd"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 6,
+        "action": "fail"
+      },
+      "resetPlanId": "work-queue.fresh-factory/v1",
+      "probeIds": [
+        "persisted-queue-json/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "work-queue/retry-does-not-clear",
+      "implementation": {
+        "id": "work-queue/retry-does-not-clear",
+        "sha256": "0d7204b5fdc859619d052eaf317a683358fee76619ceade26399acaaea91a399"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 7,
+        "action": "retry"
+      },
+      "resetPlanId": "work-queue.fresh-factory/v1",
+      "probeIds": [
+        "persisted-queue-json/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "work-queue/complete-keeps-in-flight",
+      "implementation": {
+        "id": "work-queue/complete-keeps-in-flight",
+        "sha256": "f6ee9f351ac96f09338459c66c9a63ee628f355b639f75b959c50d227c2752a8"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 8,
+        "action": "complete"
+      },
+      "resetPlanId": "work-queue.fresh-factory/v1",
+      "probeIds": [
+        "persisted-queue-json/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "work-queue/complete-stale",
+      "implementation": {
+        "id": "work-queue/complete-stale",
+        "sha256": "7185f757c726a12439c9c2d4c25bec5b7299632ca6c74a25373c957a964ceb91"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 8,
+        "action": "complete"
+      },
+      "resetPlanId": "work-queue.fresh-factory/v1",
+      "probeIds": [
+        "persisted-queue-json/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "work-queue/reset-leaves-state",
+      "implementation": {
+        "id": "work-queue/reset-leaves-state",
+        "sha256": "1dad9af08a404e9f879173678437a64f1a672a787bd8fe88c1bb37901affb523"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 1,
+        "stateIndex": 0,
+        "action": "init"
+      },
+      "resetPlanId": "work-queue.fresh-factory/v1",
+      "probeIds": [
+        "persisted-queue-json/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "persistent-transfer/premature-success",
+      "implementation": {
+        "id": "persistent-transfer/premature-success",
+        "sha256": "0b458357f97c1cd77d1ebc976b3b39448e8a6dbef9d7a2bf2027f803dae2cd5e"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 3,
+        "action": "commit"
+      },
+      "resetPlanId": "persistent-transfer.fresh-factory/v1",
+      "probeIds": [
+        "transfer-payload-journal/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "persistent-transfer/duplicate-retry",
+      "implementation": {
+        "id": "persistent-transfer/duplicate-retry",
+        "sha256": "c171ce63d2ca7d92b8238997b68a5c45e4090609ba1354c03342af3d96cf2aea"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 7,
+        "action": "chunk"
+      },
+      "resetPlanId": "persistent-transfer.fresh-factory/v1",
+      "probeIds": [
+        "transfer-payload-journal/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "persistent-transfer/stale-session",
+      "implementation": {
+        "id": "persistent-transfer/stale-session",
+        "sha256": "c31938e517a5c0213b97c3c3b26342673dccee6bccb214f393915712b7002263"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 13,
+        "action": "chunk"
+      },
+      "resetPlanId": "persistent-transfer.fresh-factory/v1",
+      "probeIds": [
+        "transfer-payload-journal/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "persistent-transfer/corrupt-content",
+      "implementation": {
+        "id": "persistent-transfer/corrupt-content",
+        "sha256": "bc9273c1372bfa4b7f6b0bc9b6b9bb3e84dfc662fccc24e95f88e2cdc57fd9b1"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 2,
+        "action": "chunk"
+      },
+      "resetPlanId": "persistent-transfer.fresh-factory/v1",
+      "probeIds": [
+        "transfer-payload-journal/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "lease-service/overlapping-ownership",
+      "implementation": {
+        "id": "lease-service/overlapping-ownership",
+        "sha256": "9beaee793fef955c6a88f4913f9a919b3cb476b0c7d3d6064652e96e65d6d071"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 2,
+        "action": "acquire"
+      },
+      "resetPlanId": "lease-service.fresh-factory/v1",
+      "probeIds": [
+        "lease-ownership-token-writes/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "lease-service/expired-token",
+      "implementation": {
+        "id": "lease-service/expired-token",
+        "sha256": "d9fb16d908cd97ba5cf8e7a8bba7ed51dcd91a578b9429552dc3186ea48dd01e"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 5,
+        "action": "write"
+      },
+      "resetPlanId": "lease-service.fresh-factory/v1",
+      "probeIds": [
+        "lease-ownership-token-writes/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "lease-service/stale-release",
+      "implementation": {
+        "id": "lease-service/stale-release",
+        "sha256": "d34edb943d5389f84e30d47475a59630202b0d01487a377e3c48337b688056cf"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 7,
+        "action": "release"
+      },
+      "resetPlanId": "lease-service.fresh-factory/v1",
+      "probeIds": [
+        "lease-ownership-token-writes/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    },
+    {
+      "id": "lease-service/invalid-renewal",
+      "implementation": {
+        "id": "lease-service/invalid-renewal",
+        "sha256": "3b80963f57a469abcedcbc26c7ce84217c8411e8198e73afc4e1461f4a48e612"
+      },
+      "expected": {
+        "kind": "behavioral_mismatch",
+        "code": "replay_mismatch",
+        "traceIndex": 0,
+        "stateIndex": 8,
+        "action": "renew"
+      },
+      "resetPlanId": "lease-service.fresh-factory/v1",
+      "probeIds": [
+        "lease-ownership-token-writes/v1"
+      ],
+      "paths": {
+        "local": {
+          "support": "required"
+        },
+        "gate": {
+          "support": "required"
+        }
+      }
+    }
+  ]
+}
