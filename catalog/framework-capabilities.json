@@ -7,104 +7,14 @@
       "componentRef": {
         "componentId": "mirrorecma",
         "repository": "https://github.com/NzSN/MirrorECMA.git",
-        "revision": "87ff8ca1555e2e35dd9a4664fc94aaa46d8f3dc2",
+        "revision": "b166806bb25443fec7b08e8a29bcda77a2226a80",
         "dirty": true,
         "dirtyContent": {
           "algorithm": "sha256",
-          "digest": "3a18fba63945d79e1601fa014ac3c5e72e95ef9e4febfbb1224b9618f0486efc",
+          "digest": "530d6b26730fa0f3f7e5d1deab0a5ced27fdbcaf2587d0e6b360783d022da77a",
           "method": "git-diff-and-untracked-manifest-v1",
-          "includedPaths": [
-            "docs/mutation-campaigns.md",
-            "docs/mutation-fidelity-guide.md",
-            "docs/project-tools.md",
-            "docs/reproduction-bundles.md",
-            "examples/application-validation/README.md",
-            "examples/application-validation/fidelity.mjs",
-            "examples/application-validation/run.mjs",
-            "examples/application-validation/suite.mjs",
-            "examples/lease-service/application.json",
-            "examples/lease-service/service.mjs",
-            "examples/persistent-transfer/application.json",
-            "examples/persistent-transfer/service.mjs",
-            "examples/work-queue/application.json",
-            "examples/work-queue/gate-service.mjs",
-            "examples/work-queue/native-service.mjs",
-            "examples/work-queue/queue-fixture.mjs",
-            "examples/work-queue/validation-faults.mjs",
-            "schemas/mutation-campaign-v1.schema.json",
-            "schemas/reproduction-bundle-v1.schema.json",
-            "scripts/materialize-lease-reduction.mjs",
-            "src/cli.ts",
-            "src/framework-catalog.ts",
-            "src/index.ts",
-            "src/lease-reduction.ts",
-            "src/mutation-campaign.ts",
-            "src/project-config.ts",
-            "src/project.ts",
-            "src/reproduction-bundle.ts",
-            "src/reproduction-prefix-reducer.ts",
-            "src/reproduction-stability.ts",
-            "test/fixtures/framework-catalog/canonicalization-vectors.json",
-            "test/fixtures/mutation-campaign/accepted/current-17-local-17-gate.json",
-            "test/fixtures/mutation-campaign/rejected/contradictory-expected-result.json",
-            "test/fixtures/mutation-campaign/rejected/duplicate-mutant.json",
-            "test/fixtures/mutation-campaign/rejected/missing-denominator.json",
-            "test/fixtures/mutation-campaign/rejected/missing-path-scope.json",
-            "test/fixtures/mutation-campaign/rejected/mutable-protected-input.json",
-            "test/fixtures/mutation-campaign/rejected/unknown-action.json",
-            "test/fixtures/reproduction/accepted/behavioral-mismatch.json",
-            "test/fixtures/reproduction/accepted/cancellation.json",
-            "test/fixtures/reproduction/accepted/cleanup-failure.json",
-            "test/fixtures/reproduction/accepted/codec-error.json",
-            "test/fixtures/reproduction/accepted/coverage-unmet.json",
-            "test/fixtures/reproduction/accepted/implementation-error.json",
-            "test/fixtures/reproduction/accepted/observer-error.json",
-            "test/fixtures/reproduction/accepted/timeout.json",
-            "test/fixtures/reproduction/rejected/contradictory-outcome.json",
-            "test/fixtures/reproduction/rejected/credentials.json",
-            "test/fixtures/reproduction/rejected/cyclic-encoding.json",
-            "test/fixtures/reproduction/rejected/deep-data.json",
-            "test/fixtures/reproduction/rejected/digest-mismatch.json",
-            "test/fixtures/reproduction/rejected/duplicate-reference.json",
-            "test/fixtures/reproduction/rejected/embedded-executable.json",
-            "test/fixtures/reproduction/rejected/malformed-coordinates.json",
-            "test/fixtures/reproduction/rejected/missing-identity.json",
-            "test/fixtures/reproduction/rejected/over-limit-inline.json",
-            "test/fixtures/reproduction/rejected/unknown-reference-type.json",
-            "test/framework-catalog.test.ts",
-            "test/mutation-campaign-definition.test.ts",
-            "test/mutation-campaign.test.ts",
-            "test/mutation-observer-fidelity.test.ts",
-            "test/project.test.ts",
-            "test/reproduction-bundle.test.ts",
-            "test/reproduction-domain-reducer.test.ts",
-            "test/reproduction-prefix-reducer.test.ts",
-            "test/reproduction-replay.test.ts",
-            "test/reproduction-stability.test.ts",
-            "test/support/framework-selection.ts",
-            "test/support/reproduction-counter.ts"
-          ],
+          "includedPaths": [],
           "excludedPaths": [
-            {
-              "path": ".work/rust-evaluator/reference-consumer-final/mirrorecma-2.0.0.tgz",
-              "reasonCode": "pre-existing-unrelated"
-            },
-            {
-              "path": ".work/rust-evaluator/reference-consumer-final/npm-cache/_cacache/content-v2/sha512/34/d3/a9c0827fdc110192fddf11545a2022ebc362e14157e6e9b0dc553940eef4de10197a7240a29426455a3294dc3dca714798516f26768c69a89173aa90da0a",
-              "reasonCode": "pre-existing-unrelated"
-            },
-            {
-              "path": ".work/rust-evaluator/reference-consumer-final/npm-cache/_cacache/index-v5/3b/d8/f93bc43d35c127407ebe3af08c459f4f0e0dc59390c30ee12ca59a3ed850",
-              "reasonCode": "pre-existing-unrelated"
-            },
-            {
-              "path": ".work/rust-evaluator/reference-consumer-final/npm-cache/_logs/2026-09-18T10_16_03_961Z-debug-0.log",
-              "reasonCode": "pre-existing-unrelated"
-            },
-            {
-              "path": ".work/rust-evaluator/reference-consumer-final/npm-cache/_update-notifier-last-checked",
-              "reasonCode": "pre-existing-unrelated"
-            },
             {
               "path": "catalog/framework-capabilities.json",
               "reasonCode": "evidence-output"
@@ -219,7 +129,7 @@
   "combinations": [],
   "extensions": {
     "org.nzsn.snapshot": {
-      "capturedAt": "2026-09-22T08:27:33Z",
+      "capturedAt": "2026-09-22T16:02:53Z",
       "provisional": true
     }
   }
