@@ -884,3 +884,59 @@ test("frozen I2 executable, runtime-selection and integer fields fail closed", (
     refusal: { code: "runtime_identity_mismatch", predicate: "runtime.node" },
   });
 });
+
+test("planning-documentation exclusion reason is accepted while unknown reasons are refused", () => {
+  const { catalogRaw, input } = fixture();
+  const withReason = (reasonCode: string) => {
+    const value = JSON.parse(catalogRaw);
+    value.visibility = "private";
+    value.components[0].componentRef = {
+      ...value.components[0].componentRef,
+      dirty: true,
+      dirtyContent: {
+        algorithm: "sha256",
+        digest: "d".repeat(64),
+        method: "git-diff-and-untracked-manifest-v1",
+        includedPaths: [],
+        excludedPaths: [{ path: "Plans/plan.md", reasonCode }],
+      },
+    };
+    const selectionValue = frameworkCatalogDigest(value);
+    const componentRefs = [value.components[0].componentRef];
+    const distribution = JSON.parse(input.observed.distributionManifestRaw);
+    distribution.catalogSelectionRef = { ...distribution.catalogSelectionRef, selectionValue };
+    distribution.componentRefs = componentRefs;
+    const distributionManifestRaw = JSON.stringify(distribution);
+    const cache = JSON.parse(input.observed.cacheIndexRaw);
+    cache.catalogSelectionRef = { ...cache.catalogSelectionRef, selectionValue };
+    cache.distributionManifestSha256 = frameworkCatalogDigest(distribution);
+    return {
+      catalogRaw: JSON.stringify(value),
+      input: {
+        ...input,
+        selectionRef: { ...input.selectionRef, selectionValue },
+        observed: {
+          ...input.observed,
+          distributionManifestRaw,
+          cacheIndexRaw: JSON.stringify(cache),
+          componentRefs,
+        },
+      },
+    };
+  };
+
+  const accepted = withReason("planning-documentation");
+  expect(
+    preflightFrameworkSelection(accepted.catalogRaw, accepted.input),
+  ).toEqual(expect.objectContaining({ status: "matched" }));
+
+  const refused = withReason("unknown-reason");
+  expect(preflightFrameworkSelection(refused.catalogRaw, refused.input)).toMatchObject({
+    status: "refused",
+    refusal: {
+      code: "catalog_invalid",
+      predicate:
+        "$.components[0].componentRef.dirtyContent.excludedPaths[0].reasonCode",
+    },
+  });
+});

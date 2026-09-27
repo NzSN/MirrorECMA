@@ -32,7 +32,11 @@ export type ComponentRef = Readonly<{
     includedPaths: readonly string[];
     excludedPaths: readonly Readonly<{
       path: string;
-      reasonCode: "pre-existing-unrelated" | "evidence-output" | "build-output";
+      reasonCode:
+        | "pre-existing-unrelated"
+        | "evidence-output"
+        | "build-output"
+        | "planning-documentation";
     }>[];
   }>;
 }>;
@@ -600,6 +604,7 @@ function componentRef(value: unknown, path: string): ComponentRef {
             "pre-existing-unrelated",
             "evidence-output",
             "build-output",
+            "planning-documentation",
           ] as unknown[]
         ).includes(record.reasonCode)
       )
@@ -616,7 +621,8 @@ function componentRef(value: unknown, path: string): ComponentRef {
         reasonCode: record.reasonCode as
           | "pre-existing-unrelated"
           | "evidence-output"
-          | "build-output",
+          | "build-output"
+          | "planning-documentation",
       };
     });
     dirtyContent = immutable({

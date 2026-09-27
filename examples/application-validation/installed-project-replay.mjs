@@ -94,8 +94,6 @@ const execution = await run([
   frameworkInput,
   "--combination",
   registry.combinationId,
-  "--tool-registry",
-  registryPath,
   "--result-file",
   resultPath,
 ]);
@@ -113,6 +111,7 @@ assert.deepEqual(result.cleanup, {
   quiescence: "confirmed",
   bindingStatus: "succeeded",
 });
+process.exitCode = expectedExit;
 if (mode === "correct") {
   assert.equal(result.outcome, "passed");
   assert.equal(result.conformance, "matched");

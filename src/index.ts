@@ -321,6 +321,14 @@ export {
   type SuiteCleanup,
 } from "./suite-result.js";
 export {
+  inspectProjectReproductionAuthority,
+  inspectProjectReproductionWithCatalog,
+  type ProjectReproductionAuthority,
+  type ProjectReproductionIdentityOptions,
+  type CatalogProjectReproductionAuthority,
+  type CatalogProjectReproductionOptions,
+} from "./project.js";
+export {
   REPRODUCTION_BUNDLE_SCHEMA,
   REPRODUCTION_MAX_BYTES,
   REPRODUCTION_MAX_DEPTH,

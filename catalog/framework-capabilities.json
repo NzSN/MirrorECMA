@@ -7,14 +7,24 @@
       "componentRef": {
         "componentId": "mirrorecma",
         "repository": "https://github.com/NzSN/MirrorECMA.git",
-        "revision": "b166806bb25443fec7b08e8a29bcda77a2226a80",
+        "revision": "59b722ac1c36d7c7be87ea7d962a89c6ab6d7145",
         "dirty": true,
         "dirtyContent": {
           "algorithm": "sha256",
-          "digest": "530d6b26730fa0f3f7e5d1deab0a5ced27fdbcaf2587d0e6b360783d022da77a",
+          "digest": "18a80444f6706422d86308d53d731b431bef3eb0495fff85577ea34c4cca8b5c",
           "method": "git-diff-and-untracked-manifest-v1",
-          "includedPaths": [],
+          "includedPaths": [
+            "examples/application-validation/installed-project-replay.mjs",
+            "examples/application-validation/run.mjs",
+            "src/suite-runner.ts",
+            "test/installed-qualification-wrappers.test.ts",
+            "test/mutation-observer-fidelity.test.ts"
+          ],
           "excludedPaths": [
+            {
+              "path": ".projectile-cache.eld",
+              "reasonCode": "pre-existing-unrelated"
+            },
             {
               "path": "catalog/framework-capabilities.json",
               "reasonCode": "evidence-output"
@@ -129,7 +139,7 @@
   "combinations": [],
   "extensions": {
     "org.nzsn.snapshot": {
-      "capturedAt": "2026-09-22T16:02:53Z",
+      "capturedAt": "2026-09-25T10:15:05Z",
       "provisional": true
     }
   }

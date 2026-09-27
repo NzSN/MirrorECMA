@@ -159,6 +159,36 @@ test("observer exception and invalid observation remain implementation/codec fai
     outcome: "failed",
     failure: { kind: "implementation" },
   });
+  const workerCallback = await evaluate({
+    ...counter(),
+    observe: () => {
+      throw Object.assign(new Error("binding failed for action Tick"), {
+        code: "observation_shape_mismatch",
+        cause: Object.assign(new Error("injected observer failure"), {
+          code: "APPLICATION",
+        }),
+      });
+    },
+  });
+  expect(workerCallback).toMatchObject({
+    outcome: "failed",
+    failure: { kind: "implementation" },
+  });
+  const typedRejection = await evaluate({
+    ...counter(),
+    observe: () => {
+      throw Object.assign(new Error("binding failed for action Tick"), {
+        code: "observation_shape_mismatch",
+        cause: Object.assign(new Error("observation field rejected"), {
+          code: "VALUE",
+        }),
+      });
+    },
+  });
+  expect(typedRejection).toMatchObject({
+    outcome: "failed",
+    failure: { kind: "codec", code: "observation_shape_mismatch" },
+  });
   const invalid = await evaluate(withObserverControl(counter(), "invalid"));
   expect(invalid).toMatchObject({
     outcome: "failed",

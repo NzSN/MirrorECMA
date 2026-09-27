@@ -97,6 +97,15 @@ try {
     assert.equal(receipt.acceptance.status, 'met');
     assert.equal(receipt.cleanup.status, 'confirmed');
   }
-  if (receiptPath) await writeFile(receiptPath, JSON.stringify(receipt, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
-  console.log(JSON.stringify(receipt, null, 2));
+  const integerMeasurements = (value) => {
+    if (Array.isArray(value)) return value.map(integerMeasurements);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
+        (key === 'durationMs' || key === 'evaluationMs') && typeof item === 'number' ? Math.round(item) : integerMeasurements(item)]));
+    }
+    return value;
+  };
+  const persisted = integerMeasurements(receipt);
+  if (receiptPath) await writeFile(receiptPath, JSON.stringify(persisted, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+  console.log(JSON.stringify(persisted, null, 2));
 } finally { await rm(scratch, { recursive: true, force: true }); }

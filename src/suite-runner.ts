@@ -85,7 +85,7 @@ function safeOperation<T>(operation:()=>T|Promise<T>):Promise<T> {
 }
 function failureFor(error: unknown, stage: SuiteFailure["stage"]): SuiteFailure {
   try {
-    if (error instanceof ReplayMismatchError) return Object.freeze({stage:"replay",kind:"mismatch",code:"model_mismatch",message:"model rejected implementation observation",traceIndex:error.traceIndex,stateIndex:error.stepIndex});
+    if (error instanceof ReplayMismatchError) return Object.freeze({stage:"replay",kind:"mismatch",code:"model_mismatch",message:"model rejected implementation observation",traceIndex:error.traceIndex,stateIndex:error.stepIndex,action:error.action});
     if (error instanceof ReplayCancelledError) return Object.freeze({stage,kind:"cancellation",code:error.code,message:"suite execution cancelled"});
     if (error instanceof ReplayDeadlineError) return Object.freeze({stage,kind:"timeout",code:error.code,message:`suite ${error.stage} deadline expired`});
     if (error instanceof MatchedEvidenceError) return Object.freeze({stage:"replay",kind:"evidence",code:error.code,message:"authoritative replay evidence is incomplete or inconsistent"});
@@ -94,7 +94,25 @@ function failureFor(error: unknown, stage: SuiteFailure["stage"]): SuiteFailure 
     const code = safeOwnString(error,"code") ?? "unknown_failure";
     if (stage === "cleanup" || code === "adapter_dispose_failed" || code === "replay_cleanup_failed") return Object.freeze({stage:"cleanup",kind:"cleanup",code:"cleanup_failed",message:"suite cleanup failed"});
     if (error instanceof SuiteOperationError) {
-      const codec = error.sourceCode === "input_shape_mismatch" || error.sourceCode === "observation_shape_mismatch";
+      let cause: unknown = undefined;
+      try {
+        const property = Object.getOwnPropertyDescriptor(error, "cause");
+        cause = property && "value" in property ? property.value : undefined;
+      } catch { cause = undefined; }
+      let implementationFailure = false;
+      for (let depth = 0; depth < 8 && cause !== null && typeof cause === "object"; depth++) {
+        const causeCode = safeOwnString(cause, "code");
+        // APPLICATION is the unchanged worker callback code. VALUE stays a typed rejection.
+        if (causeCode === "observer_control_failure" || causeCode === "APPLICATION") {
+          implementationFailure = true;
+          break;
+        }
+        try {
+          const property = Object.getOwnPropertyDescriptor(cause, "cause");
+          cause = property && "value" in property ? property.value : undefined;
+        } catch { break; }
+      }
+      const codec = !implementationFailure && (error.sourceCode === "input_shape_mismatch" || error.sourceCode === "observation_shape_mismatch");
       return Object.freeze({stage,kind:codec ? "codec" : "implementation",code:codec ? error.sourceCode! : error.code,message:"implementation operation failed"});
     }
     const negotiationCodes = new Set(["negotiation_missing","descriptor_schema_unsupported","descriptor_digest_invalid","negotiation_status_unexpected","interface_digest_mismatch","binding_digest_mismatch","binding_config_mismatch","model_interface_registration_failed"]);

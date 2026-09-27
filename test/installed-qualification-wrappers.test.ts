@@ -84,7 +84,7 @@ test.each([
       output,
     ], { encoding: "utf8" });
     expect({ status: command.status, stderr: command.stderr }).toEqual({
-      status: 0,
+      status: cliExit,
       stderr: "",
     });
     expect(JSON.parse(await readFile(join(output, resultName), "utf8"))).toEqual(result);
