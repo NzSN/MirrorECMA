@@ -11,6 +11,8 @@ import { runSuite, type SuiteConstructionContext, type SuiteImplementation } fro
 import type { SuiteResult } from "./suite-result.js";
 import {
   replayReproduction,
+  signatureFromSuiteResult,
+  signaturesEqual,
   type CatalogSelectionRef,
   type ExternalResolutionLimits,
   type ReproductionBundle,
@@ -535,6 +537,43 @@ export async function reproduceProject(
   });
 }
 
+/** Run one corpus-prefix probe for prefix reduction (R4, Mirrors
+ * Plans/m3-safe-reduction-design.md). Reproduction preflight runs unchanged:
+ * identities, catalog selection, tool identity, model and implementation
+ * pins are all re-verified per run by executePreparedProject. The bundle's
+ * corpus identity is deliberately NOT re-checked against the truncated probe
+ * corpus — the probe corpus is a prefix by construction. The result compares
+ * the observed first signature against the original bundle signature, exactly
+ * like replayReproduction. The original bundle is never mutated. */
+export async function reproduceProjectCorpusPrefixWithCatalog(
+  value: LoadedProject | string | URL,
+  bundle: ReproductionBundle,
+  options: CatalogProjectReproductionOptions & {
+    readonly corpusTraceFile: string;
+  },
+): Promise<ReproductionReplayResult> {
+  const authority = await inspectProjectReproductionWithCatalog(value, options);
+  const project: LoadedProject = {
+    ...authority.project,
+    replay: { ...authority.project.replay, traces: [options.corpusTraceFile] },
+  };
+  const result = await executePreparedProject(project, options, authority.identities);
+  const observed = signatureFromSuiteResult(result, options.normalization);
+  const replay: ReproductionReplayResult = {
+    schema: "mirrorecma.reproduction-replay/v1",
+    status:
+      observed !== null && signaturesEqual(bundle.signature, observed)
+        ? "reproduced"
+        : "not_reproduced",
+    expected: bundle.signature,
+    observed,
+  };
+  Object.defineProperty(replay, "suiteResult", {
+    value: result,
+    enumerable: false,
+  });
+  return Object.freeze(replay);
+}
 export interface CatalogProjectReproductionOptions
   extends Omit<
     ReproduceProjectOptions,

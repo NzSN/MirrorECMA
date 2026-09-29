@@ -9,12 +9,129 @@ import {
 import { preflightSuite, type SuitePreflight } from "./suite-preflight.js";
 import type { SuiteDefinition } from "./suite-definition.js";
 import type { ReproductionStabilityRecord } from "./reproduction-stability.js";
+import type {
+  TlsConnectTransport,
+  TlsOptions,
+  Transport,
+} from "./transport.js";
 
 export const LEASE_REDUCTION_SCHEMA =
   "mirrors.reduction-candidate/lease-service-input-shrink/v1" as const;
 export const LEASE_REDUCTION_PROFILE = "lease-service-input-shrink/v1" as const;
 export const LEASE_REDUCTION_DOMAIN_VERSION = "LeaseService.Next/v1" as const;
+/** Expected remote-service identities (design §5.2). A service identity record
+ *  that does not carry exactly these observations is refused before the oracle
+ *  is opened. */
+export const LEASE_REDUCTION_APALACHE_VERSION = "0.61.0" as const;
+export const LEASE_REDUCTION_JAVA_OBSERVED_VERSION = "25.0.4+7-LTS" as const;
+export type LeaseReductionOracleMode = "local" | "remote";
 const SHA256 = /^[a-f0-9]{64}$/;
+const ISO8601_UTC =
+  /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,3})?Z$/;
+const PRINTABLE_ASCII = /^[\x20-\x7e]+$/;
+const HOST = /^[A-Za-z0-9][A-Za-z0-9.:_-]*$/;
+
+export interface LeaseReductionServiceEndpoint {
+  readonly host: string;
+  readonly port: number;
+}
+/**
+ * Operator-observed identity of the deployed model-check service (design §5.2
+ * step 3). The record is evaluator-owned evidence cited by the receipt; the
+ * reducer never invents or refreshes it. Validation is strict and closed.
+ */
+export interface LeaseReductionServiceIdentity {
+  readonly endpoint: LeaseReductionServiceEndpoint;
+  readonly peerLeafSha256: string;
+  readonly apalacheVersion: typeof LEASE_REDUCTION_APALACHE_VERSION;
+  readonly javaVersion: typeof LEASE_REDUCTION_JAVA_OBSERVED_VERSION;
+  readonly observedAt: string;
+  readonly qualificationRef: string;
+}
+function serviceRecord(value: unknown, keys: readonly string[], label: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new LeaseReductionError(
+      "reduction_service_identity_invalid",
+      `${label} must be an object`,
+    );
+  const record = value as Record<string, unknown>;
+  const actual = Object.keys(record).sort();
+  const expected = [...keys].sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index]))
+    throw new LeaseReductionError(
+      "reduction_service_identity_invalid",
+      `${label} fields are invalid`,
+    );
+  return record;
+}
+/** Strictly validate one operator-observed service identity record. */
+export function validateLeaseReductionServiceIdentity(
+  value: unknown,
+): LeaseReductionServiceIdentity {
+  const record = serviceRecord(
+    value,
+    ["endpoint", "peerLeafSha256", "apalacheVersion", "javaVersion", "observedAt", "qualificationRef"],
+    "service identity",
+  );
+  const endpoint = serviceRecord(record["endpoint"], ["host", "port"], "service endpoint");
+  const host = endpoint["host"];
+  const port = endpoint["port"];
+  const peerLeafSha256 = record["peerLeafSha256"];
+  const observedAt = record["observedAt"];
+  const qualificationRef = record["qualificationRef"];
+  if (typeof host !== "string" || host.length < 1 || host.length > 253 || !HOST.test(host))
+    throw new LeaseReductionError(
+      "reduction_service_identity_invalid",
+      "service endpoint host is invalid",
+    );
+  if (!Number.isSafeInteger(port) || (port as number) < 1 || (port as number) > 65535)
+    throw new LeaseReductionError(
+      "reduction_service_identity_invalid",
+      "service endpoint port is invalid",
+    );
+  if (typeof peerLeafSha256 !== "string" || !SHA256.test(peerLeafSha256))
+    throw new LeaseReductionError(
+      "reduction_service_identity_invalid",
+      "service peer leaf fingerprint must be a lowercase SHA-256",
+    );
+  if (record["apalacheVersion"] !== LEASE_REDUCTION_APALACHE_VERSION)
+    throw new LeaseReductionError(
+      "reduction_service_identity_invalid",
+      `service Apalache version must be ${LEASE_REDUCTION_APALACHE_VERSION}`,
+    );
+  if (record["javaVersion"] !== LEASE_REDUCTION_JAVA_OBSERVED_VERSION)
+    throw new LeaseReductionError(
+      "reduction_service_identity_invalid",
+      `service Java version must be ${LEASE_REDUCTION_JAVA_OBSERVED_VERSION}`,
+    );
+  if (
+    typeof observedAt !== "string" ||
+    !ISO8601_UTC.test(observedAt) ||
+    !Number.isFinite(Date.parse(observedAt))
+  )
+    throw new LeaseReductionError(
+      "reduction_service_identity_invalid",
+      "service observation timestamp must be an ISO-8601 UTC instant",
+    );
+  if (
+    typeof qualificationRef !== "string" ||
+    qualificationRef.length < 1 ||
+    qualificationRef.length > 512 ||
+    !PRINTABLE_ASCII.test(qualificationRef)
+  )
+    throw new LeaseReductionError(
+      "reduction_service_identity_invalid",
+      "service qualification reference is invalid",
+    );
+  return Object.freeze({
+    endpoint: Object.freeze({ host, port: port as number }),
+    peerLeafSha256,
+    apalacheVersion: LEASE_REDUCTION_APALACHE_VERSION,
+    javaVersion: LEASE_REDUCTION_JAVA_OBSERVED_VERSION,
+    observedAt,
+    qualificationRef,
+  });
+}
 
 export interface LeaseReductionEdit {
   readonly stateIndex: number;
@@ -679,4 +796,219 @@ export async function reduceLeaseServiceInput<Port>(
         : { reasonCode: "fresh_trace_profile_unqualified_java" }),
     },
   );
+}
+
+/* --------------------------------------------------------------------------
+ * Oracle execution modes (Mirrors Plans/m3-safe-reduction-design.md section 5).
+ *
+ * Local mode pins byte-identical tools on this host. Remote mode runs the
+ * model oracle against the deployed service over mTLS and replaces the local
+ * Apalache/Java byte pins with an operator-observed service identity record.
+ * Both modes keep every safety invariant of the reducer: the oracle only ever
+ * witnesses model validity; application output is never the validity oracle.
+ * ------------------------------------------------------------------------ */
+
+export const LEASE_REDUCTION_TOOLS_SCHEMA_LOCAL =
+  "mirrorecma.lease-reduction-tools/v1" as const;
+export const LEASE_REDUCTION_TOOLS_SCHEMA_REMOTE =
+  "mirrorecma.lease-reduction-tools/v2" as const;
+export const LEASE_REDUCTION_ORACLE_RECEIPT_SCHEMA_V2 =
+  "mirrorecma.lease-reduction-oracle/v2" as const;
+export const LEASE_REDUCTION_MATERIALIZATION_FAILURE_SCHEMA_V2 =
+  "mirrorecma.lease-reduction-materialization/v2" as const;
+export const LEASE_REDUCTION_VALIDATOR_ID =
+  "mirrors.model-interface-reduction/v1" as const;
+
+/** Remote-mode tool manifest. Only artifacts that still execute on this host
+ *  (the candidate validator) keep byte pins; Apalache and Java run on the
+ *  service and are covered by the service identity record instead. */
+export interface LeaseReductionRemoteTools {
+  readonly schema: typeof LEASE_REDUCTION_TOOLS_SCHEMA_REMOTE;
+  readonly mode: "remote";
+  readonly totalBudgetMs: number;
+  readonly cleanupBudgetMs: number;
+  readonly validator: {
+    readonly id: typeof LEASE_REDUCTION_VALIDATOR_ID;
+    readonly path: string;
+    readonly sha256: string;
+  };
+}
+
+/** Strictly validate one remote-mode tool manifest (`...tools/v2`). */
+export function validateLeaseReductionRemoteTools(
+  value: unknown,
+): LeaseReductionRemoteTools {
+  const record = serviceRecord(
+    value,
+    ["schema", "mode", "totalBudgetMs", "cleanupBudgetMs", "validator"],
+    "remote tool manifest",
+  );
+  if (record["schema"] !== LEASE_REDUCTION_TOOLS_SCHEMA_REMOTE)
+    throw new LeaseReductionError(
+      "reduction_tool_manifest_invalid",
+      `remote tool manifest schema must be ${LEASE_REDUCTION_TOOLS_SCHEMA_REMOTE}`,
+    );
+  if (record["mode"] !== "remote")
+    throw new LeaseReductionError(
+      "reduction_tool_manifest_invalid",
+      "remote tool manifest mode must be remote",
+    );
+  for (const key of ["totalBudgetMs", "cleanupBudgetMs"]) {
+    const budget = record[key];
+    if (
+      typeof budget !== "number" ||
+      !Number.isSafeInteger(budget) ||
+      budget < 1 ||
+      budget > 0x7fffffff
+    )
+      throw new LeaseReductionError(
+        "reduction_tool_manifest_invalid",
+        `${key} must be a positive bounded integer`,
+      );
+  }
+  const validator = serviceRecord(
+    record["validator"],
+    ["id", "path", "sha256"],
+    "remote validator identity",
+  );
+  if (validator["id"] !== LEASE_REDUCTION_VALIDATOR_ID)
+    throw new LeaseReductionError(
+      "reduction_tool_manifest_invalid",
+      `remote validator id must be ${LEASE_REDUCTION_VALIDATOR_ID}`,
+    );
+  if (typeof validator["path"] !== "string" || validator["path"].length === 0)
+    throw new LeaseReductionError(
+      "reduction_tool_manifest_invalid",
+      "remote validator path is invalid",
+    );
+  if (
+    typeof validator["sha256"] !== "string" ||
+    !SHA256.test(validator["sha256"])
+  )
+    throw new LeaseReductionError(
+      "reduction_tool_manifest_invalid",
+      "remote validator digest must be a lowercase SHA-256",
+    );
+  return Object.freeze({
+    schema: LEASE_REDUCTION_TOOLS_SCHEMA_REMOTE,
+    mode: "remote" as const,
+    totalBudgetMs: record["totalBudgetMs"] as number,
+    cleanupBudgetMs: record["cleanupBudgetMs"] as number,
+    validator: Object.freeze({
+      id: LEASE_REDUCTION_VALIDATOR_ID,
+      path: validator["path"] as string,
+      sha256: validator["sha256"] as string,
+    }),
+  });
+}
+
+/** TLS credential file paths for the remote oracle. Credentials are
+ *  operator-supplied local files; they are not evidence and never enter the
+ *  receipt. */
+export interface LeaseReductionTlsPaths {
+  readonly caPath: string;
+  readonly certPath: string;
+  readonly keyPath: string;
+}
+
+export type LeaseReductionOracleRequest =
+  | { readonly mode: "local"; readonly mirrorPath: string }
+  | {
+      readonly mode: "remote";
+      readonly service: LeaseReductionServiceIdentity;
+      readonly tls: LeaseReductionTlsPaths;
+    };
+
+/** Injectable transport factories so tests never open a real connection. */
+export interface LeaseReductionOracleDeps {
+  readonly spawnMirror: (binPath: string) => Transport;
+  readonly connectTlsMirror: (
+    host: string,
+    port: number,
+    opts: TlsOptions,
+  ) => Promise<TlsConnectTransport>;
+}
+
+/** Open the model-oracle transport for the selected mode. Remote mode pins
+ *  the peer leaf fingerprint twice: once via the TLS pin option and once by
+ *  comparing the connected transport's observed fingerprint with the service
+ *  identity record, closing the transport before the mismatch error. */
+export async function openReductionOracleTransport(
+  request: LeaseReductionOracleRequest,
+  deps: LeaseReductionOracleDeps,
+): Promise<Transport> {
+  if (request.mode === "local") {
+    if (typeof request.mirrorPath !== "string" || request.mirrorPath.length === 0)
+      throw new LeaseReductionError(
+        "reduction_oracle_configuration_invalid",
+        "local oracle mode requires a mirror binary path",
+      );
+    return deps.spawnMirror(request.mirrorPath);
+  }
+  const service = request.service;
+  const tls = request.tls;
+  if (!service || !tls)
+    throw new LeaseReductionError(
+      "reduction_oracle_configuration_invalid",
+      "remote oracle mode requires a service identity record and TLS paths",
+    );
+  for (const [label, value] of [
+    ["ca", tls.caPath],
+    ["cert", tls.certPath],
+    ["key", tls.keyPath],
+  ] as const)
+    if (typeof value !== "string" || value.length === 0)
+      throw new LeaseReductionError(
+        "reduction_oracle_configuration_invalid",
+        `remote oracle mode requires a TLS ${label} path`,
+      );
+  let transport: TlsConnectTransport;
+  try {
+    transport = await deps.connectTlsMirror(service.endpoint.host, service.endpoint.port, {
+      caPath: tls.caPath,
+      certPath: tls.certPath,
+      keyPath: tls.keyPath,
+      pin: service.peerLeafSha256,
+    });
+  } catch (error) {
+    throw new LeaseReductionError(
+      "reduction_service_unreachable",
+      `model-check service could not be reached: ${
+        error instanceof Error ? error.message : "unknown error"
+      }`,
+    );
+  }
+  if (transport.peerFingerprint !== service.peerLeafSha256) {
+    try {
+      await transport.close();
+    } catch {
+      // Preserve the identity mismatch as the primary failure.
+    }
+    throw new LeaseReductionError(
+      "reduction_service_identity_mismatch",
+      "service peer leaf fingerprint differs from the service identity record",
+    );
+  }
+  return transport;
+}
+
+/** Apply the oracle-mode environment. Remote mode removes any inherited
+ *  APALACHE_MC so no local model checker can be selected; local mode pins the
+ *  launcher and prepends the selected JDK, matching the historical behavior. */
+export function applyOracleModeEnvironment(
+  mode: LeaseReductionOracleMode,
+  env: Record<string, string | undefined>,
+  local?: { readonly apalacheLauncherPath: string; readonly javaHome: string },
+): void {
+  if (mode === "remote") {
+    delete env["APALACHE_MC"];
+    return;
+  }
+  if (!local)
+    throw new LeaseReductionError(
+      "reduction_oracle_configuration_invalid",
+      "local oracle mode requires the Apalache launcher and Java home",
+    );
+  env["APALACHE_MC"] = local.apalacheLauncherPath;
+  env["PATH"] = `${local.javaHome}/bin:${env["PATH"] ?? ""}`;
 }

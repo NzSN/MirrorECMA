@@ -6,19 +6,28 @@ import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
+  applyOracleModeEnvironment,
+  connectTlsMirror,
   decodeMirrorMessage,
   decodeReproductionBundle,
   encodeState,
   materializeLeaseReductionTrace,
+  openReductionOracleTransport,
   reproductionBundleSha256,
   spawnMirror,
   startExploreSession,
   validateLeaseReductionCandidate,
+  validateLeaseReductionRemoteTools,
+  validateLeaseReductionServiceIdentity,
+  LEASE_REDUCTION_MATERIALIZATION_FAILURE_SCHEMA_V2,
+  LEASE_REDUCTION_ORACLE_RECEIPT_SCHEMA_V2,
+  LEASE_REDUCTION_TOOLS_SCHEMA_LOCAL,
+  LEASE_REDUCTION_TOOLS_SCHEMA_REMOTE,
 } from "../dist/index.js";
 import { parseBoundedJsonValue } from "../dist/reproduction-bundle.js";
 
 const usage =
-  "Usage: node scripts/materialize-lease-reduction.mjs --candidate FILE --bundle FILE --model FILE --lock FILE --original-trace FILE --tool-manifest FILE --out NEW_FILE --receipt NEW_FILE";
+  "Usage: node scripts/materialize-lease-reduction.mjs --candidate FILE --bundle FILE --model FILE --lock FILE --original-trace FILE --tool-manifest FILE --out NEW_FILE --receipt NEW_FILE [--oracle-mode local|remote] [--service-identity FILE --tls-ca FILE --tls-cert FILE --tls-key FILE]";
 const SHA256 = /^[a-f0-9]{64}$/;
 const KNOWN_APALACHE_JAR_SHA256 =
   "33611081942d392646af60993c599907f1f41752fce4a62304dbf9e2cdad4346";
@@ -43,6 +52,11 @@ for (const key of [
   "--receipt",
 ])
   if (!flags[key]) throw new Error(usage);
+const oracleMode = flags["--oracle-mode"] ?? "local";
+if (oracleMode !== "local" && oracleMode !== "remote") throw new Error(usage);
+if (oracleMode === "remote")
+  for (const key of ["--service-identity", "--tls-ca", "--tls-cert", "--tls-key"])
+    if (!flags[key]) throw new Error(usage);
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const canonical = (value) =>
@@ -248,8 +262,32 @@ try {
   );
 
   const toolInput = await readBoundedJson(flags["--tool-manifest"], 256 * 1024);
-  const tools = validateToolManifest(toolInput.value);
-  const beforeTools = await verifyTools(tools);
+  const manifestSchema = toolInput.value?.schema;
+  if (manifestSchema === LEASE_REDUCTION_TOOLS_SCHEMA_REMOTE && oracleMode !== "remote")
+    throw new Error("remote tool manifest requires --oracle-mode remote");
+  if (manifestSchema !== LEASE_REDUCTION_TOOLS_SCHEMA_REMOTE && oracleMode !== "local")
+    throw new Error("local tool manifest requires --oracle-mode local");
+  const remote = oracleMode === "remote";
+  const tools = remote
+    ? validateLeaseReductionRemoteTools(toolInput.value)
+    : validateToolManifest(toolInput.value);
+  const serviceIdentity = remote
+    ? validateLeaseReductionServiceIdentity(
+        (await readBoundedJson(flags["--service-identity"], 256 * 1024)).value,
+      )
+    : null;
+  const verifySelectedTools = remote
+    ? async (manifest) => ({
+        validator: (() => {
+          const observed = fileSha(manifest.validator.path);
+          return observed.then((digest) => {
+            assert.equal(digest, manifest.validator.sha256, "validator identity mismatch");
+            return digest;
+          });
+        })(),
+      })
+    : verifyTools;
+  const beforeTools = await verifySelectedTools(tools);
   run(resolve(tools.validator.path), ["validate", candidateInput.absolute]);
 
   const modelInput = await readBounded(flags["--model"], 1024 * 1024);
@@ -279,14 +317,37 @@ try {
   const transformed = materialized.trace;
   const changed = materialized.changedPaths;
 
-  process.env.APALACHE_MC = resolve(tools.apalache.launcherPath);
-  process.env.PATH = `${resolve(tools.java.home, "bin")}:${process.env.PATH ?? ""}`;
-  const apalacheVersion = run(resolve(tools.apalache.launcherPath), ["version"]);
-  assert.match(apalacheVersion, /0\.61\.0/, "unexpected Apalache version");
-  const javaVersion = run(resolve(tools.java.executablePath), ["-version"]);
-  assert.match(javaVersion, /25\.0\.4\+7-LTS/, "unexpected Java version");
+  applyOracleModeEnvironment(
+    oracleMode,
+    process.env,
+    remote
+      ? undefined
+      : {
+          apalacheLauncherPath: resolve(tools.apalache.launcherPath),
+          javaHome: resolve(tools.java.home),
+        },
+  );
+  if (!remote) {
+    const apalacheVersion = run(resolve(tools.apalache.launcherPath), ["version"]);
+    assert.match(apalacheVersion, /0\.61\.0/, "unexpected Apalache version");
+    const javaVersion = run(resolve(tools.java.executablePath), ["-version"]);
+    assert.match(javaVersion, /25\.0\.4\+7-LTS/, "unexpected Java version");
+  }
 
-  const transport = spawnMirror(resolve(tools.mirror.path));
+  const transport = await openReductionOracleTransport(
+    remote
+      ? {
+          mode: "remote",
+          service: serviceIdentity,
+          tls: {
+            caPath: resolve(flags["--tls-ca"]),
+            certPath: resolve(flags["--tls-cert"]),
+            keyPath: resolve(flags["--tls-key"]),
+          },
+        }
+      : { mode: "local", mirrorPath: resolve(tools.mirror.path) },
+    { spawnMirror, connectTlsMirror },
+  );
   let session;
   let deadlineTimer;
   let timedOut = false;
@@ -386,7 +447,7 @@ try {
   }
   assert.equal(cleanup.status, "confirmed", "model oracle cleanup was not confirmed");
 
-  const afterTools = await verifyTools(tools);
+  const afterTools = await verifySelectedTools(tools);
   assert.deepEqual(afterTools, beforeTools, "selected tool bytes drifted during oracle execution");
   assert.equal(sha256((await readBounded(modelInput.absolute, 1024 * 1024)).bytes), candidate.modelSha256, "model source drifted during oracle execution");
   assert.equal(sha256((await readBounded(originalInput.absolute, 16 * 1024 * 1024)).bytes), originalTraceSha256, "original trace drifted during oracle execution");
@@ -400,8 +461,9 @@ try {
     }),
   );
   const receipt = {
-    schema: "mirrorecma.lease-reduction-oracle/v1",
+    schema: LEASE_REDUCTION_ORACLE_RECEIPT_SCHEMA_V2,
     status: "model_valid",
+    oracleMode,
     profile: "lease-service-input-shrink/v1",
     domainVersion: "LeaseService.Next/v1",
     modelSha256: candidate.modelSha256,
@@ -414,18 +476,22 @@ try {
       id: tools.validator.id,
       sha256: tools.validator.sha256,
     },
-    apalache: {
-      version: tools.apalache.version,
-      sha256: tools.apalache.jarSha256,
-    },
-    java: {
-      observedVersion: tools.java.observedVersion,
-      selectedVersion: tools.java.selectedVersion,
-      executableSha256: tools.java.executableSha256,
-      archiveSha256: tools.java.archiveSha256,
-      distributionQualified: tools.java.distributionQualified,
-      qualificationRef: tools.java.qualificationRef,
-    },
+    ...(remote
+      ? { serviceIdentity }
+      : {
+          apalache: {
+            version: tools.apalache.version,
+            sha256: tools.apalache.jarSha256,
+          },
+          java: {
+            observedVersion: tools.java.observedVersion,
+            selectedVersion: tools.java.selectedVersion,
+            executableSha256: tools.java.executableSha256,
+            archiveSha256: tools.java.archiveSha256,
+            distributionQualified: tools.java.distributionQualified,
+            qualificationRef: tools.java.qualificationRef,
+          },
+        }),
     cleanup,
     materialization: {
       originalTraceSha256,
@@ -451,8 +517,9 @@ try {
   console.log(JSON.stringify({ status: "model_valid", candidateTraceSha256 }));
 } catch (error) {
   const failure = {
-    schema: "mirrorecma.lease-reduction-materialization/v1",
+    schema: LEASE_REDUCTION_MATERIALIZATION_FAILURE_SCHEMA_V2,
     status: "inconclusive",
+    oracleMode,
     reasonCode:
       error instanceof Error && error.message.includes("budget")
         ? "model_oracle_timeout"
