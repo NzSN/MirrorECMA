@@ -246,6 +246,7 @@ try {
       );
       return reproduceProjectCorpusPrefixWithCatalog(flags["--project"], bundle, {
         signal,
+        corpusTraceFile,
         ...(flags["--tool-registry"] ? { installedRegistry: flags["--tool-registry"] } : {}),
         tools: flags["--server"] ? { server: flags["--server"] } : {},
         combinationId: flags["--combination"],
