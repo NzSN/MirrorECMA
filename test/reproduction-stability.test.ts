@@ -28,6 +28,12 @@ function replay(
     suiteResult: { cleanup: { status: cleanup } } as any,
   };
 }
+function expectIntegerDurations(record: {
+  attempts: readonly { durationMs: number }[];
+}): void {
+  for (const attempt of record.attempts)
+    expect(Number.isInteger(attempt.durationMs)).toBe(true);
+}
 const policy = {
   attemptLimit: 4,
   totalBudgetMs: 1_000,
@@ -59,6 +65,9 @@ test("stable, not reproduced, and alternating outcomes are distinct", async () =
   });
   expect(alternating.classification).toBe("unstable");
   expect(alternating.attempts.map((a) => a.attempt)).toEqual([1, 2, 3, 4]);
+  expectIntegerDurations(stable);
+  expectIntegerDurations(absent);
+  expectIntegerDurations(alternating);
 });
 
 test("one-off failure is inconclusive and stops further attempts", async () => {
@@ -76,6 +85,7 @@ test("one-off failure is inconclusive and stops further attempts", async () => {
   expect(result.classification).toBe("inconclusive");
   expect(calls).toBe(2);
   expect(result.attempts.at(-1)?.outcome).toBe("failed");
+  expectIntegerDurations(result);
 });
 
 test("per-attempt timeout is bounded and cannot satisfy a mismatch", async () => {

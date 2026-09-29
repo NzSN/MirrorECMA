@@ -207,7 +207,7 @@ export async function classifyReproductionStability(
             attempt,
             outcome: bounded.boundary.kind,
             cleanup,
-            durationMs: performance.now() - started,
+            durationMs: Math.round(performance.now() - started),
           }),
         );
         if (cleanup !== "succeeded") independence = "lost";
@@ -230,7 +230,7 @@ export async function classifyReproductionStability(
             outcome: "failed" as const,
             cleanup,
             code: "stale_replay_result",
-            durationMs: performance.now() - started,
+            durationMs: Math.round(performance.now() - started),
             replay,
           }),
         );
@@ -245,7 +245,7 @@ export async function classifyReproductionStability(
           attempt,
           outcome,
           cleanup,
-          durationMs: performance.now() - started,
+          durationMs: Math.round(performance.now() - started),
           replay,
         }),
       );
@@ -261,7 +261,7 @@ export async function classifyReproductionStability(
           attempt,
           outcome: safeCode(error)?.includes("refus") ? "refused" : "failed",
           cleanup: "unknown",
-          durationMs: performance.now() - started,
+          durationMs: Math.round(performance.now() - started),
           ...(safeCode(error) ? { code: safeCode(error) } : {}),
         }),
       );

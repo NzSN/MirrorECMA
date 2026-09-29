@@ -33,6 +33,12 @@ const stability: ReproductionStabilityRecord = {
   attempts: [],
   independence: "confirmed",
 };
+function expectIntegerDurations(result: {
+  candidates: readonly { durationMs: number }[];
+}): void {
+  for (const candidate of result.candidates)
+    expect(Number.isInteger(candidate.durationMs)).toBe(true);
+}
 const policy = {
   candidateLimit: 20,
   totalBudgetMs: 1_000,
@@ -73,6 +79,7 @@ test("reports exact shortest reproducing prefix only after every shorter prefix 
     stopReason: "complete",
   });
   expect(scopes).toEqual([6, 5, 4, 3, 2, 1]);
+  expectIntegerDurations(result);
 });
 
 test("candidate limit reports only the smallest observed reproducing prefix", async () => {
@@ -91,6 +98,7 @@ test("candidate limit reports only the smallest observed reproducing prefix", as
     minimalityComplete: false,
     stopReason: "candidate_limit",
   });
+  expectIntegerDurations(result);
 });
 
 test("model-invalid and signature-drift candidates prevent a shortest-prefix claim", async () => {
@@ -119,6 +127,7 @@ test("model-invalid and signature-drift candidates prevent a shortest-prefix cla
   expect(result.candidates.find((c) => c.prefixLength === 1)?.outcome).toBe(
     "not_reproduced",
   );
+  expectIntegerDurations(result);
 });
 
 test("cleanup uncertainty hard-stops candidate evaluation", async () => {
@@ -142,6 +151,7 @@ test("cleanup uncertainty hard-stops candidate evaluation", async () => {
     stopReason: "cleanup_independence_lost",
   });
   expect(calls).toBe(2);
+  expectIntegerDurations(result);
 });
 
 test("unstable and non-resettable cases are ineligible", async () => {
@@ -163,6 +173,7 @@ test("unstable and non-resettable cases are ineligible", async () => {
     stopReason: "not_eligible",
   });
   expect(calls).toBe(0);
+  expectIntegerDurations(result);
 });
 
 test("caller cancellation stops the bounded transcript", async () => {

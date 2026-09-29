@@ -233,7 +233,7 @@ export async function reduceReproductionPrefix<T>(
             prefixLength: length,
             validity: "valid",
             outcome: validation.boundary.kind,
-            durationMs: performance.now() - started,
+            durationMs: Math.round(performance.now() - started),
           }),
         );
         return finish(
@@ -254,7 +254,7 @@ export async function reduceReproductionPrefix<T>(
             prefixLength: length,
             validity: "invalid",
             outcome: "not_run",
-            durationMs: performance.now() - started,
+            durationMs: Math.round(performance.now() - started),
             ...(validation.boundary.value.code
               ? { code: validation.boundary.value.code }
               : {}),
@@ -292,7 +292,7 @@ export async function reduceReproductionPrefix<T>(
               cleanup === "succeeded"
                 ? evaluation.boundary.kind
                 : "cleanup_unconfirmed",
-            durationMs: performance.now() - started,
+            durationMs: Math.round(performance.now() - started),
           }),
         );
         return finish(
@@ -325,7 +325,7 @@ export async function reduceReproductionPrefix<T>(
             validity: "valid" as const,
             outcome: "failed" as const,
             code: "stale_replay_result",
-            durationMs: performance.now() - started,
+            durationMs: Math.round(performance.now() - started),
           }),
         );
         return finish(
@@ -344,7 +344,7 @@ export async function reduceReproductionPrefix<T>(
             prefixLength: length,
             validity: "valid",
             outcome: "cleanup_unconfirmed",
-            durationMs: performance.now() - started,
+            durationMs: Math.round(performance.now() - started),
           }),
         );
         return finish(
@@ -362,7 +362,7 @@ export async function reduceReproductionPrefix<T>(
           prefixLength: length,
           validity: "valid",
           outcome: replay.status,
-          durationMs: performance.now() - started,
+          durationMs: Math.round(performance.now() - started),
         }),
       );
       if (replay.status === "reproduced") best = length;
@@ -374,7 +374,7 @@ export async function reduceReproductionPrefix<T>(
           prefixLength: length,
           validity: "valid",
           outcome: "failed",
-          durationMs: performance.now() - started,
+          durationMs: Math.round(performance.now() - started),
         }),
       );
       return finish(
