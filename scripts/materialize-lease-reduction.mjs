@@ -14,6 +14,7 @@ import {
   materializeLeaseReductionTrace,
   openReductionOracleTransport,
   reproductionBundleSha256,
+  settleOracleCleanup,
   spawnMirror,
   startExploreSession,
   validateLeaseReductionCandidate,
@@ -138,25 +139,6 @@ async function writeExclusive(path, bytes) {
     await handle.sync();
   } finally {
     await handle.close();
-  }
-}
-async function boundedSettlement(promise, budgetMs) {
-  let timer;
-  try {
-    return await Promise.race([
-      promise.then(
-        (value) => ({ status: "completed", value }),
-        (error) => ({ status: "failed", error }),
-      ),
-      new Promise((resolvePromise) => {
-        timer = setTimeout(
-          () => resolvePromise({ status: "timed_out" }),
-          budgetMs,
-        );
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
   }
 }
 function validateToolManifest(value) {
@@ -419,14 +401,7 @@ try {
   const boundary = new Promise((_, reject) => {
     deadlineTimer = setTimeout(async () => {
       timedOut = true;
-      const closed = await boundedSettlement(
-        Promise.resolve().then(() => transport.close()),
-        tools.cleanupBudgetMs,
-      );
-      cleanup = {
-        status: closed.status === "completed" ? "confirmed" : "unconfirmed",
-        method: "forced_transport_close",
-      };
+      cleanup = await settleOracleCleanup(transport, tools.cleanupBudgetMs);
       reject(new Error("model oracle total budget exceeded"));
     }, tools.totalBudgetMs);
   });
@@ -435,14 +410,7 @@ try {
   } finally {
     if (deadlineTimer) clearTimeout(deadlineTimer);
     if (!timedOut && cleanup.status !== "confirmed") {
-      const closed = await boundedSettlement(
-        Promise.resolve().then(() => transport.close()),
-        tools.cleanupBudgetMs,
-      );
-      cleanup = {
-        status: closed.status === "completed" ? "confirmed" : "unconfirmed",
-        method: "forced_transport_close",
-      };
+      cleanup = await settleOracleCleanup(transport, tools.cleanupBudgetMs);
     }
   }
   assert.equal(cleanup.status, "confirmed", "model oracle cleanup was not confirmed");

@@ -929,6 +929,40 @@ export interface LeaseReductionOracleDeps {
   ) => Promise<TlsConnectTransport>;
 }
 
+export interface OracleCleanupSettlement {
+  readonly status: "confirmed" | "unconfirmed";
+  readonly method: "forced_transport_close";
+}
+
+/** Settle the model-oracle transport after a forced close. Only a close that
+ *  resolves within the cleanup budget is confirmed; a rejected or hanging
+ *  close stays unconfirmed so the caller refuses the candidate. */
+export async function settleOracleCleanup(
+  transport: Pick<Transport, "close">,
+  budgetMs: number,
+): Promise<OracleCleanupSettlement> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const settled = await Promise.race([
+      Promise.resolve()
+        .then(() => transport.close())
+        .then(
+          () => "completed" as const,
+          () => "failed" as const,
+        ),
+      new Promise<"timed_out">((resolvePromise) => {
+        timer = setTimeout(() => resolvePromise("timed_out"), budgetMs);
+      }),
+    ]);
+    return {
+      status: settled === "completed" ? "confirmed" : "unconfirmed",
+      method: "forced_transport_close",
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /** Open the model-oracle transport for the selected mode. Remote mode pins
  *  the peer leaf fingerprint twice: once via the TLS pin option and once by
  *  comparing the connected transport's observed fingerprint with the service

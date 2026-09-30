@@ -247,3 +247,26 @@ test("a stale callback reproduction claim is rejected as a candidate failure", a
     candidates: [{ code: "stale_replay_result" }],
   });
 });
+
+test("a prefix too short to reproduce completes the minimality check and upgrades the claim", async () => {
+  const result = await reduceReproductionPrefix(bundle, {
+    traceIndex: 0,
+    steps: [0, 1, 2, 3],
+    stability,
+    resettable: true,
+    policy,
+    validateCandidate: async () => ({ valid: true }),
+    evaluateCandidate: async (prefix) =>
+      replay(prefix.length >= 2 ? "reproduced" : "not_reproduced"),
+  });
+  expect(result).toMatchObject({
+    bestPrefixLength: 2,
+    claim: "shortest_reproducing_prefix",
+    minimalityComplete: true,
+    stopReason: "complete",
+  });
+  expect(result.candidates.find((c) => c.prefixLength === 1)?.outcome).toBe(
+    "not_reproduced",
+  );
+  expectIntegerDurations(result);
+});

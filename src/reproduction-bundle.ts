@@ -969,6 +969,23 @@ export function signatureFromSuiteResult(
     };
   return cloneFreeze({ primary, cleanup });
 }
+/** Prefix-probe normalization: a truncated prefix that cannot reach the
+ * recorded failure ends in a `coverage_unmet` acceptance failure. For the
+ * probe corpus that is "no signature" (a prefix too short to reach the
+ * failure is definitionally not reproducing), so it must not require the
+ * full-replay normalization context. Every other suite result keeps the
+ * global normalization rules unchanged. */
+export function prefixProbeSignatureFromSuiteResult(
+  result: SuiteResult,
+  context: SuiteNormalizationContext = {},
+): ReproductionSignature | null {
+  if (
+    result.failure?.kind === "acceptance" &&
+    result.failure.code === "coverage_unmet"
+  )
+    return null;
+  return signatureFromSuiteResult(result, context);
+}
 export function signaturesEqual(
   left: ReproductionSignature,
   right: ReproductionSignature,

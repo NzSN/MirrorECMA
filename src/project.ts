@@ -11,7 +11,7 @@ import { runSuite, type SuiteConstructionContext, type SuiteImplementation } fro
 import type { SuiteResult } from "./suite-result.js";
 import {
   replayReproduction,
-  signatureFromSuiteResult,
+  prefixProbeSignatureFromSuiteResult,
   signaturesEqual,
   type CatalogSelectionRef,
   type ExternalResolutionLimits,
@@ -558,7 +558,7 @@ export async function reproduceProjectCorpusPrefixWithCatalog(
     replay: { ...authority.project.replay, traces: [options.corpusTraceFile] },
   };
   const result = await executePreparedProject(project, options, authority.identities);
-  const observed = signatureFromSuiteResult(result, options.normalization);
+  const observed = prefixProbeSignatureFromSuiteResult(result, options.normalization);
   const replay: ReproductionReplayResult = {
     schema: "mirrorecma.reproduction-replay/v1",
     status:

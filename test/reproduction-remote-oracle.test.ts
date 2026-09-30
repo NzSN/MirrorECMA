@@ -4,6 +4,7 @@ import {
   applyOracleModeEnvironment,
   LeaseReductionError,
   openReductionOracleTransport,
+  settleOracleCleanup,
   validateLeaseReductionRemoteTools,
   validateLeaseReductionServiceIdentity,
   LEASE_REDUCTION_TOOLS_SCHEMA_REMOTE,
@@ -279,5 +280,51 @@ describe("materialize-lease-reduction CLI (requires pnpm run build)", () => {
     const result = runCli([...base, "--oracle-mode", "sideways"]);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Usage:");
+  });
+});
+
+describe("settleOracleCleanup", () => {
+  test("a clean close is confirmed", async () => {
+    let closed = 0;
+    const settlement = await settleOracleCleanup(
+      {
+        close: async () => {
+          closed += 1;
+          return 0;
+        },
+      },
+      50,
+    );
+    expect(settlement).toEqual({
+      status: "confirmed",
+      method: "forced_transport_close",
+    });
+    expect(closed).toBe(1);
+  });
+
+  test("a rejecting close is unconfirmed", async () => {
+    const settlement = await settleOracleCleanup(
+      {
+        close: async () => {
+          throw new Error("transport gone");
+        },
+      },
+      50,
+    );
+    expect(settlement).toEqual({
+      status: "unconfirmed",
+      method: "forced_transport_close",
+    });
+  });
+
+  test("a close hanging past the budget is unconfirmed", async () => {
+    const settlement = await settleOracleCleanup(
+      { close: () => new Promise<number>(() => {}) },
+      10,
+    );
+    expect(settlement).toEqual({
+      status: "unconfirmed",
+      method: "forced_transport_close",
+    });
   });
 });

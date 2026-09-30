@@ -7,8 +7,10 @@ import {
   captureReproduction,
   decodeReproductionBundle,
   preflightReproduction,
+  prefixProbeSignatureFromSuiteResult,
   projectReproductionPublicSummary,
   replayReproduction,
+  signatureFromSuiteResult,
   validateReproductionBundle,
   type ReproductionBundle,
   type ReproductionPreflightOptions,
@@ -75,6 +77,49 @@ function suiteResult(kind: "mismatch" | "passed" = "mismatch"): SuiteResult {
       value: Object.freeze({ action: "enqueue" }),
       enumerable: false,
     });
+  return Object.freeze(result);
+}
+function coverageUnmetSuiteResult(): SuiteResult {
+  const result: SuiteResult = {
+    schema: "mirrorecma.suite-result/v1",
+    suiteId: "fixture-suite/v1",
+    outcome: "failed",
+    conformance: "incomplete",
+    acceptance: {
+      status: "unmet",
+      missingActions: ["Start"],
+      missingPairs: [["Start", "Complete"]],
+    },
+    cleanup: {
+      scope: "local",
+      status: "succeeded",
+      quiescence: "confirmed",
+      bindingStatus: "succeeded",
+    },
+    identities: {
+      interfaceDigest: "6".repeat(64),
+      modelDigest: "4".repeat(64),
+      corpusDigest: "5".repeat(64),
+    },
+    evidence: {
+      schema: "mirrorecma.suite-evidence/v1",
+      enteredReplay: true,
+      complete: false,
+      exact: true,
+      tracesExpected: 1,
+      tracesCompleted: 0,
+      initializationsMatched: "1",
+      transitionsMatched: "0",
+      actionCounts: {},
+      pairCounts: {},
+    },
+    failure: {
+      stage: "acceptance",
+      kind: "acceptance",
+      code: "coverage_unmet",
+      message: "truncated prefix does not cover the suite requirements",
+    },
+  };
   return Object.freeze(result);
 }
 function preflightOptions(
@@ -406,4 +451,24 @@ test("inline base64 accepts the exact 262144-byte boundary without widening ordi
   expect(() => decodeReproductionBundle(JSON.stringify(value))).toThrow(
     expect.objectContaining({ code: "bundle_string_too_large" }),
   );
+});
+
+test("a truncated prefix that cannot cover the suite normalizes to no signature", () => {
+  const result = coverageUnmetSuiteResult();
+  expect(() => signatureFromSuiteResult(result)).toThrow(
+    ReproductionBundleError,
+  );
+  expect(prefixProbeSignatureFromSuiteResult(result)).toBeNull();
+  expect(
+    prefixProbeSignatureFromSuiteResult(result, {
+      unmetRequirements: ["Start", "Complete"],
+    }),
+  ).toBeNull();
+});
+
+test("prefix-probe normalization keeps the shared rules for other failures", () => {
+  expect(
+    prefixProbeSignatureFromSuiteResult(suiteResult("mismatch")),
+  ).toMatchObject({ primary: { kind: "behavioral_mismatch" } });
+  expect(prefixProbeSignatureFromSuiteResult(suiteResult("passed"))).toBeNull();
 });
