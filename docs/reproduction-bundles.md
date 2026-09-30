@@ -215,9 +215,13 @@ selected bundle currently uses inline or external captures.
 budgets. Timeout/cancellation gives the aborted suite a separate cooperative
 settlement budget, and loss of cleanup independence stops later attempts.
 `reduceReproductionPrefix` binds the complete bundle digest, exact stable result,
-mismatch coordinate, reset eligibility, and successful cleanup. It
-model-validates each prefix before SUT acquisition. Any invalid shorter prefix
-prevents a `shortest reproducing prefix` claim.
+mismatch coordinate, reset eligibility, and successful cleanup. Candidate
+validation is caller-injected: the installed prefix driver supplies structural
+validity only (a truncated prefix is valid by construction), while the R5 domain
+reducer model-validates every candidate before SUT acquisition. Any invalid
+shorter prefix prevents a `shortest reproducing prefix` claim, and a prefix too
+short to reach the recorded failure normalizes to "no signature"
+(`not_reproduced`) rather than an error.
 
 ## Initial domain-reduction candidate
 
@@ -242,6 +246,16 @@ Java executable/archive, qualification reference, and validator implementation
 identities. A version string does not imply distribution qualification. This profile requires pinned Apalache and
 the private spec; ordinary checked-corpus replay remains Java-free. A second
 application returns `reduction_profile_unsupported` without mutation.
+
+Remote oracle mode and the prefix driver: the materializer accepts
+`--oracle-mode local|remote` with a service identity record and mTLS pins
+(`openReductionOracleTransport`, `validateLeaseReductionServiceIdentity`), and
+the forced-close settlement is the exported `settleOracleCleanup` helper. The
+replay-only R4 driver is `scripts/reduce-reproduction-prefix.mjs` (result schema
+`mirrorecma.reproduction-prefix-reduction/v1`); its Mirrors tier qualified with
+`shortest_reproducing_prefix`/`minimalityComplete: true` on 2026-09-30, while
+the R5 domain tier awaits the activated remote service. Design, safety contract,
+and the tier split: Mirrors `Plans/m3-safe-reduction-design.md` §§4–6.
 
 The pure request contract and development evidence are documented in Mirrors'
 [`model-interface-reduction.md`](../../Mirrors/Docs/model-interface-reduction.md).
