@@ -22,7 +22,7 @@ export const LEASE_REDUCTION_DOMAIN_VERSION = "LeaseService.Next/v1" as const;
 /** Expected remote-service identities (design §5.2). A service identity record
  *  that does not carry exactly these observations is refused before the oracle
  *  is opened. */
-export const LEASE_REDUCTION_APALACHE_VERSION = "0.61.0" as const;
+export const LEASE_REDUCTION_APALACHE_VERSION = "0.62.2" as const;
 export const LEASE_REDUCTION_JAVA_OBSERVED_VERSION = "25.0.4+7-LTS" as const;
 export type LeaseReductionOracleMode = "local" | "remote";
 const SHA256 = /^[a-f0-9]{64}$/;

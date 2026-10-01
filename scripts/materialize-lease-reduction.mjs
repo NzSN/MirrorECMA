@@ -259,15 +259,11 @@ try {
       )
     : null;
   const verifySelectedTools = remote
-    ? async (manifest) => ({
-        validator: (() => {
-          const observed = fileSha(manifest.validator.path);
-          return observed.then((digest) => {
-            assert.equal(digest, manifest.validator.sha256, "validator identity mismatch");
-            return digest;
-          });
-        })(),
-      })
+    ? async (manifest) => {
+        const digest = await fileSha(manifest.validator.path);
+        assert.equal(digest, manifest.validator.sha256, "validator identity mismatch");
+        return { validator: digest };
+      }
     : verifyTools;
   const beforeTools = await verifySelectedTools(tools);
   run(resolve(tools.validator.path), ["validate", candidateInput.absolute]);

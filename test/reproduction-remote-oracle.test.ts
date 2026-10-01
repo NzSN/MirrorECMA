@@ -18,9 +18,9 @@ import type {
 
 const FINGERPRINT = "a".repeat(64);
 const service: LeaseReductionServiceIdentity = {
-  endpoint: { host: "192.168.150.219", port: 8999 },
+  endpoint: { host: "172.20.208.1", port: 8999 },
   peerLeafSha256: FINGERPRINT,
-  apalacheVersion: "0.61.0",
+  apalacheVersion: "0.62.2",
   javaVersion: "25.0.4+7-LTS",
   observedAt: "2026-09-29T00:00:00Z",
   qualificationRef: "operator-observation/2026-09-29",
@@ -35,13 +35,13 @@ describe("validateLeaseReductionServiceIdentity", () => {
     expect(Object.isFrozen(validated.endpoint)).toBe(true);
   });
   test.each([
-    ["wrong Apalache version", { apalacheVersion: "0.58.2" }],
+    ["wrong Apalache version", { apalacheVersion: "0.61.0" }],
     ["wrong Java version", { javaVersion: "21.0.11" }],
     ["uppercase fingerprint", { peerLeafSha256: "A".repeat(64) }],
     ["short fingerprint", { peerLeafSha256: "ab12" }],
     ["extra key", { unexpected: true }],
-    ["bad port zero", { endpoint: { host: "192.168.150.219", port: 0 } }],
-    ["fractional port", { endpoint: { host: "192.168.150.219", port: 8999.5 } }],
+    ["bad port zero", { endpoint: { host: "172.20.208.1", port: 0 } }],
+    ["fractional port", { endpoint: { host: "172.20.208.1", port: 8999.5 } }],
     ["empty host", { endpoint: { host: "", port: 8999 } }],
     ["host with slash", { endpoint: { host: "a/b", port: 8999 } }],
     ["non-UTC timestamp", { observedAt: "2026-09-29 08:00:00+08:00" }],
@@ -173,7 +173,7 @@ describe("openReductionOracleTransport", () => {
     expect(factories.spawned).toEqual([]);
     expect(factories.connected).toHaveLength(1);
     const call = factories.connected[0]!;
-    expect(call.host).toBe("192.168.150.219");
+    expect(call.host).toBe("172.20.208.1");
     expect(call.port).toBe(8999);
     expect(call.opts.pin).toBe(FINGERPRINT);
     expect(call.opts.caPath).toBe("/r/ca.pem");
