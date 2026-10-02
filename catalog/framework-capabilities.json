@@ -7,17 +7,13 @@
       "componentRef": {
         "componentId": "mirrorecma",
         "repository": "https://github.com/NzSN/MirrorECMA.git",
-        "revision": "61890cf14d8465df31ba6c95e72eade0a5716a66",
+        "revision": "f2a6a5aa554d745e4497874ede7ce9ee9db9436f",
         "dirty": true,
         "dirtyContent": {
           "algorithm": "sha256",
-          "digest": "2d331a2e2b718ddd36c68ee96e3055ba79f3faa097e8b740d4503eaf722ebd4b",
+          "digest": "9348787a66c78d5ae2970c015913c175b0b0ac1f347a9e04e8acbb339431e064",
           "method": "git-diff-and-untracked-manifest-v1",
-          "includedPaths": [
-            "scripts/materialize-lease-reduction.mjs",
-            "src/lease-reduction.ts",
-            "test/reproduction-remote-oracle.test.ts"
-          ],
+          "includedPaths": [],
           "excludedPaths": [
             {
               "path": ".projectile-cache.eld",
@@ -137,7 +133,7 @@
   "combinations": [],
   "extensions": {
     "org.nzsn.snapshot": {
-      "capturedAt": "2026-10-01T14:44:24Z",
+      "capturedAt": "2026-10-02T00:27:20Z",
       "provisional": true
     }
   }
