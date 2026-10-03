@@ -7,11 +7,11 @@
       "componentRef": {
         "componentId": "mirrorecma",
         "repository": "https://github.com/NzSN/MirrorECMA.git",
-        "revision": "f2a6a5aa554d745e4497874ede7ce9ee9db9436f",
+        "revision": "3e7277b1a2812ef03e73a991c14bf9e5d8510c54",
         "dirty": true,
         "dirtyContent": {
           "algorithm": "sha256",
-          "digest": "9348787a66c78d5ae2970c015913c175b0b0ac1f347a9e04e8acbb339431e064",
+          "digest": "dfc009da8bc822307b7eae742a2fea1c71dcce13623f05a0c171709a63bc4a61",
           "method": "git-diff-and-untracked-manifest-v1",
           "includedPaths": [],
           "excludedPaths": [
@@ -133,7 +133,7 @@
   "combinations": [],
   "extensions": {
     "org.nzsn.snapshot": {
-      "capturedAt": "2026-10-02T00:27:20Z",
+      "capturedAt": "2026-10-02T16:03:41Z",
       "provisional": true
     }
   }
