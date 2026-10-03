@@ -1,0 +1,1 @@
+{"exactCopyVariables":["action_taken","parameters"],"schema":"mirrors.model-interface-trace-projection/v1","zipIntFunctions":[{"domain":{"lowerInclusive":"0","upperInclusive":"1"},"fields":[{"name":"entry","sourceVariable":"cells"}],"outputWireName":"cells"}]}

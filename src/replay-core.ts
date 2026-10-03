@@ -1,7 +1,7 @@
 import type { MatchedEvidenceTracker } from "./matched-evidence.js";
 import {
   decodeMirrorMessage,
-  encodeState,
+  encodeReportState,
   prettifyState,
   renderDiffHints,
   type MirrorMessage,
@@ -120,12 +120,12 @@ export async function replayCore(
         if (result.kind === "ready") {
           state = result.state;
           options.progress?.assertActive();
-          t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
+          t.send(encodeReportState(state));
         } else {
           state = await result.state;
           throwIfReplayCancelled(options.signal);
           options.progress?.assertActive();
-          t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
+          t.send(encodeReportState(state));
         }
         options.matchedEvidence?.reported();
         options.progress?.recorder.reported(msg.action);
@@ -149,12 +149,12 @@ export async function replayCore(
         if (result.kind === "ready") {
           state = result.state;
           options.progress?.assertActive();
-          t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
+          t.send(encodeReportState(state));
         } else {
           state = await result.state;
           throwIfReplayCancelled(options.signal);
           options.progress?.assertActive();
-          t.send(JSON.stringify({ proto_step: "report_state", state: encodeState(state) }));
+          t.send(encodeReportState(state));
         }
         options.matchedEvidence?.reported();
         options.progress?.recorder.reported(msg.action);

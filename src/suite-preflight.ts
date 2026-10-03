@@ -1,5 +1,6 @@
 import { specFromFiles } from "./spec.js";
-import { readFile } from "node:fs/promises";
+import { readFile, lstat, open } from "node:fs/promises";
+import { constants } from "node:fs";
 import { createHash } from "node:crypto";
 import { validateDescriptorTraceState } from "./dynamic-binding.js";
 import { decodeMirrorMessage } from "./protocol.js";
@@ -14,13 +15,51 @@ export interface SuitePreflight {
   readonly serverPaths: readonly string[];
 }
 export function suiteSha256(bytes: string | Uint8Array): string { return createHash("sha256").update(bytes).digest("hex"); }
+// Workflow artifacts use compiler source normalization and bounded reads all
+// the way through admission. Ordinary suites keep their existing byte identity.
+const workflowBounds = {fileBytes: 16 * 1024 * 1024, aggregateBytes: 64 * 1024 * 1024,
+  sources: 256, traces: 32} as const;
+interface WorkflowBudget { remaining: number }
+async function readWorkflowFile(path: string, budget: WorkflowBudget): Promise<Buffer> {
+  const reject = (message: string): never => { throw new SuiteConfigurationError(message); };
+  const before = await lstat(path);
+  if (!before.isFile() || before.isSymbolicLink()) reject("workflow preflight requires an ordinary file");
+  if (before.size > workflowBounds.fileBytes) reject("workflow preflight file exceeds 16 MiB limit");
+  if (before.size > budget.remaining) reject("workflow preflight aggregate byte limit exceeded");
+  const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== before.size) {
+      reject("workflow preflight file changed before admission");
+    }
+    // One extra byte detects growth without allowing an unbounded readFile.
+    const bytes = Buffer.alloc(before.size + 1);
+    let length = 0;
+    while (length < bytes.length) {
+      const chunk = await handle.read(bytes, length, bytes.length - length, length);
+      if (!chunk.bytesRead) break;
+      length += chunk.bytesRead;
+    }
+    const after = await handle.stat();
+    if (length !== before.size || after.size !== before.size || after.mtimeMs !== opened.mtimeMs) {
+      reject("workflow preflight file changed during admission");
+    }
+    budget.remaining -= length;
+    return bytes.subarray(0, length);
+  } finally { await handle.close(); }
+}
+function workflowUtf8(bytes: Uint8Array): string {
+  try { return new TextDecoder("utf-8", {fatal: true, ignoreBOM: true}).decode(bytes); }
+  catch { throw new SuiteConfigurationError("workflow preflight requires valid UTF-8"); }
+}
+
 function validateRawItf(value: unknown, depth = 0): void {
   if (depth > 128) throw new SuiteConfigurationError("ITF nesting exceeds preflight limit");
   if (Array.isArray(value)) { value.forEach((item)=>validateRawItf(item,depth+1)); return; }
   if (value === null || typeof value !== "object") return;
   const record = value as Record<string,unknown>;
   const tags = ["#bigint","#set","#tup","#map","#unserializable"].filter((key)=>Object.hasOwn(record,key));
-  if (tags.length) {
+  if (tags.length === 1 && Object.keys(record).length === 1) {
     const tag=tags[0]!;
     if (tags.length !== 1 || Object.keys(record).length !== 1) throw new SuiteConfigurationError("ITF constructor has extra fields");
     const inner=record[tag];
@@ -43,10 +82,21 @@ export async function preflightSuite<Port>(suite: SuiteDefinition<Port>): Promis
   const descriptor = suite.model.descriptor;
   const labels = new Map([...descriptor.initializers, ...descriptor.actions].flatMap((a) =>
     [a.wireAction, ...a.wireAliases].map((label) => [label, a] as const)));
-  const modelDigest = suiteSha256(await readFile(suite.replay.modelSource ?? suite.replay.config.specPath));
+  const workflowBudget: WorkflowBudget | undefined = suite.model.provenanceDigest === undefined ? undefined :
+    {remaining: workflowBounds.aggregateBytes};
+  const modelPath = suite.replay.modelSource ?? suite.replay.config.specPath;
+  // Capture the workflow root exactly once, together with its bounded closure.
+  // Compiler SourceUnit hashes normalized CRLF/lone-CR text, while traces keep
+  // exact byte hashes (including any final LF).
+  const workflowClosure = workflowBudget === undefined ? undefined : await specFromFiles(modelPath, undefined, {
+    maxSources: workflowBounds.sources,
+    readSource: async path => workflowUtf8(await readWorkflowFile(path, workflowBudget)).replace(/\r\n?/g, "\n"),
+  });
+  const modelDigest = workflowClosure === undefined ? suiteSha256(await readFile(modelPath)) :
+    suiteSha256(workflowClosure.sources[0]!);
   if (suite.model.provenance?.modelSha256 !== undefined && suite.model.provenance.modelSha256 !== modelDigest) fail("bundle model source hash mismatch");
   if (suite.model.provenance?.sources !== undefined) {
-    const closure = await specFromFiles(suite.replay.modelSource ?? suite.replay.config.specPath);
+    const closure = workflowClosure ?? await specFromFiles(modelPath);
     const actual = closure.sources.map(suiteSha256).sort();
     const expected = suite.model.provenance.sources.map((source)=>source.sha256).sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected)) fail("bundle source closure hash mismatch");
@@ -56,15 +106,16 @@ export async function preflightSuite<Port>(suite: SuiteDefinition<Port>): Promis
   const stateCounts: number[] = [];
   const actions: string[][] = [];
   const serverPaths: string[] = [];
-  if (suite.replay.traces.length > 4096) fail("corpus exceeds 4096 trace occurrences");
+  const traceLimit = workflowBudget === undefined ? 4096 : workflowBounds.traces;
+  if (suite.replay.traces.length > traceLimit) fail(`corpus exceeds ${traceLimit} trace occurrences`);
   for (const reference of suite.replay.traces) {
     const path = typeof reference === "string" ? reference : reference.path;
-    const bytes = await readFile(path);
+    const bytes = workflowBudget === undefined ? await readFile(path) : await readWorkflowFile(path, workflowBudget);
     const digest = suiteSha256(bytes);
     if (typeof reference !== "string" && reference.sha256 !== digest) fail("trace provenance hash mismatch");
     traceDigests.push(digest);
     serverPaths.push(typeof reference === "string" ? reference : reference.serverPath ?? reference.path);
-    const trace: unknown = JSON.parse(bytes.toString("utf8"), (_key, value: unknown) => {
+    const trace: unknown = JSON.parse(workflowBudget === undefined ? bytes.toString("utf8") : workflowUtf8(bytes), (_key, value: unknown) => {
       if (typeof value === "number" && !Number.isSafeInteger(value)) fail("ITF numbers must be safe integers or #bigint values");
       return value;
     });

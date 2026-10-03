@@ -376,6 +376,12 @@ export function encodeState(state: State): Record<string, unknown> {
   return out;
 }
 
+/** Encode the exact report_state payload used by synchronous and async replay.
+ * The transport appends the JSONL line terminator. */
+export function encodeReportState(state: State): string {
+  return JSON.stringify({ proto_step: "report_state", state: encodeState(state) });
+}
+
 function encodeValue(v: Value): unknown {
   switch (v.tag) {
     case "int":  return { "#bigint": String(v.val) };
@@ -435,23 +441,28 @@ function walk(v: unknown): any {
   if (Array.isArray(v)) return { tag: "seq", val: v.map(walk) };
   if (typeof v === "object") {
     const obj = v as Record<string, unknown>;
-    if ("#bigint" in obj && typeof obj["#bigint"] === "string")
+    const keys = Object.keys(obj);
+    const marker = keys.length === 1 ? keys[0] : undefined;
+    if (marker === "#bigint" && typeof obj["#bigint"] === "string")
       return { tag: "int", val: BigInt(obj["#bigint"] as string) };
-    if ("#tup" in obj && Array.isArray(obj["#tup"]))
+    if (marker === "#tup" && Array.isArray(obj["#tup"]))
       return { tag: "tuple", val: (obj["#tup"] as unknown[]).map(walk) };
-    if ("#set" in obj && Array.isArray(obj["#set"]))
+    if (marker === "#set" && Array.isArray(obj["#set"]))
       return { tag: "set", val: (obj["#set"] as unknown[]).map(walk) };
-    if ("#map" in obj && Array.isArray(obj["#map"]))
+    if (marker === "#map" && Array.isArray(obj["#map"]))
       return {
         tag: "map",
         val: (obj["#map"] as unknown[][]).map(([k, v]) => [walk(k), walk(v)]),
       };
-    if ("#unserializable" in obj && typeof obj["#unserializable"] === "string")
+    if (marker === "#unserializable" && typeof obj["#unserializable"] === "string")
       return { tag: "unserializable", val: obj["#unserializable"] as string };
     if ("proto_step" in obj)
       return walkMessage(obj);
-    if ("tag" in obj && "value" in obj && typeof obj.tag === "string")
-      return { tag: "variant", variantTag: obj.tag as string, value: walk(obj.value) };
+    if (keys.length === 2 && Object.prototype.hasOwnProperty.call(obj, "tag") &&
+        Object.prototype.hasOwnProperty.call(obj, "value")) {
+      if (typeof obj.tag !== "string") throw new Error("invalid ITF variant: tag must be a string");
+      return { tag: "variant", variantTag: obj.tag, value: walk(obj.value) };
+    }
     const rec: Record<string, Value> = {};
     for (const [k, val] of Object.entries(obj))
       setOwnField(rec, k, walk(val) as Value);

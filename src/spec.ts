@@ -108,6 +108,13 @@ function defaultSearchDirs(): string[] {
   return (process.env.TLA_LIBRARY_PATH ?? "").split(":").filter((d) => d.length > 0);
 }
 
+/** Optional caller-owned bounds and source capture. Default callers retain
+ * the ordinary UTF-8 file reader and unbounded closure size. */
+export interface SpecReadPolicy {
+  readonly readSource?: (path: string) => Promise<string>;
+  readonly maxSources?: number;
+}
+
 /**
  * Read a root .tla file and its transitive EXTENDS/INSTANCE dependency
  * closure into an ApalacheSpec, root first.
@@ -120,17 +127,24 @@ function defaultSearchDirs(): string[] {
  */
 export async function specFromFiles(
   rootPath: string,
-  searchDirs: string[] = defaultSearchDirs()
+  searchDirs: string[] = defaultSearchDirs(),
+  policy: SpecReadPolicy = {}
 ): Promise<ApalacheSpec> {
+  if (policy.maxSources !== undefined && (!Number.isSafeInteger(policy.maxSources) || policy.maxSources < 1)) {
+    throw new Error("source count limit must be a positive safe integer");
+  }
   const visited = new Set<string>();
   const deps: string[] = [];
 
   async function visit(path: string, isRoot: boolean): Promise<void> {
     const abs = await realpath(resolvePath(path));
     if (visited.has(abs)) return;
+    if (policy.maxSources !== undefined && visited.size >= policy.maxSources) {
+      throw new Error(`source closure exceeds ${policy.maxSources} modules`);
+    }
     visited.add(abs);
 
-    const text = await readFile(abs, "utf8");
+    const text = policy.readSource === undefined ? await readFile(abs, "utf8") : await policy.readSource(abs);
     const dir = dirname(abs);
     const refs = moduleRefs(text);
 

@@ -28,6 +28,8 @@ export interface SuiteModel<Port = NativeSuiteAdapter> {
   readonly schema: "mirrors.suite-model/v1";
   readonly nativeRepresentation: "mirrors.node-native/v1";
   readonly semanticDigest: string;
+  /** Trusted compiler workflow identity; emitted only for reviewed workflow locks. */
+  readonly provenanceDigest?: string;
   readonly targetProfile: "mirrorecma-async-v1";
   readonly stateComputerContractVersion: "mirrors.async-state-computer/v1";
   readonly descriptor: SemanticDescriptor;
@@ -86,6 +88,7 @@ export function defineSuite<Port>(input: {
       model.targetProfile !== "mirrorecma-async-v1" || model.stateComputerContractVersion !== "mirrors.async-state-computer/v1") {
     fail("unsupported suite model capability");
   }
+  if (model.provenanceDigest !== undefined && !/^[a-f0-9]{64}$/.test(model.provenanceDigest)) fail("invalid workflow provenance digest");
   const descriptor = decodeSemanticDescriptor(model.descriptor);
   const digest = semanticDescriptorDigest(descriptor);
   if (digest !== model.semanticDigest || digest !== model.metadata.semanticDigest || digest !== model.publicManifest.interfaceDigest) {

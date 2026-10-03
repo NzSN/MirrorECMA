@@ -8,6 +8,7 @@ import {
   type DiffHint,
   encodeClientMessage,
   encodeState,
+  encodeReportState,
   decodeMirrorMessage,
   asInt,
   asStr,
@@ -813,5 +814,80 @@ describe("validate + async job messages (golden wire shapes)", () => {
       jobId: "job-1",
       outcome: { validate: { invalid: "Invariant violated" } },
     });
+  });
+});
+
+
+describe("exact ITF marker shapes", () => {
+  function decodeField(raw: unknown): Value {
+    const message = decodeMirrorMessage(JSON.stringify({
+      proto_step: "initial_state", action: "Init", state: { field: raw },
+    }));
+    if (message.proto_step !== "initial_state") throw new Error("expected initial_state");
+    return message.state.field;
+  }
+  const seven: Value = { tag: "int", val: 7n };
+  const sequence: Value = { tag: "seq", val: [seven] };
+  const markers: [string, unknown, Value, Value][] = [
+    ["#bigint", "7", { tag: "str", val: "7" }, seven],
+    ["#set", [{ "#bigint": "7" }], sequence, { tag: "set", val: [seven] }],
+    ["#tup", [{ "#bigint": "7" }], sequence, { tag: "tuple", val: [seven] }],
+    ["#map", [["key", { "#bigint": "7" }]],
+      { tag: "seq", val: [{ tag: "seq", val: [{ tag: "str", val: "key" }, seven] }] },
+      { tag: "map", val: [[{ tag: "str", val: "key" }, seven]] }],
+    ["#unserializable", "opaque", { tag: "str", val: "opaque" },
+      { tag: "unserializable", val: "opaque" }],
+  ];
+  for (const [marker, raw, field, wrapped] of markers) {
+    it(`preserves ordinary records containing ${marker}`, () => {
+      expect(decodeField({ [marker]: raw, ordinary: true })).toEqual({
+        tag: "record", val: { [marker]: field, ordinary: { tag: "bool", val: true } },
+      });
+    });
+    it(`keeps exact ${marker} wrappers`, () => {
+      expect(decodeField({ [marker]: raw })).toEqual(wrapped);
+    });
+    it(`keeps wrong-type singleton ${marker} fields as records`, () => {
+      expect(decodeField({ [marker]: true })).toEqual({
+        tag: "record", val: { [marker]: { tag: "bool", val: true } },
+      });
+    });
+  }
+  it("recognizes only the exact tag/value variant shape", () => {
+    expect(decodeField({ tag: "Some", value: { "#bigint": "7" } })).toEqual({
+      tag: "variant", variantTag: "Some", value: seven,
+    });
+    expect(decodeField({ tag: "Some", value: { "#bigint": "7" }, ordinary: true })).toEqual({
+      tag: "record", val: {
+        tag: { tag: "str", val: "Some" }, value: seven,
+        ordinary: { tag: "bool", val: true },
+      },
+    });
+    expect(() => decodeField({ tag: 7, value: null })).toThrow();
+  });
+  it("still rejects malformed recognized bigint content", () => {
+    expect(() => decodeField({ "#bigint": "not-an-integer" })).toThrow();
+  });
+});
+
+describe("encodeReportState", () => {
+  it("encodes canonical arbitrary-precision report payloads rather than internal Value tags", () => {
+    const state: State = { count: { tag: "int", val: 1234567890123456789012345678901234567890n } };
+    expect(encodeReportState(state)).toBe(
+      '{"proto_step":"report_state","state":{"count":{"#bigint":"1234567890123456789012345678901234567890"}}}',
+    );
+  });
+
+  it("keeps ordinary marker-looking record fields and escapes payload newlines", () => {
+    const state: State = {
+      record: { tag: "record", val: { "#set": { tag: "seq", val: [] }, ordinary: { tag: "bool", val: true } } },
+      text: { tag: "str", val: "line\nend" },
+    };
+    const frame = encodeReportState(state);
+    expect(frame).not.toContain("\n");
+    expect(JSON.parse(frame)).toEqual({
+      proto_step: "report_state", state: { record: { "#set": [], ordinary: true }, text: "line\nend" },
+    });
+    expect(state.record).toEqual({ tag: "record", val: { "#set": { tag: "seq", val: [] }, ordinary: { tag: "bool", val: true } } });
   });
 });

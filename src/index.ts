@@ -233,6 +233,7 @@ export {
   type ExploreSessionDone,
   encodeClientMessage,
   encodeState,
+  encodeReportState,
   decodeMirrorMessage,
   asInt,
   asStr,
@@ -470,3 +471,5 @@ export {
   type LeaseReductionOptions,
   type LeaseReductionResult,
 } from "./lease-reduction.js";
+
+export { loadProjectedCorpus, ProjectedCorpusError, PROJECTED_CORPUS_LIMITS, type ProjectedCorpusOptions, type VerifiedProjectedCorpus } from "./projected-corpus.js";
