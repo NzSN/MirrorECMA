@@ -7,51 +7,13 @@
       "componentRef": {
         "componentId": "mirrorecma",
         "repository": "https://github.com/NzSN/MirrorECMA.git",
-        "revision": "c33d73922dd71f89462e2b071d0d8021b4911d6b",
+        "revision": "a03cf10a8787ff7691a4fd8b8f1013667501dfb7",
         "dirty": true,
         "dirtyContent": {
           "algorithm": "sha256",
-          "digest": "99daa3dabc7eeb87bf3ba5a87a4379aeaec975fe9f649cd6b67ecc090a5c7256",
+          "digest": "c5d2d14c61fa5549bb4de7b7824ecb64c75e36ec6d2e53f0bf74f88753c31fc6",
           "method": "git-diff-and-untracked-manifest-v1",
-          "includedPaths": [
-            "examples/lease-service/artifacts/bundle/.suite-bundle-generated.json",
-            "examples/lease-service/artifacts/bundle/LeaseServiceMirror.generated.ts",
-            "examples/persistent-transfer/artifacts/bundle/.suite-bundle-generated.json",
-            "examples/persistent-transfer/artifacts/bundle/PersistentTransferMirror.generated.ts",
-            "examples/work-queue/artifacts/bundle/.suite-bundle-generated.json",
-            "examples/work-queue/artifacts/bundle/WorkQueueMirror.generated.ts",
-            "src/index.ts",
-            "src/project.ts",
-            "src/projected-corpus.ts",
-            "src/protocol.ts",
-            "src/replay-core.ts",
-            "src/spec.ts",
-            "src/suite-definition.ts",
-            "src/suite-preflight.ts",
-            "test/fixtures/projected-corpus/ProjectedCells.lock.json",
-            "test/fixtures/projected-corpus/README.md",
-            "test/fixtures/projected-corpus/bundle/.model-interface-generated.json",
-            "test/fixtures/projected-corpus/bundle/.suite-bundle-generated.json",
-            "test/fixtures/projected-corpus/bundle/ProjectedCells.suite.ts",
-            "test/fixtures/projected-corpus/bundle/ProjectedCellsMirror.generated.ts",
-            "test/fixtures/projected-corpus/bundle/bundle-metadata.json",
-            "test/fixtures/projected-corpus/bundle/descriptor.json",
-            "test/fixtures/projected-corpus/bundle/public-manifest.json",
-            "test/fixtures/projected-corpus/corpus/3e2508fc27a1ad7cb30a0f3e0995b68c5f3343a6c3c14e68ee813840e5d36595.itf.json",
-            "test/fixtures/projected-corpus/corpus/3e2508fc27a1ad7cb30a0f3e0995b68c5f3343a6c3c14e68ee813840e5d36595.receipt.json",
-            "test/fixtures/projected-corpus/corpus/48b679c8f636978f555b47a343c51fb8802f029d886d1d21cbe359dc447c4ac5.itf.json",
-            "test/fixtures/projected-corpus/corpus/48b679c8f636978f555b47a343c51fb8802f029d886d1d21cbe359dc447c4ac5.receipt.json",
-            "test/fixtures/projected-corpus/corpus/manifest.json",
-            "test/fixtures/projected-corpus/corpus/projection.json",
-            "test/fixtures/projected-corpus/sealed/contract.json",
-            "test/fixtures/projected-corpus/sealed/proposal.json",
-            "test/fixtures/projected-corpus/sealed/review-receipt.json",
-            "test/fixtures/projected-corpus/sealed/review.json",
-            "test/fixtures/projected-corpus/source/test/fixtures/model-interface/projected-cells/ProjectedCells.tla",
-            "test/projected-corpus.test.ts",
-            "test/protocol.test.ts",
-            "test/workflow-preflight.test.ts"
-          ],
+          "includedPaths": [],
           "excludedPaths": [
             {
               "path": ".projectile-cache.eld",
@@ -171,7 +133,7 @@
   "combinations": [],
   "extensions": {
     "org.nzsn.snapshot": {
-      "capturedAt": "2026-10-03T08:33:31Z",
+      "capturedAt": "2026-10-03T14:28:25Z",
       "provisional": true
     }
   }
