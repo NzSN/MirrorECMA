@@ -908,3 +908,9 @@ The root cause should be addressed in MirrorECMA's build configuration:
 either compile to ESM output (e.g. set `"module": "es2022"` in tsconfig) or
 remove `"type": "module"` from the package.json so the published package is
 recognised as CommonJS.
+
+## Deterministic scheduling
+
+Experimental cooperative scheduling, generated replay integration and finite
+exploration are documented in [deterministic scheduling](docs/deterministic-scheduling.md).
+Concrete acceptance remains tied to the selected artifacts and application profile.

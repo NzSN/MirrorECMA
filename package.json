@@ -7,14 +7,23 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": { "mirrorecma": "./dist/cli.js" },
+  "bin": {
+    "mirrorecma": "./dist/cli.js"
+  },
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./project": { "types": "./dist/project.d.ts", "import": "./dist/project.js" },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./project": {
+      "types": "./dist/project.d.ts",
+      "import": "./dist/project.js"
+    },
     "./*": "./*"
   },
   "files": [
-    "dist"
+    "dist",
+    "docs/deterministic-scheduling.md"
   ],
   "scripts": {
     "prepare": "node scripts/clean-dist.mjs && tsc",
@@ -45,7 +54,8 @@
     "check:installed-suite": "node scripts/check-installed-suite.mjs",
     "build:application-validation": "pnpm run build && tsc -p tsconfig.examples.json && tsc -p tsconfig.application-validation.json",
     "example:transfer:acceptance": "pnpm run build:application-validation && node examples/application-validation/run.mjs persistent-transfer",
-    "example:lease:acceptance": "pnpm run build:application-validation && node examples/application-validation/run.mjs lease-service"
+    "example:lease:acceptance": "pnpm run build:application-validation && node examples/application-validation/run.mjs lease-service",
+    "test:schedule": "pnpm run build && node --test test/schedule/*.test.mjs"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

@@ -51,6 +51,7 @@ pnpm run check
 pnpm run check:model-interface
 pnpm run check:examples
 pnpm run test --runInBand --no-watchman
+pnpm run test:schedule
 (cd "$MIRRORS_ROOT" && lake build mirror model_interface_gen)
 if "$live"; then
   pnpm run smoke:generated-counter --live

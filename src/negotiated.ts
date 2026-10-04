@@ -77,6 +77,7 @@ export const MIRRORECMA_TARGET_PROFILE = "mirrorecma-v1" as const;
 export const STATE_COMPUTER_CONTRACT_VERSION = "mirrors.state-computer/v1" as const;
 export const ASYNC_STATE_COMPUTER_CONTRACT_VERSION = "mirrors.async-state-computer/v1" as const;
 export const MIRRORECMA_ASYNC_TARGET_PROFILE = "mirrorecma-async-v1" as const;
+export const MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE = "mirrorecma-async-v2" as const;
 
 
 export {
@@ -215,7 +216,8 @@ async function resolveTransport(target: string | Transport): Promise<Transport> 
 
 function selectedKey(selection: CompiledAdapterSelection): CompiledAdapterKey {
   if (selection.targetProfile !== MIRRORECMA_TARGET_PROFILE &&
-      selection.targetProfile !== MIRRORECMA_ASYNC_TARGET_PROFILE) {
+      selection.targetProfile !== MIRRORECMA_ASYNC_TARGET_PROFILE &&
+      selection.targetProfile !== MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE) {
     throw runnerError(
       "target_profile_mismatch",
       `negotiated runner requires target profile ${MIRRORECMA_TARGET_PROFILE}`,
@@ -223,7 +225,7 @@ function selectedKey(selection: CompiledAdapterSelection): CompiledAdapterKey {
   }
   if ((selection.stateComputerContractVersion !== STATE_COMPUTER_CONTRACT_VERSION &&
        selection.stateComputerContractVersion !== ASYNC_STATE_COMPUTER_CONTRACT_VERSION) ||
-      (selection.targetProfile === MIRRORECMA_ASYNC_TARGET_PROFILE &&
+      ((selection.targetProfile === MIRRORECMA_ASYNC_TARGET_PROFILE || selection.targetProfile === MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE) &&
        selection.stateComputerContractVersion !== ASYNC_STATE_COMPUTER_CONTRACT_VERSION)) {
     throw runnerError(
       "state_computer_contract_mismatch",
@@ -239,7 +241,8 @@ function selectedKey(selection: CompiledAdapterSelection): CompiledAdapterKey {
 }
 
 function selectedAsyncKey(selection: AsyncCompiledExecutionSelection): CompiledAdapterKey {
-  if (selection.targetProfile !== MIRRORECMA_ASYNC_TARGET_PROFILE) {
+  if (selection.targetProfile !== MIRRORECMA_ASYNC_TARGET_PROFILE &&
+      selection.targetProfile !== MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE) {
     throw runnerError(
       "target_profile_mismatch",
       `async negotiated runner requires target profile ${MIRRORECMA_ASYNC_TARGET_PROFILE}`,

@@ -129,6 +129,7 @@ export {
 export {
   MIRRORECMA_TARGET_PROFILE,
   MIRRORECMA_ASYNC_TARGET_PROFILE,
+  MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE,
   STATE_COMPUTER_CONTRACT_VERSION,
   ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
   NegotiatedRunnerError,
@@ -473,3 +474,8 @@ export {
 } from "./lease-reduction.js";
 
 export { loadProjectedCorpus, ProjectedCorpusError, PROJECTED_CORPUS_LIMITS, type ProjectedCorpusOptions, type VerifiedProjectedCorpus } from "./projected-corpus.js";
+
+export * from "./schedule.js";
+export * from "./schedule-binding.js";
+export * from "./schedule-exploration.js";
+export { SCHEDULING_CAPABILITIES } from "./scheduling-capabilities.js";

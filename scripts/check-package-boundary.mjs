@@ -1,9 +1,18 @@
 import assert from 'node:assert/strict';
+import {gateDependencies} from './import-boundary.mjs';
 import {spawnSync} from 'node:child_process';
 import {copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+
+assert.deepEqual(gateDependencies('type PackageRole = "mirrorecma" | "mirrorgate" | "mirrorgate-mirrorecma";'), []);
+for (const source of [
+  'import {x} from "mirrorgate";', 'export {x} from "mirrorgate-mirrorecma/legacy";',
+  'await import("mirrorgate");', 'require("mirrorgate");', 'require.resolve("mirrorgate");',
+  'type T = import("mirrorgate").T;', 'import T = require("mirrorgate");',
+  'declare module "mirrorgate" {}',
+]) assert.equal(gateDependencies(source).length, 1, source);
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const mirror = process.env.MIRROR_BIN;
@@ -38,7 +47,7 @@ try {
     if (!/\.(?:js|d\.ts)$/.test(name)) continue;
     const text = readFileSync(name, 'utf8');
     assert(!/SandboxGateEndpoint|SandboxSubmission|SandboxEvaluationPlan|TrustedGateLauncher/.test(text), name);
-    assert(!/["']mirrorgate(?:-mirrorecma)?(?:["'/])/.test(text), name);
+    assert.deepEqual(gateDependencies(text, name), [], `Gate dependency in ${name}`);
   }
   writeFileSync(join(scratch, 'package.json'), '{"private":true,"type":"module"}\n');
   copy('examples/mbt-counter/suite.ts', true);
