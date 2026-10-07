@@ -18,10 +18,17 @@ distinguishes those results from earlier workflow gates, lists skipped tiers,
 and records retained evidence and temporary-log availability. Publication and
 human usability remain separate claims.
 
+[Current framework status](../../Mirrors/Docs/current-status.md) records frozen
+October 7 qualification and the separate broader M4/platform tracks. Current
+source heads do not substitute for its pinned compatibility clients. DPM is
+cooperative Node-worker control, independent of Gate isolation and server jobs.
+
 ## Choose an entry point
 
 | Need | Read | Status |
 | --- | --- | --- |
+| Schedule instrumented Node workers under MBT | [Deterministic scheduling](deterministic-scheduling.md) | DPM-0–DPM-5 accepted for declared worker checkpoints; exact package/native record linked |
+| Compare interface locks before migration | [Mirrors lock comparison](../../Mirrors/Docs/model-interface-compiler/lock-migration.md) | Read-only validated semantic/provenance differences |
 | Define and run a new application suite | [Application suites](application-suites.md) | Default Node application API: immutable definition, checked corpus, matched acceptance and cleanup |
 | Configure installed tools and run project doctor/check/replay | [Project tools](project-tools.md) | Declarative loader, CLI and installed acceptance gate |
 | See complete local and Gate suite examples | [Application validation](../examples/application-validation/README.md) | WorkQueue, transfer and lease use generated suite bundles and `runSuite` / `evaluateSuite` |

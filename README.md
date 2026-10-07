@@ -4,6 +4,14 @@ Compare language and worker capabilities in the
 [framework map](../Mirrors/Docs/framework-map.md). MirrorECMA remains the Node
 application client; native C++/Rust Gate evaluators do not require it at runtime.
 
+[Current framework status](../Mirrors/Docs/current-status.md) separates the
+qualified October 7 M5 profile from individual client/pilot acceptance. The
+[Node-worker scheduler](docs/deterministic-scheduling.md) implements DPM-0–DPM-5
+for its declared profile, with application-owned hooks and observation. Exact
+source-hidden package/native results are in [language acceptance](../Mirrors/Plans/dpm-languages-evidence-20261005/README.md).
+Explicit `mirrorecma-async-v2` adds integer-key maps for lower-level generated
+replay; `mirrorecma` project/suite bundles retain `mirrorecma-async-v1`.
+
 For the complete framework map, start with the [application integration guide](../Mirrors/Docs/application-integration-guide.md).
 For remote model servers and concurrent jobs, see [remote server usage](docs/remote-server.md).
 

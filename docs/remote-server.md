@@ -1,5 +1,12 @@
 # Connecting to a remote Mirrors server
 
+[Current framework status](../../Mirrors/Docs/current-status.md) records the
+October 7 owned Windows oracle topology and exact scoped qualification. Verify
+fresh endpoint/process/runtime/certificate identities before use; this guide is
+not a live-health statement. The configured certificate record was valid through
+2026-10-08T02:47:53Z. No local Apalache/TLC runs on the selected coordinator;
+Windows service-manager and broader M4/Gate platform acceptance stay separate.
+
 For server installation, certificates, Windows service operation and the standalone
 validation CLI, read the [Mirrors remote server guide](../../Mirrors/Docs/remote-server-guide.md).
 For application integration across the framework, start with the

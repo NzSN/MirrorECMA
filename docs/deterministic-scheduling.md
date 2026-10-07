@@ -1,5 +1,12 @@
 # Deterministic scheduling (experimental)
 
+DPM-0–DPM-5 are accepted for the declared Node-worker profile. The
+[language acceptance record](../../Mirrors/Plans/dpm-languages-evidence-20261005/README.md)
+binds source/package/native identities; [current framework status](../../Mirrors/Docs/current-status.md)
+keeps M5 compatibility, broader M4 and package publication separate. Each
+installed language consumer passes 60 replay cases, 11 exploration checks,
+14 native runs and three mapping-refusal controls for its exact retained scope.
+
 MirrorECMA owns a real Node worker-thread coordinator. The first profile is
 `mirrorecma.worker-checkpoints/v1`. It controls intervals between declared
 checkpoints; it does not intercept arbitrary promises, browser Web Workers,
