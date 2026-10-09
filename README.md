@@ -12,6 +12,11 @@ source-hidden package/native results are in [language acceptance](../Mirrors/Pla
 Explicit `mirrorecma-async-v2` adds integer-key maps for lower-level generated
 replay; `mirrorecma` project/suite bundles retain `mirrorecma-async-v1`.
 
+The newer [generated DPM kit and receipt timeline](../Mirrors/Docs/dpm-usability-design.md)
+have source acceptance only. They prepare explicit mapping helpers and render
+actual receipts; application hooks/observations and the frozen installed/native
+acceptance remain separate. F3–F5 are approved follow-ons.
+
 For the complete framework map, start with the [application integration guide](../Mirrors/Docs/application-integration-guide.md).
 For remote model servers and concurrent jobs, see [remote server usage](docs/remote-server.md).
 
