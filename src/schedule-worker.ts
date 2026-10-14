@@ -14,11 +14,12 @@ const boot = workerData as Boot, port = boot.port;
 const abort = new AbortController();
 let waiter: {resolve():void;reject(error:Error):void}|undefined;
 let rpc: {id:number;resolve(value:ScheduleJson):void;reject(error:Error):void}|undefined;
-let nextRequest=0, permitted=false, finished=false;
+let nextRequest=0, permitted=false, finished=false, awaitingCompletionAck=false;
 const stopped=()=>new Error("scheduled worker cancelled");
 port.on("message", (message: {kind:string;id?:number;value?:ScheduleJson;error?:string})=>{
   if(message.kind==="cancel") {abort.abort();waiter?.reject(stopped());waiter=undefined;rpc?.reject(stopped());rpc=undefined;}
   else if(message.kind==="permit") {if(abort.signal.aborted)return;if(!waiter)throw new Error("permit outside parked worker");permitted=true;const ready=waiter;waiter=undefined;ready.resolve();}
+  else if(message.kind==="completion-ack") {if(!finished||!awaitingCompletionAck)throw new Error("unexpected completion acknowledgement");awaitingCompletionAck=false;port.unref();}
   else if(message.kind==="reply") {if(!rpc || rpc.id!==message.id){if(abort.signal.aborted)return;throw new Error("unexpected worker RPC reply");}const pending=rpc;rpc=undefined;if(message.error)pending.reject(new Error(message.error));else pending.resolve(message.value!);}
   else throw new Error("unknown worker control message");
 });
@@ -38,13 +39,13 @@ async function run():Promise<void>{
   await module.run(boot.data,checkpoint);
   if(waiter||rpc)throw new Error("worker completed with an unawaited checkpoint or request");
 }
-void run().then(()=>{finished=true;port.postMessage({kind:"finished"});},error=>{
+void run().then(()=>{finished=true;awaitingCompletionAck=true;port.postMessage({kind:"finished"});},error=>{
   finished=true;
   if(!abort.signal.aborted){port.postMessage({kind:"failure",error:error instanceof Error?error.message:String(error)});process.exitCode=1;}
-  else port.postMessage({kind:"finished"});
+  else {awaitingCompletionAck=true;port.postMessage({kind:"finished"});}
 }).finally(()=>{
-  // Release only the bootstrap channel's event-loop reference. The controller
-  // retains the Worker and waits for its real exit; late application hooks still
-  // report a failure while other application handles keep this worker alive.
-  port.unref();
+  // A separate MessagePort can deliver completion after the Worker exit event.
+  // Keep it referenced until acknowledged, then wait for real application exit.
+  // Failed runs need no acknowledgement; the nonzero exit remains evidence.
+  if(!awaitingCompletionAck)port.unref();
 });

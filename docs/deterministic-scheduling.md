@@ -29,9 +29,9 @@ compiler. Synchronous ECMA and Lean have no accepted DPM execution profile.
 The read-only `timeline.py --receipt FILE --format text|json` renders actual
 SDK comparison/binding/checkpoint receipts with model outcome and cleanup
 separate. Its [source acceptance](../../Mirrors/Plans/dpm-usability-evidence-20261007/README.md)
-does not renew the frozen SDK/native/package qualification above. Schedule
-reduction, an installed cross-language CLI and synchronization wrappers
-remain approved follow-ons.
+does not renew the frozen SDK/native/package qualification above. The October 13
+installed CLI/reducer and separate C++ controlled-resource prototype have their
+own bounded acceptance, described below.
 
 ## Workers and the controller
 
@@ -144,3 +144,18 @@ package. Concrete qualification is a separate hash-bound observation. Run
 `pnpm run test:schedule` for real-worker regressions. Mirrors' cross-client gate
 builds packed consumers with source checkouts hidden, then performs generated
 replay, finite coverage and the bounded native pilot from admitted artifacts.
+
+## Installed orchestration and reduction (2026-10-13)
+
+The [Mirrors DPM CLI](../../Mirrors/Docs/dpm-cli-guide.md) admits an application
+project and its exact artifact/oracle closure before replay. It supplies doctor,
+replay, finite exploration, reduction and receipt reporting around the existing
+SDK runner. Reduction searches an explicit finite oracle-backed catalog,
+preserves complete actor-local chains and freshly replays the best same failure.
+[October 13 acceptance](../../Mirrors/Plans/dpm-f3-f5-evidence-20261013/README.md)
+records fresh source-hidden offline consumers and exact limits; it does not
+extend earlier M5 qualification or establish global schedule minimality.
+
+Worker completion uses a private acknowledgement before releasing the bootstrap
+channel reference. The controller still waits for real worker exit and rejects
+late application hooks; a delayed completion notification cannot be lost at exit.

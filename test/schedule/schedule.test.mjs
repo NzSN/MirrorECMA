@@ -76,3 +76,16 @@ test('a late hook after callback return cannot be silently credited as completio
  const f=fixture('late-hook');f.adapter.actors=f.adapter.actors.slice(0,1);const factory=f.adapter.factory;f.adapter.factory=()=>{const p=factory();p.workers=p.workers.slice(0,1);return p;};
  const run=await runWorkerSchedule(plan(['a:$done']),f.adapter,policy);assert.equal(run.report().outcome,'application_failed');assert.equal(run.receipt().passed,false);assert.equal(run.report().cleanup,'confirmed');
 });
+
+// The private channel and Worker exit are independent delivery streams. Delay
+// the real terminal notification to exercise exit-before-message ordering.
+test('terminal acknowledgement survives delayed private-channel delivery',async()=>{
+ const f=fixture('early');f.adapter.actors=f.adapter.actors.slice(0,1);
+ const factory=f.adapter.factory;f.adapter.factory=()=>{const p=factory();p.workers=p.workers.slice(0,1);return p;};
+ const run=await startWorkerSchedule(plan(['a:$done']),f.adapter,policy);
+ const deliver=run.message.bind(run);let notifications=0;
+ run.message=(actor,message)=>{if(message.kind==='finished'){notifications++;setTimeout(()=>deliver(actor,message),30);}else deliver(actor,message);};
+ await run.advance(step('a:$done'));
+ assert.equal(notifications,1);assert.equal(run.receipt().passed,true);
+ assert.equal(run.report().cleanup,'confirmed');assert.equal(f.stats.teardowns,1);
+});

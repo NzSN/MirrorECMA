@@ -112,7 +112,7 @@ export class ScheduleExecution {
         actor.checkpoint=message.checkpoint;actor.phase="parked";
       }else if(message.kind==="finished"){
         if(!this.stopped&&(actor.phase!=="running"||actor.requestPending))throw new Error("worker completed outside owned interval");
-        actor.reportedFinish=true;actor.phase="finishing";actor.checkpoint=SCHEDULE_COMPLETION;
+        actor.reportedFinish=true;actor.port?.postMessage({kind:"completion-ack"});actor.phase="finishing";actor.checkpoint=SCHEDULE_COMPLETION;
       }else if(message.kind==="failure"){if(!this.stopped)this.fail("application_failed",typeof message.error==="string"?message.error:"worker failure");}
       else if(message.kind==="request"){
         if(this.stopped)return;
