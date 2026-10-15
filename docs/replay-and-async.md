@@ -14,6 +14,26 @@ These are client-local capabilities. They preserve ordinary `register`,
 descriptor. Server asynchronous jobs through `Connection` remain a separate
 protocol capability.
 
+Compiled selections admit only these target/computer contract pairs, including
+callback runners without an explicit `execution` field:
+
+| Generated target | Computer contract |
+| --- | --- |
+| `mirrorecma-v1` | `mirrors.state-computer/v1` |
+| `mirrorecma-async-v1` | `mirrors.async-state-computer/v1` |
+| `mirrorecma-async-v2` | `mirrors.async-state-computer/v1` |
+
+Explicit `execution: "sync"` selects the synchronous pair; `execution: "async"`
+selects an async pair and requires negotiation policy `require`. An incompatible
+contract fails with `state_computer_contract_mismatch`; an unsupported target or
+execution/target mismatch fails with `target_profile_mismatch`. These checks
+precede adapter lookup, transport acquisition, and factory construction. Dynamic
+descriptor selections remain target-neutral; their acquired registry scope
+chooses synchronous or asynchronous execution.
+
+For callers affected by the stricter admission rule, see the
+[client admission release notes](client-admission-release-notes.md).
+
 For externally authored or isolated implementations, see the accepted
 [implementation boundary](implementation-boundary-design.md). MirrorECMA keeps
 generic negotiation/replay/binding semantics; the coordinating agent talks to

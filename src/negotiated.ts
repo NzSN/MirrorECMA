@@ -214,44 +214,29 @@ async function resolveTransport(target: string | Transport): Promise<Transport> 
   return t;
 }
 
-function selectedKey(selection: CompiledAdapterSelection): CompiledAdapterKey {
-  if (selection.targetProfile !== MIRRORECMA_TARGET_PROFILE &&
-      selection.targetProfile !== MIRRORECMA_ASYNC_TARGET_PROFILE &&
-      selection.targetProfile !== MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE) {
+/** Admit the compiled target/contract pair before registry or transport effects. */
+function selectedKey(
+  selection: Pick<CompiledAdapterSelection,
+    "metadata" | "adapterId" | "targetProfile" | "stateComputerContractVersion">,
+  execution?: "sync" | "async",
+): CompiledAdapterKey {
+  const syncTarget = selection.targetProfile === MIRRORECMA_TARGET_PROFILE;
+  const asyncTarget = selection.targetProfile === MIRRORECMA_ASYNC_TARGET_PROFILE ||
+    selection.targetProfile === MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE;
+  if ((!syncTarget && !asyncTarget) ||
+      (execution === "sync" && !syncTarget) ||
+      (execution === "async" && !asyncTarget)) {
     throw runnerError(
       "target_profile_mismatch",
-      `negotiated runner requires target profile ${MIRRORECMA_TARGET_PROFILE}`,
+      `unsupported target profile ${selection.targetProfile} for ${execution ?? "callback"} execution`,
     );
   }
-  if ((selection.stateComputerContractVersion !== STATE_COMPUTER_CONTRACT_VERSION &&
-       selection.stateComputerContractVersion !== ASYNC_STATE_COMPUTER_CONTRACT_VERSION) ||
-      ((selection.targetProfile === MIRRORECMA_ASYNC_TARGET_PROFILE || selection.targetProfile === MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE) &&
-       selection.stateComputerContractVersion !== ASYNC_STATE_COMPUTER_CONTRACT_VERSION)) {
+  const expectedContract = syncTarget
+    ? STATE_COMPUTER_CONTRACT_VERSION : ASYNC_STATE_COMPUTER_CONTRACT_VERSION;
+  if (selection.stateComputerContractVersion !== expectedContract) {
     throw runnerError(
       "state_computer_contract_mismatch",
-      `negotiated runner requires StateComputer contract ${STATE_COMPUTER_CONTRACT_VERSION}`,
-    );
-  }
-  return {
-    semanticDigest: semanticDigestFromHex(selection.metadata.semanticDigest),
-    adapterId: selection.adapterId,
-    targetProfile: selection.targetProfile,
-    stateComputerContractVersion: selection.stateComputerContractVersion,
-  };
-}
-
-function selectedAsyncKey(selection: AsyncCompiledExecutionSelection): CompiledAdapterKey {
-  if (selection.targetProfile !== MIRRORECMA_ASYNC_TARGET_PROFILE &&
-      selection.targetProfile !== MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE) {
-    throw runnerError(
-      "target_profile_mismatch",
-      `async negotiated runner requires target profile ${MIRRORECMA_ASYNC_TARGET_PROFILE}`,
-    );
-  }
-  if (selection.stateComputerContractVersion !== ASYNC_STATE_COMPUTER_CONTRACT_VERSION) {
-    throw runnerError(
-      "state_computer_contract_mismatch",
-      `async negotiated runner requires StateComputer contract ${ASYNC_STATE_COMPUTER_CONTRACT_VERSION}`,
+      `target profile ${selection.targetProfile} requires StateComputer contract ${expectedContract}`,
     );
   }
   return Object.freeze({
@@ -288,11 +273,12 @@ type PreparedSelection = PreparedAdapter | PreparedDynamic;
 function prepareAdapter<B extends CallbackLocalBinding>(
   selection: CompiledAdapterSelection<B>,
   policy: NegotiationPolicy,
+  execution?: "sync",
 ): PreparedAdapter<B> {
   if (selection.request !== undefined && selection.request !== "verify") {
     throw runnerError("negotiation_status_unexpected", "compiled selection requires verify mode");
   }
-  const key = selectedKey(selection);
+  const key = selectedKey(selection, execution);
   return Object.freeze({
     kind: "compiled" as const,
     key: Object.freeze({ ...key }),
@@ -703,7 +689,7 @@ function prepareAsyncAdapter(
   if (selection.policy !== undefined && selection.policy !== "require") {
     throw runnerError("negotiation_status_unexpected", "async execution requires negotiation policy require");
   }
-  const key = selectedAsyncKey(selection);
+  const key = selectedKey(selection, "async");
   return Object.freeze({ key, factory: selection.registry.resolve(key) });
 }
 
@@ -812,18 +798,10 @@ async function runCompiledReportReplay(
   selection: CompiledExecutionSelection,
   options: NegotiatedReportRunOptions,
 ): Promise<CompiledReplayReport> {
-  if (selection.execution === "sync") {
-    if (selection.targetProfile !== MIRRORECMA_TARGET_PROFILE) {
-      throw runnerError("target_profile_mismatch", "sync execution requires mirrorecma-v1");
-    }
-    if (selection.stateComputerContractVersion !== STATE_COMPUTER_CONTRACT_VERSION) {
-      throw runnerError("state_computer_contract_mismatch", "sync execution requires mirrors.state-computer/v1");
-    }
-  }
   const deadlines = normalizeReplayDeadlines(options.deadlines);
   throwIfReplayCancelled(options.signal);
   const syncPrepared = selection.execution === "sync"
-    ? prepareAdapter(selection, selection.policy ?? "require")
+    ? prepareAdapter(selection, selection.policy ?? "require", "sync")
     : undefined;
   const asyncPrepared = selection.execution === "async"
     ? prepareAsyncAdapter(selection)

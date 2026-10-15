@@ -52,6 +52,16 @@ jest.unstable_mockModule("node:child_process", () => ({
 }));
 
 const { runClientExplore, runClientGenTraces } = await import("../src/client.js");
+const {
+  CompiledAdapterRegistry,
+  MIRRORECMA_TARGET_PROFILE,
+  ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
+  runClientNegotiated,
+  runClientNegotiatedWithReport,
+  runClientWithTracesNegotiated,
+  runClientWithTracesNegotiatedWithReport,
+} = await import("../src/negotiated.js");
+const { semanticDigestFromHex } = await import("../src/model-interface.js");
 
 describe("spawn allocation on registration", () => {
   jest.setTimeout(20_000);
@@ -75,6 +85,38 @@ describe("spawn allocation on registration", () => {
       }),
     ).rejects.toThrow(/UTF-8 bytes/);
     expect(spawnCalls).toHaveLength(0);
+  });
+
+  it("allocates no child for an invalid compiled pair across callback and explicit sync entry points", async () => {
+    const digestHex = "a".repeat(64);
+    const key = {
+      semanticDigest: semanticDigestFromHex(digestHex), adapterId: "counter",
+      targetProfile: MIRRORECMA_TARGET_PROFILE,
+      stateComputerContractVersion: ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
+    };
+    const selection = {
+      ...key,
+      metadata: { semanticDigest: digestHex, contract: {
+        schema: "mirrors.model-interface/v1" as const, interfaceVersion: "1.0.0",
+        model: { module: "Counter", source: "Counter.tla" },
+        wire: { actionVariable: "action_taken", parameterVariable: null },
+        initializers: [], actions: [], observations: [],
+      } },
+      registry: new CompiledAdapterRegistry([{ key, factory: () => { throw new Error("must not construct binding"); } }]),
+    };
+    const explicitSync = { ...selection, execution: "sync" as const };
+    const calls = [
+      () => runClientNegotiated("mirror-bin", apalacheConfig, traceConfig, selection),
+      () => runClientNegotiatedWithReport("mirror-bin", apalacheConfig, traceConfig, selection),
+      () => runClientWithTracesNegotiated("mirror-bin", apalacheConfig, [], selection),
+      () => runClientWithTracesNegotiatedWithReport("mirror-bin", apalacheConfig, [], selection),
+      () => runClientNegotiatedWithReport("mirror-bin", apalacheConfig, traceConfig, explicitSync),
+      () => runClientWithTracesNegotiatedWithReport("mirror-bin", apalacheConfig, [], explicitSync),
+    ];
+    for (const run of calls) {
+      await expect(run()).rejects.toMatchObject({ code: "state_computer_contract_mismatch" });
+      expect(spawnCalls).toHaveLength(0);
+    }
   });
 
   it("still allocates and closes one child for an in-limit registration", async () => {

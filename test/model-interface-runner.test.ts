@@ -8,6 +8,7 @@ import {
   ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
   MIRRORECMA_ASYNC_TARGET_PROFILE,
   runClientNegotiated,
+  runClientNegotiatedWithReport,
   runClientWithTracesNegotiated,
   runClientWithTracesNegotiatedWithReport,
   type AdapterFactory,
@@ -16,6 +17,7 @@ import {
   type DynamicHandlerFactorySelection,
   type LocalBinding,
 } from "../src/client.js";
+import { MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE } from "../src/negotiated.js";
 import {
   canonicalSemanticDescriptorBytes,
   decodeSemanticDescriptor,
@@ -177,14 +179,16 @@ function selection(
     configError?: Error;
     disposeError?: Error;
     bindingDigest?: typeof DIGEST;
+    targetProfile?: string;
+    stateComputerContractVersion?: string;
   } = {},
 ): CompiledAdapterSelection {
   const registry = new CompiledAdapterRegistry([{
     key: {
       semanticDigest: DIGEST,
       adapterId: "counter",
-      targetProfile: MIRRORECMA_TARGET_PROFILE,
-      stateComputerContractVersion: STATE_COMPUTER_CONTRACT_VERSION,
+      targetProfile: options.targetProfile ?? MIRRORECMA_TARGET_PROFILE,
+      stateComputerContractVersion: options.stateComputerContractVersion ?? STATE_COMPUTER_CONTRACT_VERSION,
     },
     factory: () => {
       counters.factory += 1;
@@ -209,8 +213,8 @@ function selection(
   return {
     metadata: METADATA,
     adapterId: "counter",
-    targetProfile: MIRRORECMA_TARGET_PROFILE,
-    stateComputerContractVersion: STATE_COMPUTER_CONTRACT_VERSION,
+    targetProfile: options.targetProfile ?? MIRRORECMA_TARGET_PROFILE,
+    stateComputerContractVersion: options.stateComputerContractVersion ?? STATE_COMPUTER_CONTRACT_VERSION,
     registry,
     policy: options.policy,
     fallbackFactory: options.fallbackFactory,
@@ -364,7 +368,7 @@ describe("negotiated model-interface runner", () => {
     },
   );
 
-  it.each([MIRRORECMA_TARGET_PROFILE, MIRRORECMA_ASYNC_TARGET_PROFILE])(
+  it.each([MIRRORECMA_ASYNC_TARGET_PROFILE, MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE])(
     "awaits explicitly registered async local computers for %s and returns identity", async (targetProfile) => {
       const calls = counters();
       const selected = selection(calls);
@@ -372,16 +376,21 @@ describe("negotiated model-interface runner", () => {
         stateComputerContractVersion: ASYNC_STATE_COMPUTER_CONTRACT_VERSION };
       const events: string[] = [];
       const asyncSelection: CompiledAdapterSelection = { ...selected, ...key,
-        registry: new CompiledAdapterRegistry([{ key, factory: () => ({
-          semanticDigest: DIGEST,
-          computer: async (_action, _params, _prev, context) => {
-            events.push(`action:${context.traceIndex}:${context.stateIndex}`);
-            await Promise.resolve();
-            events.push("observed");
-            return { count: { tag: "int", val: 0n } };
-          },
-          assertCompatibleConfig: () => {}, dispose: () => { events.push("disposed"); },
-        }) }]),
+        registry: new CompiledAdapterRegistry([{ key, factory: () => {
+          calls.factory += 1;
+          return {
+            semanticDigest: DIGEST,
+            computer: async (_action, _params, _prev, context) => {
+              calls.computer += 1;
+              events.push(`action:${context.traceIndex}:${context.stateIndex}`);
+              await Promise.resolve();
+              events.push("observed");
+              return { count: { tag: "int", val: 0n } };
+            },
+            assertCompatibleConfig: () => { calls.config += 1; },
+            dispose: () => { calls.dispose += 1; events.push("disposed"); },
+          };
+        } }]),
       };
       const transport = new ScriptedTransport([specValidated(),
         JSON.stringify({ proto_step: "initial_state", action: "init", state: {} }),
@@ -389,9 +398,47 @@ describe("negotiated model-interface runner", () => {
       const report = await runClientWithTracesNegotiatedWithReport(transport, CFG, [], asyncSelection);
       expect(report).toMatchObject({ interfaceDigest: DIGEST, statesMatched: 1 });
       expect(events).toEqual(["action:1:0", "observed", "disposed"]);
+      expect(calls).toEqual({ factory: 1, computer: 1, dispose: 1, config: 1 });
       expect(transport.closes).toBe(1);
     },
   );
+
+  it.each([
+    [MIRRORECMA_TARGET_PROFILE, ASYNC_STATE_COMPUTER_CONTRACT_VERSION, "state_computer_contract_mismatch"],
+    [MIRRORECMA_TARGET_PROFILE, "unknown", "state_computer_contract_mismatch"],
+    [MIRRORECMA_ASYNC_TARGET_PROFILE, STATE_COMPUTER_CONTRACT_VERSION, "state_computer_contract_mismatch"],
+    [MIRRORECMA_ASYNC_TARGET_PROFILE, "unknown", "state_computer_contract_mismatch"],
+    [MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE, STATE_COMPUTER_CONTRACT_VERSION, "state_computer_contract_mismatch"],
+    [MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE, "unknown", "state_computer_contract_mismatch"],
+    ["unknown", STATE_COMPUTER_CONTRACT_VERSION, "target_profile_mismatch"],
+  ])("rejects callback pair %s / %s before acquiring any resource", async (targetProfile, contract, code) => {
+    const entries: Array<(t: Transport, selected: CompiledAdapterSelection) => Promise<unknown>> = [
+      (t, selected) => runClientNegotiated(t, CFG, { numTraces: 1 }, selected),
+      (t, selected) => runClientNegotiatedWithReport(t, CFG, { numTraces: 1 }, selected),
+      (t, selected) => runClientWithTracesNegotiated(t, CFG, [], selected),
+      (t, selected) => runClientWithTracesNegotiatedWithReport(t, CFG, [], selected),
+    ];
+    for (const run of entries) {
+      const calls = counters();
+      const effects = { registry: 0, ready: 0, iterator: 0, fallback: 0 };
+      // Deliberately register the exact invalid key: digest/adapter lookup cannot authorize it.
+      const selected = selection(calls, {
+        targetProfile, stateComputerContractVersion: contract, policy: "prefer",
+        fallbackFactory: () => { effects.fallback += 1; throw new Error("must not acquire fallback"); },
+      });
+      const resolve = selected.registry.resolve.bind(selected.registry);
+      selected.registry.resolve = (key) => { effects.registry += 1; return resolve(key); };
+      const transport = new ScriptedTransport([]);
+      Object.defineProperty(transport, "ready", { get: () => { effects.ready += 1; return Promise.resolve(); } });
+      transport[Symbol.asyncIterator] = () => { effects.iterator += 1; throw new Error("must not acquire iterator"); };
+
+      await expect(run(transport, selected)).rejects.toMatchObject({ code });
+      expect(calls).toEqual({ factory: 0, computer: 0, dispose: 0, config: 0 });
+      expect(effects).toEqual({ registry: 0, ready: 0, iterator: 0, fallback: 0 });
+      expect(transport.sent).toHaveLength(0);
+      expect(transport.closes).toBe(0);
+    }
+  });
 
   it("creates dynamic resources only after descriptor authorization and owns failed binding cleanup", async () => {
     const { descriptor, contract } = counterArtifacts();
@@ -415,6 +462,37 @@ describe("negotiated model-interface runner", () => {
       .rejects.toMatchObject({ code: "handler_missing" });
     expect({ created, disposed }).toEqual({ created: 1, disposed: 1 });
     expect(accepted.closes).toBe(1);
+  });
+
+  it.each(["sync", "async"] as const)("keeps descriptor factory scopes target-neutral for %s execution", async (execution) => {
+    const { descriptor, contract } = counterArtifacts();
+    const calls = { created: 0, action: 0, observation: 0, disposed: 0 };
+    const selected: DynamicHandlerFactorySelection = {
+      mode: "dynamic", contract, semanticDigest: semanticDescriptorDigest(descriptor),
+      descriptorCache: new DescriptorCache(),
+      createRegistry: () => {
+        calls.created += 1;
+        const dispose = () => { calls.disposed += 1; };
+        return execution === "async"
+          ? { execution, registry: {
+              semanticDigest: semanticDescriptorDigest(descriptor),
+              actions: { Initialize: async () => { calls.action += 1; }, Tick: async () => {} },
+              observations: { Count: async () => { calls.observation += 1; return 0n; } },
+            }, dispose }
+          : { execution, registry: {
+              semanticDigest: semanticDescriptorDigest(descriptor),
+              actions: { Initialize: () => { calls.action += 1; }, Tick: () => {} },
+              observations: { Count: () => { calls.observation += 1; return 0n; } },
+            }, dispose };
+      },
+    };
+    const transport = new ScriptedTransport([resolvedReply(descriptor),
+      JSON.stringify({ proto_step: "initial_state", action: "init", state: {} }),
+      JSON.stringify({ proto_step: "all_steps_done" })]);
+    const report = await runClientWithTracesNegotiatedWithReport(transport, DYNAMIC_CFG, [], selected);
+    expect(report).toMatchObject({ interfaceDigest: semanticDescriptorDigest(descriptor), statesMatched: 1 });
+    expect(calls).toEqual({ created: 1, action: 1, observation: 1, disposed: 1 });
+    expect(transport.closes).toBe(1);
   });
 
   it("cleans up asynchronous dynamic scope on action timeout and prevents late observation", async () => {

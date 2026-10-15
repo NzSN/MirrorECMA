@@ -21,7 +21,7 @@ export interface TlsOptions {
   caPath: string;
   /** PEM client certificate signed by the same CA. */
   certPath: string;
-  /** PEM private key for certPath (must be 0600 on POSIX, like the Haskell client). */
+  /** PEM private key for certPath (must be exactly 0600 on POSIX, with no special bits). */
   keyPath: string;
   /** Expected server leaf certificate fingerprint, lowercase hex SHA-256 over DER.
    *  Optional for direct connect; registry connect supplies one automatically. */
@@ -364,13 +364,13 @@ export function sha256Hex(buf: Uint8Array): string {
   return createHash("sha256").update(buf).digest("hex");
 }
 
-/** On POSIX the client key must not be accessible by group/other (matches Haskell). */
+/** On POSIX require exact owner read/write permissions, including no special bits. */
 async function assertPrivateKeyMode(keyPath: string): Promise<void> {
   if (process.platform === "win32") return;
   const { mode } = await stat(keyPath);
-  if ((mode & 0o077) !== 0) {
+  if ((mode & 0o7777) !== 0o600) {
     throw new Error(
-      `client key ${keyPath} must not be accessible by group/other (chmod 0600)`,
+      `client key ${keyPath} must have exact POSIX mode 0600 with no special bits (chmod 0600)`,
     );
   }
 }

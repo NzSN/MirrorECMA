@@ -3,12 +3,14 @@ import {
   AsyncCompiledAdapterRegistry,
   CompiledAdapterRegistry,
   MIRRORECMA_ASYNC_TARGET_PROFILE,
+  MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE,
   MIRRORECMA_TARGET_PROFILE,
   ModelInterfaceRegistrationError,
   STATE_COMPUTER_CONTRACT_VERSION,
   runClientNegotiatedWithReport,
   runClientWithTracesNegotiatedWithReport,
   type AsyncCompiledExecutionSelection,
+  type CompiledExecutionSelection,
   type SyncCompiledExecutionSelection,
 } from "../src/negotiated.js";
 import {
@@ -98,13 +100,14 @@ function asyncSelection(options: {
   computer?: () => Promise<State>;
   dispose?: () => void | Promise<void>;
   coverage?: () => Readonly<Record<string, number>> | Promise<Readonly<Record<string, number>>>;
+  targetProfile?: string;
 } = {}): { selection: AsyncCompiledExecutionSelection; calls: string[] } {
   const calls: string[] = [];
   const registry = new AsyncCompiledAdapterRegistry([{
     key: {
       semanticDigest: DIGEST,
       adapterId: "counter",
-      targetProfile: MIRRORECMA_ASYNC_TARGET_PROFILE,
+      targetProfile: options.targetProfile ?? MIRRORECMA_ASYNC_TARGET_PROFILE,
       stateComputerContractVersion: ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
     },
     factory: async (_config, authority) => {
@@ -130,7 +133,7 @@ function asyncSelection(options: {
       execution: "async",
       metadata: METADATA,
       adapterId: "counter",
-      targetProfile: MIRRORECMA_ASYNC_TARGET_PROFILE,
+      targetProfile: options.targetProfile ?? MIRRORECMA_ASYNC_TARGET_PROFILE,
       stateComputerContractVersion: ASYNC_STATE_COMPUTER_CONTRACT_VERSION,
       registry,
       policy: "require",
@@ -164,6 +167,70 @@ function syncSelection(compute: () => State): SyncCompiledExecutionSelection {
 }
 
 describe("async negotiated replay reports", () => {
+  it("admits the explicit synchronous pair for generation and precomputed replay", async () => {
+    for (const generate of [true, false]) {
+      let computers = 0;
+      const selected = syncSelection(() => { computers += 1; return {}; });
+      const transport = new ControlledTransport([matched(),
+        JSON.stringify({ proto_step: "initial_state", action: "init", state: {} }),
+        JSON.stringify({ proto_step: "all_steps_done" })]);
+      const report = await (generate
+        ? runClientNegotiatedWithReport(transport, CONFIG, { numTraces: 1 }, selected)
+        : runClientWithTracesNegotiatedWithReport(transport, CONFIG, [], selected));
+      expect(report.status).toBe("completed");
+      expect(computers).toBe(1);
+      expect(transport.closes).toBe(1);
+    }
+  });
+
+  it.each([MIRRORECMA_ASYNC_TARGET_PROFILE, MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE])(
+    "admits explicit async target %s for generation and precomputed replay", async (targetProfile) => {
+      for (const generate of [true, false]) {
+        const { selection, calls } = asyncSelection({ targetProfile });
+        const transport = new ControlledTransport([matched(),
+          JSON.stringify({ proto_step: "initial_state", action: "init", state: {} }),
+          JSON.stringify({ proto_step: "all_steps_done" })]);
+        const report = await (generate
+          ? runClientNegotiatedWithReport(transport, CONFIG, { numTraces: 1 }, selection)
+          : runClientWithTracesNegotiatedWithReport(transport, CONFIG, [], selection));
+        expect(report.status).toBe("completed");
+        expect(calls).toEqual(["factory", "config", "computer", "dispose"]);
+        expect(transport.closes).toBe(1);
+      }
+    },
+  );
+
+  it.each([
+    ["sync", MIRRORECMA_TARGET_PROFILE, ASYNC_STATE_COMPUTER_CONTRACT_VERSION, "state_computer_contract_mismatch"],
+    ["sync", MIRRORECMA_TARGET_PROFILE, "unknown", "state_computer_contract_mismatch"],
+    ["sync", MIRRORECMA_ASYNC_TARGET_PROFILE, ASYNC_STATE_COMPUTER_CONTRACT_VERSION, "target_profile_mismatch"],
+    ["sync", MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE, ASYNC_STATE_COMPUTER_CONTRACT_VERSION, "target_profile_mismatch"],
+    ["async", MIRRORECMA_TARGET_PROFILE, ASYNC_STATE_COMPUTER_CONTRACT_VERSION, "target_profile_mismatch"],
+    ["async", MIRRORECMA_ASYNC_TARGET_PROFILE, STATE_COMPUTER_CONTRACT_VERSION, "state_computer_contract_mismatch"],
+    ["async", MIRRORECMA_ASYNC_TARGET_PROFILE, "unknown", "state_computer_contract_mismatch"],
+    ["async", MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE, STATE_COMPUTER_CONTRACT_VERSION, "state_computer_contract_mismatch"],
+    ["async", MIRRORECMA_ASYNC_TYPED_MAPS_TARGET_PROFILE, "unknown", "state_computer_contract_mismatch"],
+    ["async", "unknown", ASYNC_STATE_COMPUTER_CONTRACT_VERSION, "target_profile_mismatch"],
+  ] as const)("rejects explicit %s pair %s / %s before effects", async (execution, targetProfile, contract, code) => {
+    for (const generate of [true, false]) {
+      const effects = { registry: 0, ready: 0, iterator: 0 };
+      const asyncCase = asyncSelection();
+      const base = execution === "async" ? asyncCase.selection : syncSelection(() => { throw new Error("must not compute"); });
+      const selected: CompiledExecutionSelection = { ...base, targetProfile, stateComputerContractVersion: contract };
+      selected.registry.resolve = () => { effects.registry += 1; throw new Error("must not resolve"); };
+      const transport = new ControlledTransport([]);
+      Object.defineProperty(transport, "ready", { get: () => { effects.ready += 1; return Promise.resolve(); } });
+      transport[Symbol.asyncIterator] = () => { effects.iterator += 1; throw new Error("must not acquire iterator"); };
+      await expect(generate
+        ? runClientNegotiatedWithReport(transport, CONFIG, { numTraces: 1 }, selected)
+        : runClientWithTracesNegotiatedWithReport(transport, CONFIG, [], selected)).rejects.toMatchObject({ code });
+      expect(effects).toEqual({ registry: 0, ready: 0, iterator: 0 });
+      expect(asyncCase.calls).toEqual([]);
+      expect(transport.sent).toHaveLength(0);
+      expect(transport.closes).toBe(0);
+    }
+  });
+
   it("runs one async callback at a time and returns stable coverage", async () => {
     const transport = new ControlledTransport([
       matched(),

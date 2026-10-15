@@ -648,8 +648,10 @@ Certificate prerequisites (the same files/paths the Haskell client takes):
   client verifies the server chain (and the server verifies the client cert)
   against it.
 - `client.crt` / `client.key` — a client certificate and key signed by that
-  CA. On POSIX the key must be mode `0600` (not accessible by group/other);
-  `connectTlsMirror` rejects otherwise.
+  CA. On POSIX the key must have exact mode `0600`, with no special bits;
+  `connectTlsMirror` rejects otherwise before opening a socket. It never changes
+  the key's permissions. See the [admission release notes](docs/client-admission-release-notes.md)
+  for the compatibility change.
 - TLS is pinned to **1.3 only**; no older versions are negotiated.
 - Server identity is checked against SAN only. DNS names use DNS SAN + SNI;
   IP literals use IP SAN and are not sent as SNI. A CN-only certificate is
