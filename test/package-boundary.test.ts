@@ -2,19 +2,19 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import * as client from "../src/index.js";
 
-test("the 2.0 root exposes generic MBT without Gate hosting/evaluation exports", () => {
+test("the root exposes generic MBT without Gate hosting/evaluation exports", () => {
   expect(typeof client.runClientWithTracesNegotiatedWithReport).toBe("function");
   expect(typeof client.AsyncCompiledAdapterRegistry).toBe("function");
   for (const name of Object.keys(client)) {
     expect(name).not.toMatch(/sandbox|mirrorgate|TrustedGate/i);
   }
   const pkg = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
-  expect(pkg.version).toBe("2.0.0");
+  expect(pkg.version).toBe("0.1.0");
   for (const category of ["dependencies", "peerDependencies", "optionalDependencies", "peerDependenciesMeta"]) {
     expect(Object.keys(pkg[category] ?? {})).not.toEqual(expect.arrayContaining(["mirrorgate", "mirrorgate-mirrorecma"]));
   }
   expect(JSON.parse(readFileSync(resolve("package.bazel.json"), "utf8")).version).toBe(pkg.version);
-  expect(readFileSync(resolve("MODULE.bazel"), "utf8")).toMatch(/name = "mirrorecma",\s*version = "2\.0\.0"/);
+  expect(readFileSync(resolve("MODULE.bazel"), "utf8")).toMatch(/name = "mirrorecma",\s*version = "0\.1\.0"/);
 });
 
 function sourceFiles(directory: string): string[] {
