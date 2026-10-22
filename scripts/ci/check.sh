@@ -47,12 +47,14 @@ if "$live"; then
 else
   echo "Live trace generation not requested; running compiler and offline replay gates."
 fi
+# Unit/project fixtures also execute these tools. Build before Jest so a cold
+# hosted checkout has the same prerequisites as a prepared local checkout.
+(cd "$MIRRORS_ROOT" && lake build mirror model_interface_gen)
 pnpm run check
 pnpm run check:model-interface
 pnpm run check:examples
 pnpm run test --runInBand --no-watchman
 pnpm run test:schedule
-(cd "$MIRRORS_ROOT" && lake build mirror model_interface_gen)
 if "$live"; then
   pnpm run smoke:generated-counter --live
 else
