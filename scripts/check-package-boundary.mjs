@@ -33,7 +33,7 @@ try {
   // Installed package contents, not a source-tree import or a dependency symlink.
   const packed = JSON.parse(run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', scratch,
     '--cache', join(scratch, 'npm-cache')], root))[0];
-  assert.equal(packed.version, '2.0.0');
+  assert.equal(packed.version, '0.1.0');
   const target = join(scratch, 'node_modules/mirrorecma'); mkdirSync(target, {recursive: true});
   run('tar', ['-xzf', join(scratch, packed.filename), '--strip-components=1', '-C', target]);
   const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));

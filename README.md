@@ -1,5 +1,7 @@
 # MirrorECMA
 
+[Product versions and compatibility](docs/versioning.md).
+
 Compare language and worker capabilities in the
 [framework map](../Mirrors/Docs/framework-map.md). MirrorECMA remains the Node
 application client; native C++/Rust Gate evaluators do not require it at runtime.

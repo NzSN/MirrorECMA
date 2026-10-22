@@ -1,0 +1,50 @@
+{
+  "schema": "mirrors.component-compatibility/v1",
+  "component": {
+    "repository": "NzSN/MirrorECMA",
+    "version": "0.1.0",
+    "releaseTag": "v0.1.0",
+    "sourceParent": "13847be5d63d93437c551fad8c5e98f2afd884b0"
+  },
+  "server": {
+    "repository": "NzSN/Mirrors",
+    "tag": "v0.1.0",
+    "revision": "ea8091c0c723f3f561044a5c1efb91d12e7aaf5f",
+    "formerTag": "v0.0.3.3",
+    "embeddedVersion": "v0.0.3.2",
+    "binarySha256": "53bd92420e101567a6a76b0e80fc9786b6496e3af98a32f2ee2f5ea35de65082"
+  },
+  "compatibility": {
+    "status": "verified-for-declared-profile",
+    "profile": "supplied-trace-client/v1",
+    "transports": [
+      "stdio",
+      "tcp",
+      "tls1.3-mutual-auth"
+    ],
+    "operations": [
+      "register_traces",
+      "report_state"
+    ],
+    "controls": [
+      "actual-state-mismatch",
+      "wrong-server-pin-before-compute"
+    ],
+    "actualRows": 7,
+    "sourceTreeSha256": "90edf4232bfda7b2e915b7e740ba4fb50b8ae22ba2262502b4ae530aad60e23f",
+    "evidence": {
+      "url": "https://github.com/NzSN/Mirrors/blob/main/Plans/version-migration-2026-10-22/evidence/transport-compatibility.json",
+      "sha256": "40c2dafdc9afb061738e70e26d38baf42dee0ebbb143bac810587c258314fa0b"
+    }
+  },
+  "limits": [
+    "Live model generation/validation/exploration not exercised in this campaign.",
+    "Exact model-interface digests remain required.",
+    "The frozen compiler has no Lean emitter or later async-ECMA/Rust v2 emitters.",
+    "Checked-in current generated fixtures are not byte-fresh under the older baseline compiler; current development compiler is pinned separately."
+  ],
+  "developmentCompiler": {
+    "revision": "545ed2166c5817eb7cbec3bc1ec5b1b2f7051b6f",
+    "purpose": "current generated fixture byte freshness, async examples and focused CI; separate from frozen baseline server compatibility"
+  }
+}
